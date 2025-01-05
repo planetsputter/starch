@@ -5,234 +5,290 @@
 #include "starch.h"
 
 static const char *names[256] = {
+	[op_invalid] = "invalid",
+
 	//
 	// Push immediate operations
 	//
-	[op_invalid] = "invalid",
-	[op_push1] = "push1",
-	[op_push1u2] = "push1u2",
-	[op_push1u4] = "push1u4",
-	[op_push1u8] = "push1u8",
-	[op_push1i2] = "push1i2",
-	[op_push1i4] = "push1i4",
-	[op_push1i8] = "push1i8",
-	[op_push2] = "push2",
-	[op_push2u4] = "push2u4",
-	[op_push2u8] = "push2u8",
-	[op_push2i4] = "push2i4",
-	[op_push2i8] = "push2i8",
-	[op_push4] = "push4",
-	[op_push4u8] = "push4u8",
-	[op_push4i8] = "push4i8",
 	[op_push8] = "push8",
+	[op_push8u16] = "push8u16",
+	[op_push8u32] = "push8u32",
+	[op_push8u64] = "push8u64",
+	[op_push8i16] = "push8i16",
+	[op_push8i32] = "push8i32",
+	[op_push8i64] = "push8i64",
+	[op_push16] = "push16",
+	[op_push16u32] = "push16u32",
+	[op_push16u64] = "push16u64",
+	[op_push16i32] = "push16i32",
+	[op_push16i64] = "push16i64",
+	[op_push32] = "push32",
+	[op_push32u64] = "push32u64",
+	[op_push32i64] = "push32i64",
+	[op_push64] = "push64",
 
 	//
 	// Pop operations
 	//
-	[op_pop1] = "pop1",
-	[op_pop2] = "pop2",
-	[op_pop4] = "pop4",
 	[op_pop8] = "pop8",
-	[op_pop] = "pop",
-	[op_dup1] = "dup1",
-	[op_dup2] = "dup2",
-	[op_dup4] = "dup4",
+	[op_pop16] = "pop16",
+	[op_pop32] = "pop32",
+	[op_pop64] = "pop64",
+
+	//
+	// Duplication operations
+	//
 	[op_dup8] = "dup8",
-	[op_set1] = "set1",
-	[op_set2] = "set2",
-	[op_set4] = "set4",
+	[op_dup16] = "dup16",
+	[op_dup32] = "dup32",
+	[op_dup64] = "dup64",
+
+	//
+	// Setting operations
+	//
 	[op_set8] = "set8",
-	[op_prom1u2] = "prom1u2",
-	[op_prom1u4] = "prom1u4",
-	[op_prom1u8] = "prom1u8",
-	[op_prom1i2] = "prom1i2",
-	[op_prom1i4] = "prom1i4",
-	[op_prom1i8] = "prom1i8",
-	[op_prom2u4] = "prom2u4",
-	[op_prom2u8] = "prom2u8",
-	[op_prom2i4] = "prom2i4",
-	[op_prom2i8] = "prom2i8",
-	[op_prom4u8] = "prom4u8",
-	[op_prom4i8] = "prom4i8",
-	[op_dem8_4] = "dem8_4",
-	[op_dem8_2] = "dem8_2",
-	[op_dem8_1] = "dem8_1",
-	[op_dem4_2] = "dem4_2",
-	[op_dem4_1] = "dem4_1",
-	[op_dem2_1] = "dem2_1",
-	[op_add1] = "add1",
-	[op_add2] = "add2",
-	[op_add4] = "add4",
+	[op_set16] = "set16",
+	[op_set32] = "set32",
+	[op_set64] = "set64",
+
+	//
+	// Promotion operations
+	//
+	[op_prom8u16] = "prom8u16",
+	[op_prom8u32] = "prom8u32",
+	[op_prom8u64] = "prom8u64",
+	[op_prom8i16] = "prom8i16",
+	[op_prom8i32] = "prom8i32",
+	[op_prom8i64] = "prom8i64",
+	[op_prom16u32] = "prom16u32",
+	[op_prom16u64] = "prom16u64",
+	[op_prom16i32] = "prom16i32",
+	[op_prom16i64] = "prom16i64",
+	[op_prom32u64] = "prom32u64",
+	[op_prom32i64] = "prom32i64",
+
+	//
+	// Demotion operations
+	//
+	[op_dem64to32] = "dem64to32",
+	[op_dem64to16] = "dem64to16",
+	[op_dem64to8] = "dem64to8",
+	[op_dem32to16] = "dem32to16",
+	[op_dem32to8] = "dem32to8",
+	[op_dem16to8] = "dem16to8",
+
+	//
+	// Integer arithmetic operations
+	//
 	[op_add8] = "add8",
-	[op_sub1] = "sub1",
-	[op_sub2] = "sub2",
-	[op_sub4] = "sub4",
+	[op_add16] = "add16",
+	[op_add32] = "add32",
+	[op_add64] = "add64",
 	[op_sub8] = "sub8",
-	[op_mulu1] = "mulu1",
-	[op_mulu2] = "mulu2",
-	[op_mulu4] = "mulu4",
+	[op_sub16] = "sub16",
+	[op_sub32] = "sub32",
+	[op_sub64] = "sub64",
 	[op_mulu8] = "mulu8",
-	[op_muli1] = "muli1",
-	[op_muli2] = "muli2",
-	[op_muli4] = "muli4",
+	[op_mulu16] = "mulu16",
+	[op_mulu32] = "mulu32",
+	[op_mulu64] = "mulu64",
 	[op_muli8] = "muli8",
-	[op_divu1] = "divu1",
-	[op_divu2] = "divu2",
-	[op_divu4] = "divu4",
+	[op_muli16] = "muli16",
+	[op_muli32] = "muli32",
+	[op_muli64] = "muli64",
 	[op_divu8] = "divu8",
-	[op_divi1] = "divi1",
-	[op_divi2] = "divi2",
-	[op_divi4] = "divi4",
+	[op_divu16] = "divu16",
+	[op_divu32] = "divu32",
+	[op_divu64] = "divu64",
 	[op_divi8] = "divi8",
-	[op_modu1] = "modu1",
-	[op_modu2] = "modu2",
-	[op_modu4] = "modu4",
+	[op_divi16] = "divi16",
+	[op_divi32] = "divi32",
+	[op_divi64] = "divi64",
 	[op_modu8] = "modu8",
-	[op_modi1] = "modi1",
-	[op_modi2] = "modi2",
-	[op_modi4] = "modi4",
+	[op_modu16] = "modu16",
+	[op_modu32] = "modu32",
+	[op_modu64] = "modu64",
 	[op_modi8] = "modi8",
-	[op_lshift1] = "lshift1",
-	[op_lshift2] = "lshift2",
-	[op_lshift4] = "lshift4",
+	[op_modi16] = "modi16",
+	[op_modi32] = "modi32",
+	[op_modi64] = "modi64",
+
+	//
+	// Bitwise shift operations
+	//
 	[op_lshift8] = "lshift8",
-	[op_rshiftu1] = "rshiftu1",
-	[op_rshiftu2] = "rshiftu2",
-	[op_rshiftu4] = "rshiftu4",
+	[op_lshift16] = "lshift16",
+	[op_lshift32] = "lshift32",
+	[op_lshift64] = "lshift64",
 	[op_rshiftu8] = "rshiftu8",
-	[op_rshifti1] = "rshifti1",
-	[op_rshifti2] = "rshifti2",
-	[op_rshifti4] = "rshifti4",
+	[op_rshiftu16] = "rshiftu16",
+	[op_rshiftu32] = "rshiftu32",
+	[op_rshiftu64] = "rshiftu64",
 	[op_rshifti8] = "rshifti8",
-	[op_band1] = "band1",
-	[op_band2] = "band2",
-	[op_band4] = "band4",
+	[op_rshifti16] = "rshifti16",
+	[op_rshifti32] = "rshifti32",
+	[op_rshifti64] = "rshifti64",
+
+	//
+	// Bitwise logical operations
+	//
 	[op_band8] = "band8",
-	[op_bor1] = "bor1",
-	[op_bor2] = "bor2",
-	[op_bor4] = "bor4",
+	[op_band16] = "band16",
+	[op_band32] = "band32",
+	[op_band64] = "band64",
 	[op_bor8] = "bor8",
-	[op_bxor1] = "bxor1",
-	[op_bxor2] = "bxor2",
-	[op_bxor4] = "bxor4",
+	[op_bor16] = "bor16",
+	[op_bor32] = "bor32",
+	[op_bor64] = "bor64",
 	[op_bxor8] = "bxor8",
-	[op_binv1] = "binv1",
-	[op_binv2] = "binv2",
-	[op_binv4] = "binv4",
+	[op_bxor16] = "bxor16",
+	[op_bxor32] = "bxor32",
+	[op_bxor64] = "bxor64",
 	[op_binv8] = "binv8",
-	[op_land1] = "land1",
-	[op_land2] = "land2",
-	[op_land4] = "land4",
+	[op_binv16] = "binv16",
+	[op_binv32] = "binv32",
+	[op_binv64] = "binv64",
+
+	//
+	// Boolean logical operations
+	//
 	[op_land8] = "land8",
-	[op_lor1] = "lor1",
-	[op_lor2] = "lor2",
-	[op_lor4] = "lor4",
+	[op_land16] = "land16",
+	[op_land32] = "land32",
+	[op_land64] = "land64",
 	[op_lor8] = "lor8",
-	[op_linv1] = "linv1",
-	[op_linv2] = "linv2",
-	[op_linv4] = "linv4",
+	[op_lor16] = "lor16",
+	[op_lor32] = "lor32",
+	[op_lor64] = "lor64",
 	[op_linv8] = "linv8",
-	[op_ceq1] = "ceq1",
-	[op_ceq2] = "ceq2",
-	[op_ceq4] = "ceq4",
+	[op_linv16] = "linv16",
+	[op_linv32] = "linv32",
+	[op_linv64] = "linv64",
+
+	//
+	// Comparison operations
+	//
 	[op_ceq8] = "ceq8",
-	[op_cne1] = "cne1",
-	[op_cne2] = "cne2",
-	[op_cne4] = "cne4",
+	[op_ceq16] = "ceq16",
+	[op_ceq32] = "ceq32",
+	[op_ceq64] = "ceq64",
 	[op_cne8] = "cne8",
-	[op_cgtu1] = "cgtu1",
-	[op_cgtu2] = "cgtu2",
-	[op_cgtu4] = "cgtu4",
+	[op_cne16] = "cne16",
+	[op_cne32] = "cne32",
+	[op_cne64] = "cne64",
 	[op_cgtu8] = "cgtu8",
-	[op_cgti1] = "cgti1",
-	[op_cgti2] = "cgti2",
-	[op_cgti4] = "cgti4",
+	[op_cgtu16] = "cgtu16",
+	[op_cgtu32] = "cgtu32",
+	[op_cgtu64] = "cgtu64",
 	[op_cgti8] = "cgti8",
-	[op_cltu1] = "cltu1",
-	[op_cltu2] = "cltu2",
-	[op_cltu4] = "cltu4",
+	[op_cgti16] = "cgti16",
+	[op_cgti32] = "cgti32",
+	[op_cgti64] = "cgti64",
 	[op_cltu8] = "cltu8",
-	[op_clti1] = "clti1",
-	[op_clti2] = "clti2",
-	[op_clti4] = "clti4",
+	[op_cltu16] = "cltu16",
+	[op_cltu32] = "cltu32",
+	[op_cltu64] = "cltu64",
 	[op_clti8] = "clti8",
-	[op_cgeu1] = "cgeu1",
-	[op_cgeu2] = "cgeu2",
-	[op_cgeu4] = "cgeu4",
+	[op_clti16] = "clti16",
+	[op_clti32] = "clti32",
+	[op_clti64] = "clti64",
 	[op_cgeu8] = "cgeu8",
-	[op_cgei1] = "cgei1",
-	[op_cgei2] = "cgei2",
-	[op_cgei4] = "cgei4",
+	[op_cgeu16] = "cgeu16",
+	[op_cgeu32] = "cgeu32",
+	[op_cgeu64] = "cgeu64",
 	[op_cgei8] = "cgei8",
-	[op_cleu1] = "cleu1",
-	[op_cleu2] = "cleu2",
-	[op_cleu4] = "cleu4",
+	[op_cgei16] = "cgei16",
+	[op_cgei32] = "cgei32",
+	[op_cgei64] = "cgei64",
 	[op_cleu8] = "cleu8",
-	[op_clei1] = "clei1",
-	[op_clei2] = "clei2",
-	[op_clei4] = "clei4",
+	[op_cleu16] = "cleu16",
+	[op_cleu32] = "cleu32",
+	[op_cleu64] = "cleu64",
 	[op_clei8] = "clei8",
+	[op_clei16] = "clei16",
+	[op_clei32] = "clei32",
+	[op_clei64] = "clei64",
+
+	//
+	// Function operations
+	//
 	[op_call] = "call",
 	[op_calls] = "calls",
 	[op_ret] = "ret",
+
+	//
+	// Branching operations
+	//
 	[op_jmp] = "jmp",
 	[op_jmps] = "jmps",
-	[op_rjmpi1] = "rjmpi1",
-	[op_rjmpi2] = "rjmpi2",
-	[op_rjmpi4] = "rjmpi4",
 	[op_rjmpi8] = "rjmpi8",
-	[op_brz1] = "brz1",
-	[op_brz2] = "brz2",
-	[op_brz4] = "brz4",
+	[op_rjmpi16] = "rjmpi16",
+	[op_rjmpi32] = "rjmpi32",
+	[op_rjmpi64] = "rjmpi64",
+
+	//
+	// Conditional branching operations
+	//
 	[op_brz8] = "brz8",
-	[op_rbrz1i1] = "op_rbrz1i1",
-	[op_rbrz2i1] = "op_rbrz2i1",
-	[op_rbrz4i1] = "op_rbrz4i1",
-	[op_rbrz8i1] = "op_rbrz8i1",
-	[op_rbrz1i2] = "op_rbrz1i2",
-	[op_rbrz2i2] = "op_rbrz2i2",
-	[op_rbrz4i2] = "op_rbrz4i2",
-	[op_rbrz8i2] = "op_rbrz8i2",
-	[op_rbrz1i4] = "op_rbrz1i4",
-	[op_rbrz2i4] = "op_rbrz2i4",
-	[op_rbrz4i4] = "op_rbrz4i4",
-	[op_rbrz8i4] = "op_rbrz8i4",
-	[op_rbrz1i8] = "op_rbrz1i8",
-	[op_rbrz2i8] = "op_rbrz2i8",
-	[op_rbrz4i8] = "op_rbrz4i8",
-	[op_rbrz8i8] = "op_rbrz8i8",
-	[op_load1] = "load1",
-	[op_load2] = "load2",
-	[op_load4] = "load4",
+	[op_brz16] = "brz16",
+	[op_brz32] = "brz32",
+	[op_brz64] = "brz64",
+	[op_rbrz8i8] = "rbrz8i8",
+	[op_rbrz16i8] = "rbrz16i8",
+	[op_rbrz32i8] = "rbrz32i8",
+	[op_rbrz64i8] = "rbrz64i8",
+	[op_rbrz8i16] = "rbrz8i16",
+	[op_rbrz16i16] = "rbrz16i16",
+	[op_rbrz32i16] = "rbrz32i16",
+	[op_rbrz64i16] = "rbrz64i16",
+	[op_rbrz8i32] = "rbrz8i32",
+	[op_rbrz16i32] = "rbrz16i32",
+	[op_rbrz32i32] = "rbrz32i32",
+	[op_rbrz64i32] = "rbrz64i32",
+	[op_rbrz8i64] = "rbrz8i64",
+	[op_rbrz16i64] = "rbrz16i64",
+	[op_rbrz32i64] = "rbrz32i64",
+	[op_rbrz64i64] = "rbrz64i64",
+
+	//
+	// Memory operations
+	//
 	[op_load8] = "load8",
-	[op_loadpop1] = "loadpop1",
-	[op_loadpop2] = "loadpop2",
-	[op_loadpop4] = "loadpop4",
+	[op_load16] = "load16",
+	[op_load32] = "load32",
+	[op_load64] = "load64",
 	[op_loadpop8] = "loadpop8",
-	[op_loadsfp1] = "loadsfp1",
-	[op_loadsfp2] = "loadsfp2",
-	[op_loadsfp4] = "loadsfp4",
+	[op_loadpop16] = "loadpop16",
+	[op_loadpop32] = "loadpop32",
+	[op_loadpop64] = "loadpop64",
 	[op_loadsfp8] = "loadsfp8",
-	[op_loadpopsfp1] = "loadpopsfp1",
-	[op_loadpopsfp2] = "loadpopsfp2",
-	[op_loadpopsfp4] = "loadpopsfp4",
+	[op_loadsfp16] = "loadsfp16",
+	[op_loadsfp32] = "loadsfp32",
+	[op_loadsfp64] = "loadsfp64",
 	[op_loadpopsfp8] = "loadpopsfp8",
-	[op_store1] = "store1",
-	[op_store2] = "store2",
-	[op_store4] = "store4",
+	[op_loadpopsfp16] = "loadpopsfp16",
+	[op_loadpopsfp32] = "loadpopsfp32",
+	[op_loadpopsfp64] = "loadpopsfp64",
 	[op_store8] = "store8",
-	[op_storepop1] = "storepop1",
-	[op_storepop2] = "storepop2",
-	[op_storepop4] = "storepop4",
+	[op_store16] = "store16",
+	[op_store32] = "store32",
+	[op_store64] = "store64",
 	[op_storepop8] = "storepop8",
-	[op_storesfp1] = "storesfp1",
-	[op_storesfp2] = "storesfp2",
-	[op_storesfp4] = "storesfp4",
+	[op_storepop16] = "storepop16",
+	[op_storepop32] = "storepop32",
+	[op_storepop64] = "storepop64",
 	[op_storesfp8] = "storesfp8",
-	[op_storepopsfp1] = "storepopsfp1",
-	[op_storepopsfp2] = "storepopsfp2",
-	[op_storepopsfp4] = "storepopsfp4",
+	[op_storesfp16] = "storesfp16",
+	[op_storesfp32] = "storesfp32",
+	[op_storesfp64] = "storesfp64",
 	[op_storepopsfp8] = "storepopsfp8",
+	[op_storepopsfp16] = "storepopsfp16",
+	[op_storepopsfp32] = "storepopsfp32",
+	[op_storepopsfp64] = "storepopsfp64",
+
+	//
+	// Special Operations
+	//
 	[op_admin] = "admin",
 	[op_ext] = "ext",
 	[op_nop] = "nop",
@@ -260,216 +316,215 @@ int imm_count_for_opcode(int opcode)
 	//
 	// Push immediate operations
 	//
-	case op_push1:
-	case op_push1u2:
-	case op_push1u4:
-	case op_push1u8:
-	case op_push1i2:
-	case op_push1i4:
-	case op_push1i8:
-	case op_push2:
-	case op_push2u4:
-	case op_push2u8:
-	case op_push2i4:
-	case op_push2i8:
-	case op_push4:
-	case op_push4u8:
-	case op_push4i8:
 	case op_push8:
+	case op_push8u16:
+	case op_push8u32:
+	case op_push8u64:
+	case op_push8i16:
+	case op_push8i32:
+	case op_push8i64:
+	case op_push16:
+	case op_push16u32:
+	case op_push16u64:
+	case op_push16i32:
+	case op_push16i64:
+	case op_push32:
+	case op_push32u64:
+	case op_push32i64:
+	case op_push64:
 		ret = 1;
 		break;
 
 	//
 	// Pop operations
 	//
-	case op_pop1:
-	case op_pop2:
-	case op_pop4:
 	case op_pop8:
-	case op_pop:
+	case op_pop16:
+	case op_pop32:
+	case op_pop64:
 		break;
 
 	//
 	// Duplication operations
 	//
-	case op_dup1:
-	case op_dup2:
-	case op_dup4:
 	case op_dup8:
+	case op_dup16:
+	case op_dup32:
+	case op_dup64:
 		break;
 
 	//
 	// Setting operations
 	//
-	case op_set1:
-	case op_set2:
-	case op_set4:
 	case op_set8:
+	case op_set16:
+	case op_set32:
+	case op_set64:
 		break;
 
 	//
 	// Promotion Operations
 	//
-	case op_prom1u2:
-	case op_prom1u4:
-	case op_prom1u8:
-	case op_prom1i2:
-	case op_prom1i4:
-	case op_prom1i8:
-	case op_prom2u4:
-	case op_prom2u8:
-	case op_prom2i4:
-	case op_prom2i8:
-	case op_prom4u8:
-	case op_prom4i8:
+	case op_prom8u16:
+	case op_prom8u32:
+	case op_prom8u64:
+	case op_prom8i16:
+	case op_prom8i32:
+	case op_prom8i64:
+	case op_prom16u32:
+	case op_prom16u64:
+	case op_prom16i32:
+	case op_prom16i64:
+	case op_prom32u64:
+	case op_prom32i64:
 		break;
 
 	//
 	// Demotion Operations
 	//
-	case op_dem8_4:
-	case op_dem8_2:
-	case op_dem8_1:
-	case op_dem4_2:
-	case op_dem4_1:
-	case op_dem2_1:
+	case op_dem64to32:
+	case op_dem64to16:
+	case op_dem64to8:
+	case op_dem32to16:
+	case op_dem32to8:
+	case op_dem16to8:
 		break;
 
 	//
 	// Integer Arithmetic Operations
 	//
-	case op_add1:
-	case op_add2:
-	case op_add4:
 	case op_add8:
-	case op_sub1:
-	case op_sub2:
-	case op_sub4:
+	case op_add16:
+	case op_add32:
+	case op_add64:
 	case op_sub8:
-	case op_mulu1:
-	case op_mulu2:
-	case op_mulu4:
+	case op_sub16:
+	case op_sub32:
+	case op_sub64:
 	case op_mulu8:
-	case op_muli1:
-	case op_muli2:
-	case op_muli4:
+	case op_mulu16:
+	case op_mulu32:
+	case op_mulu64:
 	case op_muli8:
-	case op_divu1:
-	case op_divu2:
-	case op_divu4:
+	case op_muli16:
+	case op_muli32:
+	case op_muli64:
 	case op_divu8:
-	case op_divi1:
-	case op_divi2:
-	case op_divi4:
+	case op_divu16:
+	case op_divu32:
+	case op_divu64:
 	case op_divi8:
-	case op_modu1:
-	case op_modu2:
-	case op_modu4:
+	case op_divi16:
+	case op_divi32:
+	case op_divi64:
 	case op_modu8:
-	case op_modi1:
-	case op_modi2:
-	case op_modi4:
+	case op_modu16:
+	case op_modu32:
+	case op_modu64:
 	case op_modi8:
+	case op_modi16:
+	case op_modi32:
+	case op_modi64:
 		break;
 
 	//
 	// Bitwise shift operations
 	//
-	case op_lshift1:
-	case op_lshift2:
-	case op_lshift4:
 	case op_lshift8:
-	case op_rshiftu1:
-	case op_rshiftu2:
-	case op_rshiftu4:
+	case op_lshift16:
+	case op_lshift32:
+	case op_lshift64:
 	case op_rshiftu8:
-	case op_rshifti1:
-	case op_rshifti2:
-	case op_rshifti4:
+	case op_rshiftu16:
+	case op_rshiftu32:
+	case op_rshiftu64:
 	case op_rshifti8:
+	case op_rshifti16:
+	case op_rshifti32:
+	case op_rshifti64:
 		break;
 
 	//
 	// Bitwise logical operations
 	//
-	case op_band1:
-	case op_band2:
-	case op_band4:
 	case op_band8:
-	case op_bor1:
-	case op_bor2:
-	case op_bor4:
+	case op_band16:
+	case op_band32:
+	case op_band64:
 	case op_bor8:
-	case op_bxor1:
-	case op_bxor2:
-	case op_bxor4:
+	case op_bor16:
+	case op_bor32:
+	case op_bor64:
 	case op_bxor8:
-	case op_binv1:
-	case op_binv2:
-	case op_binv4:
+	case op_bxor16:
+	case op_bxor32:
+	case op_bxor64:
 	case op_binv8:
+	case op_binv16:
+	case op_binv32:
+	case op_binv64:
 		break;
 
 	//
 	// Boolean logical operations
 	//
-	case op_land1:
-	case op_land2:
-	case op_land4:
 	case op_land8:
-	case op_lor1:
-	case op_lor2:
-	case op_lor4:
+	case op_land16:
+	case op_land32:
+	case op_land64:
 	case op_lor8:
-	case op_linv1:
-	case op_linv2:
-	case op_linv4:
+	case op_lor16:
+	case op_lor32:
+	case op_lor64:
 	case op_linv8:
+	case op_linv16:
+	case op_linv32:
+	case op_linv64:
 		break;
 
 	//
 	// Comparison operations
 	//
-	case op_ceq1:
-	case op_ceq2:
-	case op_ceq4:
 	case op_ceq8:
-	case op_cne1:
-	case op_cne2:
-	case op_cne4:
+	case op_ceq16:
+	case op_ceq32:
+	case op_ceq64:
 	case op_cne8:
-	case op_cgtu1:
-	case op_cgtu2:
-	case op_cgtu4:
+	case op_cne16:
+	case op_cne32:
+	case op_cne64:
 	case op_cgtu8:
-	case op_cgti1:
-	case op_cgti2:
-	case op_cgti4:
+	case op_cgtu16:
+	case op_cgtu32:
+	case op_cgtu64:
 	case op_cgti8:
-	case op_cltu1:
-	case op_cltu2:
-	case op_cltu4:
+	case op_cgti16:
+	case op_cgti32:
+	case op_cgti64:
 	case op_cltu8:
-	case op_clti1:
-	case op_clti2:
-	case op_clti4:
+	case op_cltu16:
+	case op_cltu32:
+	case op_cltu64:
 	case op_clti8:
-	case op_cgeu1:
-	case op_cgeu2:
-	case op_cgeu4:
+	case op_clti16:
+	case op_clti32:
+	case op_clti64:
 	case op_cgeu8:
-	case op_cgei1:
-	case op_cgei2:
-	case op_cgei4:
+	case op_cgeu16:
+	case op_cgeu32:
+	case op_cgeu64:
 	case op_cgei8:
-	case op_cleu1:
-	case op_cleu2:
-	case op_cleu4:
+	case op_cgei16:
+	case op_cgei32:
+	case op_cgei64:
 	case op_cleu8:
-	case op_clei1:
-	case op_clei2:
-	case op_clei4:
+	case op_cleu16:
+	case op_cleu32:
+	case op_cleu64:
 	case op_clei8:
+	case op_clei16:
+	case op_clei32:
+	case op_clei64:
 		break;
 
 	//
@@ -490,74 +545,74 @@ int imm_count_for_opcode(int opcode)
 		break;
 	case op_jmps:
 		break;
-	case op_rjmpi1:
-	case op_rjmpi2:
-	case op_rjmpi4:
 	case op_rjmpi8:
+	case op_rjmpi16:
+	case op_rjmpi32:
+	case op_rjmpi64:
 		ret = 1;
 		break;
 
 	//
 	// Conditional branching operations
 	//
-	case op_brz1:
-	case op_brz2:
-	case op_brz4:
 	case op_brz8:
-	case op_rbrz1i1:
-	case op_rbrz2i1:
-	case op_rbrz4i1:
-	case op_rbrz8i1:
-	case op_rbrz1i2:
-	case op_rbrz2i2:
-	case op_rbrz4i2:
-	case op_rbrz8i2:
-	case op_rbrz1i4:
-	case op_rbrz2i4:
-	case op_rbrz4i4:
-	case op_rbrz8i4:
-	case op_rbrz1i8:
-	case op_rbrz2i8:
-	case op_rbrz4i8:
+	case op_brz16:
+	case op_brz32:
+	case op_brz64:
 	case op_rbrz8i8:
+	case op_rbrz16i8:
+	case op_rbrz32i8:
+	case op_rbrz64i8:
+	case op_rbrz8i16:
+	case op_rbrz16i16:
+	case op_rbrz32i16:
+	case op_rbrz64i16:
+	case op_rbrz8i32:
+	case op_rbrz16i32:
+	case op_rbrz32i32:
+	case op_rbrz64i32:
+	case op_rbrz8i64:
+	case op_rbrz16i64:
+	case op_rbrz32i64:
+	case op_rbrz64i64:
 		ret = 1;
 		break;
 
 	//
 	// Memory operations
 	//
-	case op_load1:
-	case op_load2:
-	case op_load4:
 	case op_load8:
-	case op_loadpop1:
-	case op_loadpop2:
-	case op_loadpop4:
+	case op_load16:
+	case op_load32:
+	case op_load64:
 	case op_loadpop8:
-	case op_loadsfp1:
-	case op_loadsfp2:
-	case op_loadsfp4:
+	case op_loadpop16:
+	case op_loadpop32:
+	case op_loadpop64:
 	case op_loadsfp8:
-	case op_loadpopsfp1:
-	case op_loadpopsfp2:
-	case op_loadpopsfp4:
+	case op_loadsfp16:
+	case op_loadsfp32:
+	case op_loadsfp64:
 	case op_loadpopsfp8:
-	case op_store1:
-	case op_store2:
-	case op_store4:
+	case op_loadpopsfp16:
+	case op_loadpopsfp32:
+	case op_loadpopsfp64:
 	case op_store8:
-	case op_storepop1:
-	case op_storepop2:
-	case op_storepop4:
+	case op_store16:
+	case op_store32:
+	case op_store64:
 	case op_storepop8:
-	case op_storesfp1:
-	case op_storesfp2:
-	case op_storesfp4:
+	case op_storepop16:
+	case op_storepop32:
+	case op_storepop64:
 	case op_storesfp8:
-	case op_storepopsfp1:
-	case op_storepopsfp2:
-	case op_storepopsfp4:
+	case op_storesfp16:
+	case op_storesfp32:
+	case op_storesfp64:
 	case op_storepopsfp8:
+	case op_storepopsfp16:
+	case op_storepopsfp32:
+	case op_storepopsfp64:
 		break;
 
 	//
@@ -584,221 +639,220 @@ int imm_types_for_opcode(int opcode, int *dts)
 	//
 	// Push immediate operations
 	//
-	case op_push1: *dts = dt_a1; break;
-	case op_push1u2: *dts = dt_u1; break;
-	case op_push1u4: *dts = dt_u1; break;
-	case op_push1u8: *dts = dt_u1; break;
-	case op_push1i2: *dts = dt_i1; break;
-	case op_push1i4: *dts = dt_i1; break;
-	case op_push1i8: *dts = dt_i1; break;
-	case op_push2: *dts = dt_a2; break;
-	case op_push2u4: *dts = dt_u2; break;
-	case op_push2u8: *dts = dt_u2; break;
-	case op_push2i4: *dts = dt_i2; break;
-	case op_push2i8: *dts = dt_i2; break;
-	case op_push4: *dts = dt_a4; break;
-	case op_push4u8: *dts = dt_u4; break;
-	case op_push4i8: *dts = dt_i4; break;
-	case op_push8: *dts = dt_a8; break;
+	case op_push8:     *dts = dt_a8; break;
+	case op_push8u16:  *dts = dt_u8; break;
+	case op_push8u32:  *dts = dt_u8; break;
+	case op_push8u64:  *dts = dt_u8; break;
+	case op_push8i16:  *dts = dt_i8; break;
+	case op_push8i32:  *dts = dt_i8; break;
+	case op_push8i64:  *dts = dt_i8; break;
+	case op_push16:    *dts = dt_a16; break;
+	case op_push16u32: *dts = dt_u16; break;
+	case op_push16u64: *dts = dt_u16; break;
+	case op_push16i32: *dts = dt_i16; break;
+	case op_push16i64: *dts = dt_i16; break;
+	case op_push32:    *dts = dt_a32; break;
+	case op_push32u64: *dts = dt_u32; break;
+	case op_push32i64: *dts = dt_i32; break;
+	case op_push64:    *dts = dt_a64; break;
 
 	//
 	// Pop operations
 	//
-	case op_pop1:
-	case op_pop2:
-	case op_pop4:
 	case op_pop8:
-	case op_pop:
+	case op_pop16:
+	case op_pop32:
+	case op_pop64:
 		break;
 
 	//
 	// Duplication operations
 	//
-	case op_dup1:
-	case op_dup2:
-	case op_dup4:
 	case op_dup8:
+	case op_dup16:
+	case op_dup32:
+	case op_dup64:
 		break;
 
 	//
 	// Setting operations
 	//
-	case op_set1:
-	case op_set2:
-	case op_set4:
 	case op_set8:
+	case op_set16:
+	case op_set32:
+	case op_set64:
 		break;
 
 	//
 	// Promotion Operations
 	//
-	case op_prom1u2:
-	case op_prom1u4:
-	case op_prom1u8:
-	case op_prom1i2:
-	case op_prom1i4:
-	case op_prom1i8:
-	case op_prom2u4:
-	case op_prom2u8:
-	case op_prom2i4:
-	case op_prom2i8:
-	case op_prom4u8:
-	case op_prom4i8:
+	case op_prom8u16:
+	case op_prom8u32:
+	case op_prom8u64:
+	case op_prom8i16:
+	case op_prom8i32:
+	case op_prom8i64:
+	case op_prom16u32:
+	case op_prom16u64:
+	case op_prom16i32:
+	case op_prom16i64:
+	case op_prom32u64:
+	case op_prom32i64:
 		break;
 
 	//
 	// Demotion Operations
 	//
-	case op_dem8_4:
-	case op_dem8_2:
-	case op_dem8_1:
-	case op_dem4_2:
-	case op_dem4_1:
-	case op_dem2_1:
+	case op_dem64to32:
+	case op_dem64to16:
+	case op_dem64to8:
+	case op_dem32to16:
+	case op_dem32to8:
+	case op_dem16to8:
 		break;
 
 	//
 	// Integer Arithmetic Operations
 	//
-	case op_add1:
-	case op_add2:
-	case op_add4:
 	case op_add8:
-	case op_sub1:
-	case op_sub2:
-	case op_sub4:
+	case op_add16:
+	case op_add32:
+	case op_add64:
 	case op_sub8:
-	case op_mulu1:
-	case op_mulu2:
-	case op_mulu4:
+	case op_sub16:
+	case op_sub32:
+	case op_sub64:
 	case op_mulu8:
-	case op_muli1:
-	case op_muli2:
-	case op_muli4:
+	case op_mulu16:
+	case op_mulu32:
+	case op_mulu64:
 	case op_muli8:
-	case op_divu1:
-	case op_divu2:
-	case op_divu4:
+	case op_muli16:
+	case op_muli32:
+	case op_muli64:
 	case op_divu8:
-	case op_divi1:
-	case op_divi2:
-	case op_divi4:
+	case op_divu16:
+	case op_divu32:
+	case op_divu64:
 	case op_divi8:
-	case op_modu1:
-	case op_modu2:
-	case op_modu4:
+	case op_divi16:
+	case op_divi32:
+	case op_divi64:
 	case op_modu8:
-	case op_modi1:
-	case op_modi2:
-	case op_modi4:
+	case op_modu16:
+	case op_modu32:
+	case op_modu64:
 	case op_modi8:
+	case op_modi16:
+	case op_modi32:
+	case op_modi64:
 		break;
 
 	//
 	// Bitwise shift operations
 	//
-	case op_lshift1:
-	case op_lshift2:
-	case op_lshift4:
 	case op_lshift8:
-	case op_rshiftu1:
-	case op_rshiftu2:
-	case op_rshiftu4:
+	case op_lshift16:
+	case op_lshift32:
+	case op_lshift64:
 	case op_rshiftu8:
-	case op_rshifti1:
-	case op_rshifti2:
-	case op_rshifti4:
+	case op_rshiftu16:
+	case op_rshiftu32:
+	case op_rshiftu64:
 	case op_rshifti8:
+	case op_rshifti16:
+	case op_rshifti32:
+	case op_rshifti64:
 		break;
 
 	//
 	// Bitwise logical operations
 	//
-	case op_band1:
-	case op_band2:
-	case op_band4:
 	case op_band8:
-	case op_bor1:
-	case op_bor2:
-	case op_bor4:
+	case op_band16:
+	case op_band32:
+	case op_band64:
 	case op_bor8:
-	case op_bxor1:
-	case op_bxor2:
-	case op_bxor4:
+	case op_bor16:
+	case op_bor32:
+	case op_bor64:
 	case op_bxor8:
-	case op_binv1:
-	case op_binv2:
-	case op_binv4:
+	case op_bxor16:
+	case op_bxor32:
+	case op_bxor64:
 	case op_binv8:
+	case op_binv16:
+	case op_binv32:
+	case op_binv64:
 		break;
 
 	//
 	// Boolean logical operations
 	//
-	case op_land1:
-	case op_land2:
-	case op_land4:
 	case op_land8:
-	case op_lor1:
-	case op_lor2:
-	case op_lor4:
+	case op_land16:
+	case op_land32:
+	case op_land64:
 	case op_lor8:
-	case op_linv1:
-	case op_linv2:
-	case op_linv4:
+	case op_lor16:
+	case op_lor32:
+	case op_lor64:
 	case op_linv8:
+	case op_linv16:
+	case op_linv32:
+	case op_linv64:
 		break;
 
 	//
 	// Comparison operations
 	//
-	case op_ceq1:
-	case op_ceq2:
-	case op_ceq4:
 	case op_ceq8:
-	case op_cne1:
-	case op_cne2:
-	case op_cne4:
+	case op_ceq16:
+	case op_ceq32:
+	case op_ceq64:
 	case op_cne8:
-	case op_cgtu1:
-	case op_cgtu2:
-	case op_cgtu4:
+	case op_cne16:
+	case op_cne32:
+	case op_cne64:
 	case op_cgtu8:
-	case op_cgti1:
-	case op_cgti2:
-	case op_cgti4:
+	case op_cgtu16:
+	case op_cgtu32:
+	case op_cgtu64:
 	case op_cgti8:
-	case op_cltu1:
-	case op_cltu2:
-	case op_cltu4:
+	case op_cgti16:
+	case op_cgti32:
+	case op_cgti64:
 	case op_cltu8:
-	case op_clti1:
-	case op_clti2:
-	case op_clti4:
+	case op_cltu16:
+	case op_cltu32:
+	case op_cltu64:
 	case op_clti8:
-	case op_cgeu1:
-	case op_cgeu2:
-	case op_cgeu4:
+	case op_clti16:
+	case op_clti32:
+	case op_clti64:
 	case op_cgeu8:
-	case op_cgei1:
-	case op_cgei2:
-	case op_cgei4:
+	case op_cgeu16:
+	case op_cgeu32:
+	case op_cgeu64:
 	case op_cgei8:
-	case op_cleu1:
-	case op_cleu2:
-	case op_cleu4:
+	case op_cgei16:
+	case op_cgei32:
+	case op_cgei64:
 	case op_cleu8:
-	case op_clei1:
-	case op_clei2:
-	case op_clei4:
+	case op_cleu16:
+	case op_cleu32:
+	case op_cleu64:
 	case op_clei8:
+	case op_clei16:
+	case op_clei32:
+	case op_clei64:
 		break;
 
 	//
 	// Function operations
 	//
 	case op_call:
-		*dts = dt_u8;
+		*dts = dt_u64;
 		break;
 	case op_calls:
 	case op_ret:
@@ -807,82 +861,82 @@ int imm_types_for_opcode(int opcode, int *dts)
 	//
 	// Branching operations
 	//
-	case op_jmp: *dts = dt_u8; break;
+	case op_jmp: *dts = dt_u64; break;
 	case op_jmps: break;
-	case op_rjmpi1: *dts = dt_i1; break;
-	case op_rjmpi2: *dts = dt_i2; break;
-	case op_rjmpi4: *dts = dt_i4; break;
-	case op_rjmpi8: *dts = dt_i8; break;
+	case op_rjmpi8:  *dts = dt_i8; break;
+	case op_rjmpi16: *dts = dt_i16; break;
+	case op_rjmpi32: *dts = dt_i32; break;
+	case op_rjmpi64: *dts = dt_i64; break;
 
 	//
 	// Conditional branching operations
 	//
-	case op_brz1:
-	case op_brz2:
-	case op_brz4:
 	case op_brz8:
-		*dts = dt_u8;
+	case op_brz16:
+	case op_brz32:
+	case op_brz64:
+		*dts = dt_u64;
 		break;
-	case op_rbrz1i1:
-	case op_rbrz2i1:
-	case op_rbrz4i1:
-	case op_rbrz8i1:
-		*dts = dt_i1;
-		break;
-	case op_rbrz1i2:
-	case op_rbrz2i2:
-	case op_rbrz4i2:
-	case op_rbrz8i2:
-		*dts = dt_i2;
-		break;
-	case op_rbrz1i4:
-	case op_rbrz2i4:
-	case op_rbrz4i4:
-	case op_rbrz8i4:
-		*dts = dt_i4;
-		break;
-	case op_rbrz1i8:
-	case op_rbrz2i8:
-	case op_rbrz4i8:
 	case op_rbrz8i8:
+	case op_rbrz16i8:
+	case op_rbrz32i8:
+	case op_rbrz64i8:
 		*dts = dt_i8;
+		break;
+	case op_rbrz8i16:
+	case op_rbrz16i16:
+	case op_rbrz32i16:
+	case op_rbrz64i16:
+		*dts = dt_i16;
+		break;
+	case op_rbrz8i32:
+	case op_rbrz16i32:
+	case op_rbrz32i32:
+	case op_rbrz64i32:
+		*dts = dt_i32;
+		break;
+	case op_rbrz8i64:
+	case op_rbrz16i64:
+	case op_rbrz32i64:
+	case op_rbrz64i64:
+		*dts = dt_i64;
 		break;
 
 	//
 	// Memory operations
 	//
-	case op_load1:
-	case op_load2:
-	case op_load4:
 	case op_load8:
-	case op_loadpop1:
-	case op_loadpop2:
-	case op_loadpop4:
+	case op_load16:
+	case op_load32:
+	case op_load64:
 	case op_loadpop8:
-	case op_loadsfp1:
-	case op_loadsfp2:
-	case op_loadsfp4:
+	case op_loadpop16:
+	case op_loadpop32:
+	case op_loadpop64:
 	case op_loadsfp8:
-	case op_loadpopsfp1:
-	case op_loadpopsfp2:
-	case op_loadpopsfp4:
+	case op_loadsfp16:
+	case op_loadsfp32:
+	case op_loadsfp64:
 	case op_loadpopsfp8:
-	case op_store1:
-	case op_store2:
-	case op_store4:
+	case op_loadpopsfp16:
+	case op_loadpopsfp32:
+	case op_loadpopsfp64:
 	case op_store8:
-	case op_storepop1:
-	case op_storepop2:
-	case op_storepop4:
+	case op_store16:
+	case op_store32:
+	case op_store64:
 	case op_storepop8:
-	case op_storesfp1:
-	case op_storesfp2:
-	case op_storesfp4:
+	case op_storepop16:
+	case op_storepop32:
+	case op_storepop64:
 	case op_storesfp8:
-	case op_storepopsfp1:
-	case op_storepopsfp2:
-	case op_storepopsfp4:
+	case op_storesfp16:
+	case op_storesfp32:
+	case op_storesfp64:
 	case op_storepopsfp8:
+	case op_storepopsfp16:
+	case op_storepopsfp32:
+	case op_storepopsfp64:
 		break;
 
 	//

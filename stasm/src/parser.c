@@ -248,51 +248,51 @@ int Parser_Terminate(struct Parser *parser)
 					// @todo: have a function which returns the min and max values for a given data type
 					// @todo: also have a function which returns how many bytes required for a given data type
 					switch (imm_dt) {
-					case dt_a1:
+					case dt_a8:
 						if (litval < -0x80 || litval > 0xff) success = false;
 						else token->type = TT_INT1;
 						break;
-					case dt_a2:
+					case dt_a16:
 						if (litval < -0x8000 || litval > 0xffff) success = false;
 						else token->type = TT_INT2;
 						break;
-					case dt_a4:
+					case dt_a32:
 						if (litval < -0x80000000 || litval > 0xffffffff) success = false;
 						else token->type = TT_INT4;
 						break;
-					case dt_a8:
+					case dt_a64:
 						// @todo: range check?
 						token->type = TT_INT8;
 						break;
-					case dt_i1:
+					case dt_i8:
 						if (litval < -0x80 || litval > 0x7f) success = false;
 						else token->type = TT_INT1;
 						break;
-					case dt_i2:
+					case dt_i16:
 						if (litval < -0x8000 || litval > 0x7fff) success = false;
 						else token->type = TT_INT2;
 						break;
-					case dt_i4:
+					case dt_i32:
 						if (litval < -0x80000000 || litval > 0x7fffffff) success = false;
 						else token->type = TT_INT4;
 						break;
-					case dt_i8:
+					case dt_i64:
 						// @todo: range check?
 						token->type = TT_INT8;
 						break;
-					case dt_u1:
+					case dt_u8:
 						if (litval < 0 || litval > 0xff) success = false;
 						else token->type = TT_INT1;
 						break;
-					case dt_u2:
+					case dt_u16:
 						if (litval < 0 || litval > 0xffff) success = false;
 						else token->type = TT_INT2;
 						break;
-					case dt_u4:
+					case dt_u32:
 						if (litval < 0 || litval > 0xffffffff) success = false;
 						else token->type = TT_INT4;
 						break;
-					case dt_u8:
+					case dt_u64:
 						// @todo: range check?
 						token->type = TT_INT8;
 						break;
