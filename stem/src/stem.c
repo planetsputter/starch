@@ -1,6 +1,7 @@
 // stem.c
 
 #include "starg.h"
+#include "mem.h"
 
 // Variables set by command-line arguments
 const char *arg_help = NULL;
@@ -67,5 +68,9 @@ int main(int argc, const char *argv[])
 	}
 	// Arguments parsed, no errors
 
+	struct mem memory;
+	mem_init(&memory);
+
+	mem_destroy(&memory);
 	return 0;
 }

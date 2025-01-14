@@ -292,7 +292,9 @@ enum {
 	//
 	// Special Operations
 	//
-	op_admin = 0xfd, // Administrative operations
+	op_setsbp, // Set SBP
+	op_setsfp, // Set SFP
+	op_setsp,  // Set SP
 	op_ext   = 0xfe, // Introduces an extended operation
 	op_nop   = 0xff, // No op
 };
@@ -328,3 +330,12 @@ enum {
 // Use imm_count_for_opcode() to determine the minimum length of dts.
 // Returns -1 on error.
 int imm_types_for_opcode(int opcode, int *dts);
+
+//
+// Error conditions
+//
+enum {
+	STERR_NONE = 0,
+	STERR_BAD_ALIGN, // Bad alignment
+	STERR_BAD_ACCESS, // Illegal memory access
+};

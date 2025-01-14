@@ -289,7 +289,9 @@ static const char *names[256] = {
 	//
 	// Special Operations
 	//
-	[op_admin] = "admin",
+	[op_setsbp] = "op_setsbp",
+	[op_setsfp] = "op_setsfp",
+	[op_setsp] = "op_setsp",
 	[op_ext] = "ext",
 	[op_nop] = "nop",
 };
@@ -618,8 +620,13 @@ int imm_count_for_opcode(int opcode)
 	//
 	// Special Operations
 	//
-	case op_admin:
+	case op_setsbp:
+	case op_setsfp:
+	case op_setsp:
+		ret = 1;
+		break;
 	case op_ext:
+		// @todo
 	case op_nop:
 		break;
 
@@ -942,9 +949,13 @@ int imm_types_for_opcode(int opcode, int *dts)
 	//
 	// Special Operations
 	//
-	case op_admin:
-		// @todo
+	case op_setsbp:
+	case op_setsfp:
+	case op_setsp:
+		*dts = dt_u64;
+		break;
 	case op_ext:
+		// @todo
 	case op_nop:
 		break;
 

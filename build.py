@@ -148,6 +148,8 @@ if __name__ == '__main__':
 			for cfg_target in cfg_targets:
 				if cfg_target not in args.targets: args.targets.append(cfg_target)
 		if args.targets:
-			subprocess.run(('make', '-j', str(args.jobs), '-f', '.build/makefile', *args.targets))
+			completed = subprocess.run(('make', '-j', str(args.jobs), '-f', '.build/makefile', *args.targets))
+			completed.check_returncode();
 	except Exception as e:
 		print('error: %s' % str(e))
+		exit(1)
