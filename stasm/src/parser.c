@@ -168,7 +168,7 @@ void Parser_ParseByte(struct Parser *parser, byte b, int *error)
 	// Process the decoded character
 	switch (parser->state) {
 	case PARSER_STATE_DEFAULT:
-		if (isalnum(c)) { // These continue or start a word
+		if (isalnum(c) || c == '-' || c == '_') { // These continue or start a word
 			if (parser->word == NULL) {
 				parser->word = bstr_alloc();
 			}
@@ -257,7 +257,7 @@ int Parser_Terminate(struct Parser *parser)
 						else token->type = TT_INT2;
 						break;
 					case dt_a32:
-						if (litval < -0x80000000 || litval > 0xffffffff) success = false;
+						if (litval < -0x80000000l || litval > 0xffffffffl) success = false;
 						else token->type = TT_INT4;
 						break;
 					case dt_a64:
@@ -273,7 +273,7 @@ int Parser_Terminate(struct Parser *parser)
 						else token->type = TT_INT2;
 						break;
 					case dt_i32:
-						if (litval < -0x80000000 || litval > 0x7fffffff) success = false;
+						if (litval < -0x80000000l || litval > 0x7fffffffl) success = false;
 						else token->type = TT_INT4;
 						break;
 					case dt_i64:
@@ -289,7 +289,7 @@ int Parser_Terminate(struct Parser *parser)
 						else token->type = TT_INT2;
 						break;
 					case dt_u32:
-						if (litval < 0 || litval > 0xffffffff) success = false;
+						if (litval < 0 || litval > 0xffffffffl) success = false;
 						else token->type = TT_INT4;
 						break;
 					case dt_u64:

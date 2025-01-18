@@ -7,7 +7,6 @@
 #include <stdint.h>
 
 enum {
-
 	op_invalid = 0x00, // Invalid operation
 
 	//
@@ -292,9 +291,9 @@ enum {
 	//
 	// Special Operations
 	//
-	op_setsbp, // Set SBP
-	op_setsfp, // Set SFP
-	op_setsp,  // Set SP
+	op_setsbp, // Set SBP to top 8 byte address
+	op_setsfp, // Set SFP to top 8 byte address
+	op_setsp,  // Set SP to top 8 byte address
 	op_ext   = 0xfe, // Introduces an extended operation
 	op_nop   = 0xff, // No op
 };

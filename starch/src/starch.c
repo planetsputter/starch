@@ -289,9 +289,9 @@ static const char *names[256] = {
 	//
 	// Special Operations
 	//
-	[op_setsbp] = "op_setsbp",
-	[op_setsfp] = "op_setsfp",
-	[op_setsp] = "op_setsp",
+	[op_setsbp] = "setsbp",
+	[op_setsfp] = "setsfp",
+	[op_setsp] = "setsp",
 	[op_ext] = "ext",
 	[op_nop] = "nop",
 };
@@ -315,6 +315,9 @@ int imm_count_for_opcode(int opcode)
 	int ret = 0;
 
 	switch (opcode) {
+	case op_invalid:
+		break;
+
 	//
 	// Push immediate operations
 	//
@@ -623,8 +626,6 @@ int imm_count_for_opcode(int opcode)
 	case op_setsbp:
 	case op_setsfp:
 	case op_setsp:
-		ret = 1;
-		break;
 	case op_ext:
 		// @todo
 	case op_nop:

@@ -172,7 +172,7 @@ int main(int argc, const char *argv[])
 					ret = 1;
 					break;
 				}
-				val = (val << 8) | b;
+				val |= b << (j * 8);
 			}
 			if (ret) break;
 
@@ -180,13 +180,19 @@ int main(int argc, const char *argv[])
 			switch (dt) {
 			case dt_a8:
 			case dt_u8:
+				ret = fprintf(outfile, " %hhu", (uint8_t)val);
+				break;
 			case dt_a16:
 			case dt_u16:
+				ret = fprintf(outfile, " %hu", (uint16_t)val);
+				break;
 			case dt_a32:
 			case dt_u32:
+				ret = fprintf(outfile, " %u", (uint32_t)val);
+				break;
 			case dt_a64:
 			case dt_u64:
-				ret = fprintf(outfile, " %lu", val);
+				ret = fprintf(outfile, " %lu", (uint64_t)val);
 				break;
 			case dt_i8:
 				ret = fprintf(outfile, " %d", (int8_t)val);
@@ -199,6 +205,7 @@ int main(int argc, const char *argv[])
 				break;
 			case dt_i64:
 				ret = fprintf(outfile, " %ld", val);
+				break;
 			}
 			if (ret < 0) {
 				fprintf(stderr, "error: failed to write to %s\n", arg_output ? arg_output : "stdout");

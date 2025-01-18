@@ -32,7 +32,7 @@ struct arg_desc arg_descs[] = {
 		'\0',                // Flag
 		NULL,                // Name
 		&arg_src,            // Value
-		true,                // Required
+		false,               // Required
 		"starch source",     // Usage text
 		"source"             // Value hint
 	},
@@ -78,10 +78,16 @@ int main(int argc, const char *argv[])
 	}
 	// Arguments parsed, no errors
 
-	FILE *infile = fopen(arg_src, "r");
-	if (!infile) {
-		fprintf(stderr, "error: failed to open %s\n", arg_src);
-		return 1;
+	FILE *infile;
+	if (arg_src) {
+		infile = fopen(arg_src, "r");
+		if (!infile) {
+			fprintf(stderr, "error: failed to open %s\n", arg_src ? arg_src : "stdin");
+			return 1;
+		}
+	}
+	else {
+		infile = stdin;
 	}
 
 	struct Parser parser;
@@ -92,13 +98,15 @@ int main(int argc, const char *argv[])
 		if (error) break;
 	}
 	if (!error && ferror(infile)) {
-		fprintf(stderr, "error: failed to read from %s\n", arg_src);
+		fprintf(stderr, "error: failed to read from %s\n", arg_src ? arg_src : "stdin");
 		error = 1;
 	}
-	fclose(infile);
+	if (infile != stdin) {
+		fclose(infile);
+	}
 	if (!error) {
 		if (!Parser_CanTerminate(&parser)) {
-			fprintf(stderr, "error: unexpected end of file in %s\n", arg_src);
+			fprintf(stderr, "error: unexpected end of file in %s\n", arg_src ? arg_src : "stdin");
 			error = 1;
 		}
 		else {
