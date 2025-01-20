@@ -25,14 +25,17 @@ int core_step(struct core *core, struct mem *mem)
 	int ret = mem_read8(mem, core, core->pc, &opcode);
 	if (ret) return ret;
 
-	uint8_t temp_u8;
-	uint16_t temp_u16;
-	uint32_t temp_u32;
-	uint64_t temp_addr, temp_u64;
+	uint8_t temp_u8, temp_u8b;
+	uint16_t temp_u16, temp_u16b;
+	uint32_t temp_u32, temp_u32b;
+	uint64_t temp_addr, temp_u64, temp_u64b;
 	int64_t temp_i64;
 
 	// Execute instruction on core and memory
 	switch (opcode) {
+	//
+	// Invalid instruction
+	//
 	case op_invalid:
 		return STERR_BAD_INST;
 
@@ -339,24 +342,101 @@ int core_step(struct core *core, struct mem *mem)
 	//
 	// Demotion operations
 	//
+	// Note: Some of these could be replaced with pop operations.
 	case op_dem64to32:
+		core->sp += 4;
+		break;
 	case op_dem64to16:
+		core->sp += 6;
+		break;
 	case op_dem64to8:
+		core->sp += 7;
+		break;
 	case op_dem32to16:
+		core->sp += 2;
+		break;
 	case op_dem32to8:
+		core->sp += 3;
+		break;
 	case op_dem16to8:
+		core->sp += 1;
+		break;
 
 	//
 	// Integer arithmetic operations
 	//
 	case op_add8:
+		ret = mem_read8(mem, core, core->sp, &temp_u8); // Read operand
+		if (ret) return ret;
+		ret = mem_read8(mem, core, core->sp + 1, &temp_u8b); // Read operand
+		if (ret) return ret;
+		ret = mem_write8(mem, core, core->sp + 1, temp_u8 + temp_u8b); // Write sum
+		if (ret) return ret;
+		core->sp += 1;
+		break;
 	case op_add16:
+		ret = mem_read16(mem, core, core->sp, &temp_u16); // Read operand
+		if (ret) return ret;
+		ret = mem_read16(mem, core, core->sp + 2, &temp_u16b); // Read operand
+		if (ret) return ret;
+		ret = mem_write16(mem, core, core->sp + 2, temp_u16 + temp_u16b); // Write sum
+		if (ret) return ret;
+		core->sp += 2;
+		break;
 	case op_add32:
+		ret = mem_read32(mem, core, core->sp, &temp_u32); // Read operand
+		if (ret) return ret;
+		ret = mem_read32(mem, core, core->sp + 4, &temp_u32b); // Read operand
+		if (ret) return ret;
+		ret = mem_write32(mem, core, core->sp + 4, temp_u32 + temp_u32b); // Write sum
+		if (ret) return ret;
+		core->sp += 4;
+		break;
 	case op_add64:
+		ret = mem_read64(mem, core, core->sp, &temp_u64); // Read operand
+		if (ret) return ret;
+		ret = mem_read64(mem, core, core->sp + 8, &temp_u64b); // Read operand
+		if (ret) return ret;
+		ret = mem_write64(mem, core, core->sp + 8, temp_u64 + temp_u64b); // Write sum
+		if (ret) return ret;
+		core->sp += 8;
+		break;
 	case op_sub8:
+		ret = mem_read8(mem, core, core->sp, &temp_u8); // Read operand
+		if (ret) return ret;
+		ret = mem_read8(mem, core, core->sp + 1, &temp_u8b); // Read operand
+		if (ret) return ret;
+		ret = mem_write8(mem, core, core->sp + 1, temp_u8 - temp_u8b); // Write sum
+		if (ret) return ret;
+		core->sp += 1;
+		break;
 	case op_sub16:
+		ret = mem_read16(mem, core, core->sp, &temp_u16); // Read operand
+		if (ret) return ret;
+		ret = mem_read16(mem, core, core->sp + 2, &temp_u16b); // Read operand
+		if (ret) return ret;
+		ret = mem_write16(mem, core, core->sp + 2, temp_u16 - temp_u16b); // Write sum
+		if (ret) return ret;
+		core->sp += 2;
+		break;
 	case op_sub32:
+		ret = mem_read32(mem, core, core->sp, &temp_u32); // Read operand
+		if (ret) return ret;
+		ret = mem_read32(mem, core, core->sp + 4, &temp_u32b); // Read operand
+		if (ret) return ret;
+		ret = mem_write32(mem, core, core->sp + 4, temp_u32 - temp_u32b); // Write sum
+		if (ret) return ret;
+		core->sp += 4;
+		break;
 	case op_sub64:
+		ret = mem_read64(mem, core, core->sp, &temp_u64); // Read operand
+		if (ret) return ret;
+		ret = mem_read64(mem, core, core->sp + 8, &temp_u64b); // Read operand
+		if (ret) return ret;
+		ret = mem_write64(mem, core, core->sp + 8, temp_u64 - temp_u64b); // Write sum
+		if (ret) return ret;
+		core->sp += 8;
+		break;
 	case op_mulu8:
 	case op_mulu16:
 	case op_mulu32:

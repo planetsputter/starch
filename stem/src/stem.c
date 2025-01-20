@@ -1,6 +1,7 @@
 // stem.c
 
 #include <errno.h>
+#include <stdlib.h>
 
 #include "core.h"
 #include "mem.h"
@@ -8,6 +9,8 @@
 #include "starg.h"
 
 // Variables set by command-line arguments
+const char *arg_cycles = NULL;
+const char *arg_dump = NULL;
 const char *arg_help = NULL;
 const char *arg_image = NULL;
 
@@ -20,6 +23,24 @@ struct arg_desc arg_descs[] = {
 		false,
 		"show usage",
 		NULL
+	},
+	{
+		ARG_TYPE_NAMED,
+		'c',
+		"--cycles",
+		&arg_cycles,
+		false,
+		"cycles",
+		"cycles"
+	},
+	{
+		ARG_TYPE_NAMED,
+		'd',
+		"--dump",
+		&arg_dump,
+		false,
+		"hex dump",
+		"dump"
 	},
 	{
 		ARG_TYPE_POSITIONAL,
@@ -72,6 +93,16 @@ int main(int argc, const char *argv[])
 	}
 	// Arguments parsed, no errors
 
+	long int max_cycles = -1;
+	if (arg_cycles) {
+		char *endptr = NULL;
+		max_cycles = strtol(arg_cycles, &endptr, 0);
+		if (*arg_cycles == '\0' || *endptr != '\0') {
+			fprintf(stderr, "error: invalid cycle count \"%s\"\n", arg_cycles);
+			return 1;
+		}
+	}
+
 	// Open the input image file
 	FILE *infile = fopen(arg_image, "rb");
 	if (infile == NULL) {
@@ -93,10 +124,27 @@ int main(int argc, const char *argv[])
 		fprintf(stderr, "error: failed to load memory from \"%s\" to address 0\n", arg_image);
 	}
 	else {
-		for (; (ret = core_step(&core, &memory)) == 0; );
+		for (int cycles = 0; (max_cycles < 0 || cycles < max_cycles) && ret == 0; cycles++) {
+			ret = core_step(&core, &memory);
+		}
 		// @todo: print an error message for non-halt opcodes
 		if (ret != STERR_HALT && ret != STERR_NONE) {
 			fprintf(stderr, "error: an error occurred during emulation: %s (0x%08x)\n", name_for_sterr(ret), ret);
+		}
+	}
+
+	// Create a hex dump if requested
+	if (arg_dump) {
+		FILE *dumpfile = fopen(arg_dump, "wb");
+		if (!dumpfile) {
+			fprintf(stderr, "error: unable to open hex dump file \"%s\"\n", arg_dump);
+			ret = 1;
+		}
+		else {
+			// @todo: the memory range does not include highest byte
+			// would be better to have a function that dumps all modified memory
+			ret = mem_dump_hex(&memory, 0, 0, dumpfile);
+			fclose(dumpfile);
 		}
 	}
 

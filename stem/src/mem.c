@@ -74,6 +74,40 @@ static struct mem_node *mem_node_get_page(struct mem_node *node, uint64_t addr)
 	return retnode;
 }
 
+struct iter_params;
+typedef int (*iter_func_t)(struct mem_node*, struct iter_params *params);
+struct iter_params {
+	uint64_t begin_addr, end_addr;
+	iter_func_t iter_func;
+	void *user_ptr;
+};
+static int mem_node_iterate(struct mem_node *node, struct iter_params *params)
+{
+	int ret;
+	if (!node) {
+		ret = 0;
+	}
+	else if (params->end_addr != 0 && node->addr >= params->end_addr) {
+		// Range ends before this node
+		ret = mem_node_iterate(node->prev, params);
+	}
+	else if (node->addr + MEM_PAGE_SIZE <= params->begin_addr) {
+		// Range begins after this node
+		ret = mem_node_iterate(node->next, params);
+	}
+	else {
+		// Range contains this node
+		ret = mem_node_iterate(node->prev, params);
+		if (ret == 0) {
+			ret = params->iter_func(node, params);
+			if (ret == 0) {
+				ret = mem_node_iterate(node->next, params);
+			}
+		}
+	}
+	return ret;
+}
+
 //
 // Memory object
 //
@@ -330,4 +364,58 @@ int mem_load_image(struct mem *mem, uint64_t addr, FILE *image_file)
 		node->data[addr & MEM_PAGE_MASK] = ret;
 	}
 	return ferror(image_file) ? errno : 0;
+}
+
+static int print_hex_iter_func(struct mem_node *node, struct iter_params *params)
+{
+	FILE *hex_file = (FILE*)params->user_ptr;
+
+	uint64_t addr = node->addr;
+	if (addr < params->begin_addr) {
+		addr = params->begin_addr;
+	}
+	addr &= ~(uint64_t)0xf;
+
+	uint64_t stop_addr = node->addr + MEM_PAGE_SIZE;
+	if (params->end_addr != 0 && stop_addr > params->end_addr) {
+		stop_addr = params->end_addr;
+		stop_addr = (stop_addr + 15) & ~(uint64_t)0xf;
+	}
+
+	int ret = 0;
+	for (; ret == 0 && addr < stop_addr; addr += 16) {
+		int i;
+		for (i = 0; i < 16; i++) {
+			if (node->data[(addr + i) & MEM_PAGE_MASK]) {
+				break;
+			}
+		}
+		if (i == 16) { // Don't print rows that are all zero
+			continue;
+		}
+
+		// Print row address
+		ret = fprintf(hex_file, "%016lx:", addr);
+		if (ret < 0) break;
+		// Print row data
+		for (i = 0; i < 16; i++) {
+			ret = fprintf(hex_file, " %02x", node->data[(addr + i) & MEM_PAGE_MASK]);
+			if (ret < 0) break;
+		}
+		if (i == 16) {
+			ret = fprintf(hex_file, "\n");
+			if (ret >= 0) ret = 0;
+		}
+	}
+	return ret;
+}
+
+int mem_dump_hex(struct mem *mem, uint64_t addr, uint64_t size, FILE *hex_file)
+{
+	struct iter_params params;
+	params.begin_addr = addr;
+	params.end_addr = addr + size;
+	params.iter_func = print_hex_iter_func;
+	params.user_ptr = hex_file;
+	return mem_node_iterate(mem->root, &params);
 }

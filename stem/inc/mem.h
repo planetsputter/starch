@@ -30,4 +30,9 @@ int mem_read16(struct mem*, struct core*, uint64_t addr, uint16_t *data);
 int mem_read32(struct mem*, struct core*, uint64_t addr, uint32_t *data);
 int mem_read64(struct mem*, struct core*, uint64_t addr, uint64_t *data);
 
+// Load a binary image file into memory. Returns 0 on success.
 int mem_load_image(struct mem*, uint64_t addr, FILE *image_file);
+// Dump the given range of memory to a hex file.
+// If addr and size are both zero, dumps all modified memory.
+// Returns 0 on success.
+int mem_dump_hex(struct mem*, uint64_t addr, uint64_t size, FILE *hex_file);

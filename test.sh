@@ -364,17 +364,13 @@ check_opi32 push32i64 rjmpi32 rbrz8i32 rbrz16i32 rbrz32i32 rbrz64i32
 #
 # Test halt
 #
-$STASM <<EOF
-halt
-EOF
+echo halt | $STASM
 $STEM a.stb
 
 #
 # Test invalid
 #
-$STASM <<EOF
-invalid
-EOF
-if $STEM a.stb; then false; fi
+echo invalid | $STASM
+if $STEM a.stb 2>/dev/null; then false; else [ $? -eq 1 ]; fi
 
 echo all tests passed
