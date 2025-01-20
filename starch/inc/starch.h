@@ -294,6 +294,7 @@ enum {
 	op_setsbp, // Set SBP to top 8 byte address
 	op_setsfp, // Set SFP to top 8 byte address
 	op_setsp,  // Set SP to top 8 byte address
+	op_halt, // Halts the processor
 	op_ext   = 0xfe, // Introduces an extended operation
 	op_nop   = 0xff, // No op
 };
@@ -331,10 +332,22 @@ enum {
 int imm_types_for_opcode(int opcode, int *dts);
 
 //
+// Constants
+//
+enum {
+	STFRAME_SIZE = 16, // Stack frame size
+};
+
+//
 // Error conditions
 //
 enum {
 	STERR_NONE = 0,
+	STERR_BAD_INST, // Bad instruction
 	STERR_BAD_ALIGN, // Bad alignment
-	STERR_BAD_ACCESS, // Illegal memory access
+	STERR_BAD_IO_ACCESS, // Access to unused IO memory
+	STERR_BAD_FRAME_ACCESS, // Access to protected stack frame data
+	STERR_HALT, // Processor halted
 };
+
+const char *name_for_sterr(int);

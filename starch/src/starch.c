@@ -292,6 +292,7 @@ static const char *names[256] = {
 	[op_setsbp] = "setsbp",
 	[op_setsfp] = "setsfp",
 	[op_setsp] = "setsp",
+	[op_halt] = "halt",
 	[op_ext] = "ext",
 	[op_nop] = "nop",
 };
@@ -626,6 +627,7 @@ int imm_count_for_opcode(int opcode)
 	case op_setsbp:
 	case op_setsfp:
 	case op_setsp:
+	case op_halt:
 	case op_ext:
 		// @todo
 	case op_nop:
@@ -955,6 +957,7 @@ int imm_types_for_opcode(int opcode, int *dts)
 	case op_setsp:
 		*dts = dt_u64;
 		break;
+	case op_halt:
 	case op_ext:
 		// @todo
 	case op_nop:
@@ -966,4 +969,23 @@ int imm_types_for_opcode(int opcode, int *dts)
 	}
 
 	return ret;
+}
+
+const char *name_for_sterr(int sterr)
+{
+	switch (sterr) {
+	case STERR_NONE:
+		return "STERR_NONE";
+	case STERR_BAD_INST:
+		return "STERR_BAD_INST";
+	case STERR_BAD_ALIGN:
+		return "STERR_BAD_ALIGN";
+	case STERR_BAD_IO_ACCESS:
+		return "STERR_BAD_IO_ACCESS";
+	case STERR_BAD_FRAME_ACCESS:
+		return "STERR_BAD_FRAME_ACCESS";
+	case STERR_HALT:
+		return "STERR_HALT";
+	}
+	return "STERR_UNKNOWN";
 }

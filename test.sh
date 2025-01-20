@@ -7,8 +7,9 @@ trap 'echo test failed on line $LINENO' ERR
 mkdir -p test
 cd test
 
-STASM=../stasm/bin/stasm
 DISTASM=../distasm/bin/distasm
+STASM=../stasm/bin/stasm
+STEM=../stem/bin/stem
 
 # Check for symmetric dis/assembly of opcodes with zero immediates
 check_op0() {
@@ -73,7 +74,8 @@ check_op0 invalid \
 	storepop8 storepop16 storepop32 storepop64 \
 	storesfp8 storesfp16 storesfp32 storesfp64 \
 	storepopsfp8 storepopsfp16 storepopsfp32 storepopsfp64 \
-	setsbp setsfp setsp ext nop
+	setsbp setsfp setsp halt \
+	ext nop
 
 #
 # Check for symmetric dis/assembly of opcodes with a8 immediate
@@ -358,5 +360,21 @@ check_opi32() {
 check_opi32 push32i64 rjmpi32 rbrz8i32 rbrz16i32 rbrz32i32 rbrz64i32
 
 # @todo: Test opcodes with a64 immediate
+
+#
+# Test halt
+#
+$STASM <<EOF
+halt
+EOF
+$STEM a.stb
+
+#
+# Test invalid
+#
+$STASM <<EOF
+invalid
+EOF
+if $STEM a.stb; then false; fi
 
 echo all tests passed

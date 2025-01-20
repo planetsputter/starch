@@ -1,7 +1,11 @@
 // stem.c
 
-#include "starg.h"
+#include <errno.h>
+
+#include "core.h"
 #include "mem.h"
+#include "starch.h"
+#include "starg.h"
 
 // Variables set by command-line arguments
 const char *arg_help = NULL;
@@ -68,9 +72,37 @@ int main(int argc, const char *argv[])
 	}
 	// Arguments parsed, no errors
 
+	// Open the input image file
+	FILE *infile = fopen(arg_image, "rb");
+	if (infile == NULL) {
+		fprintf(stderr, "error: failed to open image file \"%s\"\n", arg_image);
+		return errno;
+	}
+
+	// Initialize memory
 	struct mem memory;
 	mem_init(&memory);
 
+	// Initialize a core
+	struct core core;
+	core_init(&core);
+
+	// @todo: load input file into memory
+	int ret = mem_load_image(&memory, 0, infile);
+	if (ret) {
+		fprintf(stderr, "error: failed to load memory from \"%s\" to address 0\n", arg_image);
+	}
+	else {
+		for (; (ret = core_step(&core, &memory)) == 0; );
+		// @todo: print an error message for non-halt opcodes
+		if (ret != STERR_HALT && ret != STERR_NONE) {
+			fprintf(stderr, "error: an error occurred during emulation: %s (0x%08x)\n", name_for_sterr(ret), ret);
+		}
+	}
+
+	// Clean up
 	mem_destroy(&memory);
-	return 0;
+	core_destroy(&core);
+	fclose(infile);
+	return ret == STERR_HALT || ret == STERR_NONE ? 0 : ret;
 }

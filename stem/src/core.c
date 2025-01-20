@@ -5,9 +5,13 @@
 #include "core.h"
 #include "starch.h"
 
-void core_init(struct core *c)
+void core_init(struct core *core)
 {
-	memset(c, 0, sizeof(struct core));
+	memset(core, 0, sizeof(struct core));
+	// Start with a stack of 1GiB
+	core->sbp = 0x40000000;
+	core->sfp = 0x40000000;
+	core->sp = 0x40000000;
 }
 
 void core_destroy(struct core*)
@@ -18,144 +22,147 @@ int core_step(struct core *core, struct mem *mem)
 {
 	// Fetch instruction from memory
 	uint8_t opcode;
-	int ret = mem_read8(mem, core->pc, &opcode);
+	int ret = mem_read8(mem, core, core->pc, &opcode);
 	if (ret) return ret;
 
 	uint8_t temp_u8;
 	uint16_t temp_u16;
 	uint32_t temp_u32;
-	uint64_t temp_u64;
+	uint64_t temp_addr, temp_u64;
 	int64_t temp_i64;
 
 	// Execute instruction on core and memory
 	switch (opcode) {
+	case op_invalid:
+		return STERR_BAD_INST;
+
 	//
 	// Push immediate operations
 	//
 	case op_push8:
-		ret = mem_read8(mem, core->pc + 1, &temp_u8); // Read imm
+		ret = mem_read8(mem, core, core->pc + 1, &temp_u8); // Read imm
 		if (ret) return ret;
-		ret = mem_write8(mem, core->sp - 1, temp_u8); // Write to stack
+		ret = mem_write8(mem, core, core->sp - 1, temp_u8); // Write to stack
 		if (ret) return ret;
 		core->sp -= 1;
 		core->pc += 2;
 		break;
 	case op_push8u16:
-		ret = mem_read8(mem, core->pc + 1, &temp_u8); // Read imm
+		ret = mem_read8(mem, core, core->pc + 1, &temp_u8); // Read imm
 		if (ret) return ret;
-		ret = mem_write16(mem, core->sp - 2, temp_u8); // Write to stack
+		ret = mem_write16(mem, core, core->sp - 2, temp_u8); // Write to stack
 		if (ret) return ret;
 		core->sp -= 2;
 		core->pc += 2;
 		break;
 	case op_push8u32:
-		ret = mem_read8(mem, core->pc + 1, &temp_u8); // Read imm
+		ret = mem_read8(mem, core, core->pc + 1, &temp_u8); // Read imm
 		if (ret) return ret;
-		ret = mem_write32(mem, core->sp - 4, temp_u8); // Write to stack
+		ret = mem_write32(mem, core, core->sp - 4, temp_u8); // Write to stack
 		if (ret) return ret;
 		core->sp -= 4;
 		core->pc += 2;
 		break;
 	case op_push8u64:
-		ret = mem_read8(mem, core->pc + 1, &temp_u8); // Read imm
+		ret = mem_read8(mem, core, core->pc + 1, &temp_u8); // Read imm
 		if (ret) return ret;
-		ret = mem_write64(mem, core->sp - 8, temp_u8); // Write to stack
+		ret = mem_write64(mem, core, core->sp - 8, temp_u8); // Write to stack
 		if (ret) return ret;
 		core->sp -= 8;
 		core->pc += 2;
 		break;
 	case op_push8i16:
-		ret = mem_read8(mem, core->pc + 1, &temp_u8); // Read imm
+		ret = mem_read8(mem, core, core->pc + 1, &temp_u8); // Read imm
 		if (ret) return ret;
-		ret = mem_write16(mem, core->sp - 2, (int8_t)temp_u8); // Write to stack
+		ret = mem_write16(mem, core, core->sp - 2, (int8_t)temp_u8); // Write to stack
 		if (ret) return ret;
 		core->sp -= 2;
 		core->pc += 2;
 		break;
 	case op_push8i32:
-		ret = mem_read8(mem, core->pc + 1, &temp_u8); // Read imm
+		ret = mem_read8(mem, core, core->pc + 1, &temp_u8); // Read imm
 		if (ret) return ret;
-		ret = mem_write32(mem, core->sp - 4, (int8_t)temp_u8); // Write to stack
+		ret = mem_write32(mem, core, core->sp - 4, (int8_t)temp_u8); // Write to stack
 		if (ret) return ret;
 		core->sp -= 4;
 		core->pc += 2;
 		break;
 	case op_push8i64:
-		ret = mem_read8(mem, core->pc + 1, &temp_u8); // Read imm
+		ret = mem_read8(mem, core, core->pc + 1, &temp_u8); // Read imm
 		if (ret) return ret;
-		ret = mem_write64(mem, core->sp - 8, (int8_t)temp_u8); // Write to stack
+		ret = mem_write64(mem, core, core->sp - 8, (int8_t)temp_u8); // Write to stack
 		if (ret) return ret;
 		core->sp -= 8;
 		core->pc += 2;
 		break;
 	case op_push16:
-		ret = mem_read16(mem, core->pc + 1, &temp_u16); // Read imm
+		ret = mem_read16(mem, core, core->pc + 1, &temp_u16); // Read imm
 		if (ret) return ret;
-		ret = mem_write16(mem, core->sp - 2, temp_u16); // Write to stack
+		ret = mem_write16(mem, core, core->sp - 2, temp_u16); // Write to stack
 		if (ret) return ret;
 		core->sp -= 2;
 		core->pc += 3;
 		break;
 	case op_push16u32:
-		ret = mem_read16(mem, core->pc + 1, &temp_u16); // Read imm
+		ret = mem_read16(mem, core, core->pc + 1, &temp_u16); // Read imm
 		if (ret) return ret;
-		ret = mem_write32(mem, core->sp - 4, temp_u16); // Write to stack
+		ret = mem_write32(mem, core, core->sp - 4, temp_u16); // Write to stack
 		if (ret) return ret;
 		core->sp -= 4;
 		core->pc += 3;
 		break;
 	case op_push16u64:
-		ret = mem_read16(mem, core->pc + 1, &temp_u16); // Read imm
+		ret = mem_read16(mem, core, core->pc + 1, &temp_u16); // Read imm
 		if (ret) return ret;
-		ret = mem_write64(mem, core->sp - 8, temp_u16); // Write to stack
+		ret = mem_write64(mem, core, core->sp - 8, temp_u16); // Write to stack
 		if (ret) return ret;
 		core->sp -= 8;
 		core->pc += 3;
 		break;
 	case op_push16i32:
-		ret = mem_read16(mem, core->pc + 1, &temp_u16); // Read imm
+		ret = mem_read16(mem, core, core->pc + 1, &temp_u16); // Read imm
 		if (ret) return ret;
-		ret = mem_write32(mem, core->sp - 4, (int16_t)temp_u16); // Write to stack
+		ret = mem_write32(mem, core, core->sp - 4, (int16_t)temp_u16); // Write to stack
 		if (ret) return ret;
 		core->sp -= 4;
 		core->pc += 3;
 		break;
 	case op_push16i64:
-		ret = mem_read16(mem, core->pc + 1, &temp_u16); // Read imm
+		ret = mem_read16(mem, core, core->pc + 1, &temp_u16); // Read imm
 		if (ret) return ret;
-		ret = mem_write64(mem, core->sp - 8, (int16_t)temp_u16); // Write to stack
+		ret = mem_write64(mem, core, core->sp - 8, (int16_t)temp_u16); // Write to stack
 		if (ret) return ret;
 		core->sp -= 8;
 		core->pc += 3;
 		break;
 	case op_push32:
-		ret = mem_read32(mem, core->pc + 1, &temp_u32); // Read imm
+		ret = mem_read32(mem, core, core->pc + 1, &temp_u32); // Read imm
 		if (ret) return ret;
-		ret = mem_write32(mem, core->sp - 4, temp_u32); // Write to stack
+		ret = mem_write32(mem, core, core->sp - 4, temp_u32); // Write to stack
 		if (ret) return ret;
 		core->sp -= 4;
 		core->pc += 5;
 		break;
 	case op_push32u64:
-		ret = mem_read32(mem, core->pc + 1, &temp_u32); // Read imm
+		ret = mem_read32(mem, core, core->pc + 1, &temp_u32); // Read imm
 		if (ret) return ret;
-		ret = mem_write64(mem, core->sp - 8, temp_u32); // Write to stack
+		ret = mem_write64(mem, core, core->sp - 8, temp_u32); // Write to stack
 		if (ret) return ret;
 		core->sp -= 8;
 		core->pc += 5;
 		break;
 	case op_push32i64:
-		ret = mem_read32(mem, core->pc + 1, &temp_u32); // Read imm
+		ret = mem_read32(mem, core, core->pc + 1, &temp_u32); // Read imm
 		if (ret) return ret;
-		ret = mem_write64(mem, core->sp - 8, (int32_t)temp_u32); // Write to stack
+		ret = mem_write64(mem, core, core->sp - 8, (int32_t)temp_u32); // Write to stack
 		if (ret) return ret;
 		core->sp -= 8;
 		core->pc += 5;
 		break;
 	case op_push64:
-		ret = mem_read64(mem, core->pc + 1, &temp_u64); // Read imm
+		ret = mem_read64(mem, core, core->pc + 1, &temp_u64); // Read imm
 		if (ret) return ret;
-		ret = mem_write64(mem, core->sp - 8, temp_u64); // Write to stack
+		ret = mem_write64(mem, core, core->sp - 8, temp_u64); // Write to stack
 		if (ret) return ret;
 		core->sp -= 8;
 		core->pc += 9;
@@ -181,30 +188,30 @@ int core_step(struct core *core, struct mem *mem)
 	// Duplication operations
 	//
 	case op_dup8:
-		ret = mem_read8(mem, core->sp, &temp_u8);
+		ret = mem_read8(mem, core, core->sp, &temp_u8);
 		if (ret) return ret;
-		ret = mem_write8(mem, core->sp - 1, temp_u8);
+		ret = mem_write8(mem, core, core->sp - 1, temp_u8);
 		if (ret) return ret;
 		core->sp -= 1;
 		break;
 	case op_dup16:
-		ret = mem_read16(mem, core->sp, &temp_u16);
+		ret = mem_read16(mem, core, core->sp, &temp_u16);
 		if (ret) return ret;
-		ret = mem_write16(mem, core->sp - 2, temp_u16);
+		ret = mem_write16(mem, core, core->sp - 2, temp_u16);
 		if (ret) return ret;
 		core->sp -= 2;
 		break;
 	case op_dup32:
-		ret = mem_read32(mem, core->sp, &temp_u32);
+		ret = mem_read32(mem, core, core->sp, &temp_u32);
 		if (ret) return ret;
-		ret = mem_write32(mem, core->sp - 4, temp_u32);
+		ret = mem_write32(mem, core, core->sp - 4, temp_u32);
 		if (ret) return ret;
 		core->sp -= 4;
 		break;
 	case op_dup64:
-		ret = mem_read64(mem, core->sp, &temp_u64);
+		ret = mem_read64(mem, core, core->sp, &temp_u64);
 		if (ret) return ret;
-		ret = mem_write64(mem, core->sp - 8, temp_u64);
+		ret = mem_write64(mem, core, core->sp - 8, temp_u64);
 		if (ret) return ret;
 		core->sp -= 8;
 		break;
@@ -213,30 +220,30 @@ int core_step(struct core *core, struct mem *mem)
 	// Setting operations
 	//
 	case op_set8:
-		ret = mem_read8(mem, core->sp, &temp_u8);
+		ret = mem_read8(mem, core, core->sp, &temp_u8);
 		if (ret) return ret;
-		ret = mem_write8(mem, core->sp + 1, temp_u8);
+		ret = mem_write8(mem, core, core->sp + 1, temp_u8);
 		if (ret) return ret;
 		core->sp += 1;
 		break;
 	case op_set16:
-		ret = mem_read16(mem, core->sp, &temp_u16);
+		ret = mem_read16(mem, core, core->sp, &temp_u16);
 		if (ret) return ret;
-		ret = mem_write16(mem, core->sp + 2, temp_u16);
+		ret = mem_write16(mem, core, core->sp + 2, temp_u16);
 		if (ret) return ret;
 		core->sp += 2;
 		break;
 	case op_set32:
-		ret = mem_read32(mem, core->sp, &temp_u32);
+		ret = mem_read32(mem, core, core->sp, &temp_u32);
 		if (ret) return ret;
-		ret = mem_write32(mem, core->sp + 4, temp_u32);
+		ret = mem_write32(mem, core, core->sp + 4, temp_u32);
 		if (ret) return ret;
 		core->sp += 4;
 		break;
 	case op_set64:
-		ret = mem_read64(mem, core->sp, &temp_u64);
+		ret = mem_read64(mem, core, core->sp, &temp_u64);
 		if (ret) return ret;
-		ret = mem_write64(mem, core->sp + 8, temp_u64);
+		ret = mem_write64(mem, core, core->sp + 8, temp_u64);
 		if (ret) return ret;
 		core->sp += 8;
 		break;
@@ -245,86 +252,86 @@ int core_step(struct core *core, struct mem *mem)
 	// Promotion operations
 	//
 	case op_prom8u16:
-		ret = mem_read8(mem, core->sp, &temp_u8);
+		ret = mem_read8(mem, core, core->sp, &temp_u8);
 		if (ret) return ret;
-		ret = mem_write16(mem, core->sp - 1, temp_u8);
+		ret = mem_write16(mem, core, core->sp - 1, temp_u8);
 		if (ret) return ret;
 		core->sp -= 1;
 		break;
 	case op_prom8u32:
-		ret = mem_read8(mem, core->sp, &temp_u8);
+		ret = mem_read8(mem, core, core->sp, &temp_u8);
 		if (ret) return ret;
-		ret = mem_write32(mem, core->sp - 3, temp_u8);
+		ret = mem_write32(mem, core, core->sp - 3, temp_u8);
 		if (ret) return ret;
 		core->sp -= 3;
 		break;
 	case op_prom8u64:
-		ret = mem_read8(mem, core->sp, &temp_u8);
+		ret = mem_read8(mem, core, core->sp, &temp_u8);
 		if (ret) return ret;
-		ret = mem_write64(mem, core->sp - 7, temp_u8);
+		ret = mem_write64(mem, core, core->sp - 7, temp_u8);
 		if (ret) return ret;
 		core->sp -= 7;
 		break;
 	case op_prom8i16:
-		ret = mem_read8(mem, core->sp, &temp_u8);
+		ret = mem_read8(mem, core, core->sp, &temp_u8);
 		if (ret) return ret;
-		ret = mem_write16(mem, core->sp - 1, (int8_t)temp_u8);
+		ret = mem_write16(mem, core, core->sp - 1, (int8_t)temp_u8);
 		if (ret) return ret;
 		core->sp -= 1;
 		break;
 	case op_prom8i32:
-		ret = mem_read8(mem, core->sp, &temp_u8);
+		ret = mem_read8(mem, core, core->sp, &temp_u8);
 		if (ret) return ret;
-		ret = mem_write32(mem, core->sp - 3, (int8_t)temp_u8);
+		ret = mem_write32(mem, core, core->sp - 3, (int8_t)temp_u8);
 		if (ret) return ret;
 		core->sp -= 3;
 		break;
 	case op_prom8i64:
-		ret = mem_read8(mem, core->sp, &temp_u8);
+		ret = mem_read8(mem, core, core->sp, &temp_u8);
 		if (ret) return ret;
-		ret = mem_write64(mem, core->sp - 7, (int8_t)temp_u8);
+		ret = mem_write64(mem, core, core->sp - 7, (int8_t)temp_u8);
 		if (ret) return ret;
 		core->sp -= 7;
 		break;
 	case op_prom16u32:
-		ret = mem_read16(mem, core->sp, &temp_u16);
+		ret = mem_read16(mem, core, core->sp, &temp_u16);
 		if (ret) return ret;
-		ret = mem_write32(mem, core->sp - 2, temp_u16);
+		ret = mem_write32(mem, core, core->sp - 2, temp_u16);
 		if (ret) return ret;
 		core->sp -= 2;
 		break;
 	case op_prom16u64:
-		ret = mem_read16(mem, core->sp, &temp_u16);
+		ret = mem_read16(mem, core, core->sp, &temp_u16);
 		if (ret) return ret;
-		ret = mem_write64(mem, core->sp - 6, temp_u16);
+		ret = mem_write64(mem, core, core->sp - 6, temp_u16);
 		if (ret) return ret;
 		core->sp -= 6;
 		break;
 	case op_prom16i32:
-		ret = mem_read16(mem, core->sp, &temp_u16);
+		ret = mem_read16(mem, core, core->sp, &temp_u16);
 		if (ret) return ret;
-		ret = mem_write32(mem, core->sp - 2, (int16_t)temp_u16);
+		ret = mem_write32(mem, core, core->sp - 2, (int16_t)temp_u16);
 		if (ret) return ret;
 		core->sp -= 2;
 		break;
 	case op_prom16i64:
-		ret = mem_read16(mem, core->sp, &temp_u16);
+		ret = mem_read16(mem, core, core->sp, &temp_u16);
 		if (ret) return ret;
-		ret = mem_write64(mem, core->sp - 6, (int16_t)temp_u16);
+		ret = mem_write64(mem, core, core->sp - 6, (int16_t)temp_u16);
 		if (ret) return ret;
 		core->sp -= 6;
 		break;
 	case op_prom32u64:
-		ret = mem_read32(mem, core->sp, &temp_u32);
+		ret = mem_read32(mem, core, core->sp, &temp_u32);
 		if (ret) return ret;
-		ret = mem_write64(mem, core->sp - 4, temp_u32);
+		ret = mem_write64(mem, core, core->sp - 4, temp_u32);
 		if (ret) return ret;
 		core->sp -= 4;
 		break;
 	case op_prom32i64:
-		ret = mem_read32(mem, core->sp, &temp_u32);
+		ret = mem_read32(mem, core, core->sp, &temp_u32);
 		if (ret) return ret;
-		ret = mem_write64(mem, core->sp - 4, (int32_t)temp_u32);
+		ret = mem_write64(mem, core, core->sp - 4, (int32_t)temp_u32);
 		if (ret) return ret;
 		core->sp -= 4;
 		break;
@@ -516,189 +523,345 @@ int core_step(struct core *core, struct mem *mem)
 	// Memory operations
 	//
 	case op_load8:
-		ret = mem_read64(mem, core->sp, &temp_u64); // Read addr
+		ret = mem_read64(mem, core, core->sp, &temp_addr); // Read addr
 		if (ret) return ret;
-		ret = mem_read8(mem, temp_u64, &temp_u8); // Read data
+		ret = mem_read8(mem, core, temp_addr, &temp_u8); // Read data
 		if (ret) return ret;
-		ret = mem_write8(mem, core->sp - 1, temp_u8); // Write to stack
+		ret = mem_write8(mem, core, core->sp - 1, temp_u8); // Write to stack
 		if (ret) return ret;
 		core->sp -= 1;
 		core->pc += 1;
 		break;
 	case op_load16:
-		ret = mem_read64(mem, core->sp, &temp_u64); // Read addr
+		ret = mem_read64(mem, core, core->sp, &temp_addr); // Read addr
 		if (ret) return ret;
-		ret = mem_read16(mem, temp_u64, &temp_u16); // Read data
+		ret = mem_read16(mem, core, temp_addr, &temp_u16); // Read data
 		if (ret) return ret;
-		ret = mem_write16(mem, core->sp - 2, temp_u16); // Write to stack
+		ret = mem_write16(mem, core, core->sp - 2, temp_u16); // Write to stack
 		if (ret) return ret;
 		core->sp -= 2;
 		core->pc += 1;
 		break;
 	case op_load32:
-		ret = mem_read64(mem, core->sp, &temp_u64); // Read addr
+		ret = mem_read64(mem, core, core->sp, &temp_addr); // Read addr
 		if (ret) return ret;
-		ret = mem_read32(mem, temp_u64, &temp_u32); // Read data
+		ret = mem_read32(mem, core, temp_addr, &temp_u32); // Read data
 		if (ret) return ret;
-		ret = mem_write32(mem, core->sp - 4, temp_u32); // Write to stack
+		ret = mem_write32(mem, core, core->sp - 4, temp_u32); // Write to stack
 		if (ret) return ret;
 		core->sp -= 4;
 		core->pc += 1;
 		break;
 	case op_load64:
-		ret = mem_read64(mem, core->sp, &temp_u64); // Read addr
+		ret = mem_read64(mem, core, core->sp, &temp_addr); // Read addr
 		if (ret) return ret;
-		ret = mem_read64(mem, temp_u64, &temp_u64); // Read data
+		ret = mem_read64(mem, core, temp_addr, &temp_u64); // Read data
 		if (ret) return ret;
-		ret = mem_write64(mem, core->sp - 8, temp_u64); // Write to stack
+		ret = mem_write64(mem, core, core->sp - 8, temp_u64); // Write to stack
 		if (ret) return ret;
 		core->sp -= 8;
 		core->pc += 1;
 		break;
 	case op_loadpop8:
-		ret = mem_read64(mem, core->sp, &temp_u64); // Read addr
+		ret = mem_read64(mem, core, core->sp, &temp_addr); // Read addr
 		if (ret) return ret;
-		ret = mem_read8(mem, temp_u64, &temp_u8); // Read data
+		ret = mem_read8(mem, core, temp_addr, &temp_u8); // Read data
 		if (ret) return ret;
-		ret = mem_write8(mem, core->sp + 7, temp_u8); // Write to stack
+		ret = mem_write8(mem, core, core->sp + 7, temp_u8); // Write to stack
 		if (ret) return ret;
 		core->sp += 7;
 		core->pc += 1;
 		break;
 	case op_loadpop16:
-		ret = mem_read64(mem, core->sp, &temp_u64); // Read addr
+		ret = mem_read64(mem, core, core->sp, &temp_addr); // Read addr
 		if (ret) return ret;
-		ret = mem_read16(mem, temp_u64, &temp_u16); // Read data
+		ret = mem_read16(mem, core, temp_addr, &temp_u16); // Read data
 		if (ret) return ret;
-		ret = mem_write16(mem, core->sp + 6, temp_u16); // Write to stack
+		ret = mem_write16(mem, core, core->sp + 6, temp_u16); // Write to stack
 		if (ret) return ret;
 		core->sp += 6;
 		core->pc += 1;
 		break;
 	case op_loadpop32:
-		ret = mem_read64(mem, core->sp, &temp_u64); // Read addr
+		ret = mem_read64(mem, core, core->sp, &temp_addr); // Read addr
 		if (ret) return ret;
-		ret = mem_read32(mem, temp_u64, &temp_u32); // Read data
+		ret = mem_read32(mem, core, temp_addr, &temp_u32); // Read data
 		if (ret) return ret;
-		ret = mem_write32(mem, core->sp + 4, temp_u32); // Write to stack
+		ret = mem_write32(mem, core, core->sp + 4, temp_u32); // Write to stack
 		if (ret) return ret;
 		core->sp += 4;
 		core->pc += 1;
 		break;
 	case op_loadpop64:
-		ret = mem_read64(mem, core->sp, &temp_u64); // Read addr
+		ret = mem_read64(mem, core, core->sp, &temp_addr); // Read addr
 		if (ret) return ret;
-		ret = mem_read64(mem, temp_u64, &temp_u64); // Read data
+		ret = mem_read64(mem, core, temp_addr, &temp_u64); // Read data
 		if (ret) return ret;
-		ret = mem_write64(mem, core->sp, temp_u64); // Write to stack
+		ret = mem_write64(mem, core, core->sp, temp_u64); // Write to stack
 		if (ret) return ret;
 		core->pc += 1;
 		break;
 	case op_loadsfp8:
-		ret = mem_read64(mem, core->sp, (uint64_t*)&temp_i64); // Read offset
+		ret = mem_read64(mem, core, core->sp, (uint64_t*)&temp_i64); // Read offset
 		if (ret) return ret;
-		ret = mem_read8(mem, temp_i64 + core->sfp, &temp_u8); // Read data
+		ret = mem_read8(mem, core, temp_i64 + core->sfp, &temp_u8); // Read data
 		if (ret) return ret;
-		ret = mem_write8(mem, core->sp - 1, temp_u8); // Write to stack
+		ret = mem_write8(mem, core, core->sp - 1, temp_u8); // Write to stack
 		if (ret) return ret;
 		core->sp -= 1;
 		core->pc += 1;
 		break;
 	case op_loadsfp16:
-		ret = mem_read64(mem, core->sp, (uint64_t*)&temp_i64); // Read offset
+		ret = mem_read64(mem, core, core->sp, (uint64_t*)&temp_i64); // Read offset
 		if (ret) return ret;
-		ret = mem_read16(mem, temp_i64 + core->sfp, &temp_u16); // Read data
+		ret = mem_read16(mem, core, temp_i64 + core->sfp, &temp_u16); // Read data
 		if (ret) return ret;
-		ret = mem_write16(mem, core->sp - 2, temp_u16); // Write to stack
+		ret = mem_write16(mem, core, core->sp - 2, temp_u16); // Write to stack
 		if (ret) return ret;
 		core->sp -= 2;
 		core->pc += 1;
 		break;
 	case op_loadsfp32:
-		ret = mem_read64(mem, core->sp, (uint64_t*)&temp_i64); // Read offset
+		ret = mem_read64(mem, core, core->sp, (uint64_t*)&temp_i64); // Read offset
 		if (ret) return ret;
-		ret = mem_read32(mem, temp_i64 + core->sfp, &temp_u32); // Read data
+		ret = mem_read32(mem, core, temp_i64 + core->sfp, &temp_u32); // Read data
 		if (ret) return ret;
-		ret = mem_write32(mem, core->sp - 4, temp_u32); // Write to stack
+		ret = mem_write32(mem, core, core->sp - 4, temp_u32); // Write to stack
 		if (ret) return ret;
 		core->sp -= 4;
 		core->pc += 1;
 		break;
 	case op_loadsfp64:
-		ret = mem_read64(mem, core->sp, (uint64_t*)&temp_i64); // Read offset
+		ret = mem_read64(mem, core, core->sp, (uint64_t*)&temp_i64); // Read offset
 		if (ret) return ret;
-		ret = mem_read64(mem, temp_i64 + core->sfp, &temp_u64); // Read data
+		ret = mem_read64(mem, core, temp_i64 + core->sfp, &temp_u64); // Read data
 		if (ret) return ret;
-		ret = mem_write64(mem, core->sp - 8, temp_u64); // Write to stack
+		ret = mem_write64(mem, core, core->sp - 8, temp_u64); // Write to stack
 		if (ret) return ret;
 		core->sp -= 8;
 		core->pc += 1;
 		break;
 	case op_loadpopsfp8:
-		ret = mem_read64(mem, core->sp, (uint64_t*)&temp_i64); // Read offset
+		ret = mem_read64(mem, core, core->sp, (uint64_t*)&temp_i64); // Read offset
 		if (ret) return ret;
-		ret = mem_read8(mem, temp_i64 + core->sfp, &temp_u8); // Read data
+		ret = mem_read8(mem, core, temp_i64 + core->sfp, &temp_u8); // Read data
 		if (ret) return ret;
-		ret = mem_write8(mem, core->sp + 7, temp_u8); // Write to stack
+		ret = mem_write8(mem, core, core->sp + 7, temp_u8); // Write to stack
 		if (ret) return ret;
 		core->sp += 7;
 		core->pc += 1;
 		break;
 	case op_loadpopsfp16:
-		ret = mem_read64(mem, core->sp, (uint64_t*)&temp_i64); // Read offset
+		ret = mem_read64(mem, core, core->sp, (uint64_t*)&temp_i64); // Read offset
 		if (ret) return ret;
-		ret = mem_read16(mem, temp_i64 + core->sfp, &temp_u16); // Read data
+		ret = mem_read16(mem, core, temp_i64 + core->sfp, &temp_u16); // Read data
 		if (ret) return ret;
-		ret = mem_write16(mem, core->sp + 6, temp_u16); // Write to stack
+		ret = mem_write16(mem, core, core->sp + 6, temp_u16); // Write to stack
 		if (ret) return ret;
 		core->sp += 6;
 		core->pc += 1;
 		break;
 	case op_loadpopsfp32:
-		ret = mem_read64(mem, core->sp, (uint64_t*)&temp_i64); // Read offset
+		ret = mem_read64(mem, core, core->sp, (uint64_t*)&temp_i64); // Read offset
 		if (ret) return ret;
-		ret = mem_read32(mem, temp_i64 + core->sfp, &temp_u32); // Read data
+		ret = mem_read32(mem, core, temp_i64 + core->sfp, &temp_u32); // Read data
 		if (ret) return ret;
-		ret = mem_write32(mem, core->sp + 4, temp_u32); // Write to stack
+		ret = mem_write32(mem, core, core->sp + 4, temp_u32); // Write to stack
 		if (ret) return ret;
 		core->sp += 4;
 		core->pc += 1;
 		break;
 	case op_loadpopsfp64:
-		ret = mem_read64(mem, core->sp, (uint64_t*)&temp_i64); // Read offset
+		ret = mem_read64(mem, core, core->sp, (uint64_t*)&temp_i64); // Read offset
 		if (ret) return ret;
-		ret = mem_read64(mem, temp_i64 + core->sfp, &temp_u64); // Read data
+		ret = mem_read64(mem, core, temp_i64 + core->sfp, &temp_u64); // Read data
 		if (ret) return ret;
-		ret = mem_write64(mem, core->sp, temp_u64); // Write to stack
+		ret = mem_write64(mem, core, core->sp, temp_u64); // Write to stack
 		if (ret) return ret;
 		core->pc += 1;
 		break;
 	case op_store8:
+		ret = mem_read64(mem, core, core->sp, &temp_addr); // Read addr
+		if (ret) return ret;
+		ret = mem_read8(mem, core, core->sp + 8, &temp_u8); // Read data
+		if (ret) return ret;
+		ret = mem_write8(mem, core, temp_addr, temp_u8); // Write to memory
+		if (ret) return ret;
+		core->pc += 1;
+		break;
 	case op_store16:
+		ret = mem_read64(mem, core, core->sp, &temp_addr); // Read addr
+		if (ret) return ret;
+		ret = mem_read16(mem, core, core->sp + 8, &temp_u16); // Read data
+		if (ret) return ret;
+		ret = mem_write16(mem, core, temp_addr, temp_u16); // Write to memory
+		if (ret) return ret;
+		core->pc += 1;
+		break;
 	case op_store32:
+		ret = mem_read64(mem, core, core->sp, &temp_addr); // Read addr
+		if (ret) return ret;
+		ret = mem_read32(mem, core, core->sp + 8, &temp_u32); // Read data
+		if (ret) return ret;
+		ret = mem_write32(mem, core, temp_addr, temp_u32); // Write to memory
+		if (ret) return ret;
+		core->pc += 1;
+		break;
 	case op_store64:
+		ret = mem_read64(mem, core, core->sp, &temp_addr); // Read addr
+		if (ret) return ret;
+		ret = mem_read64(mem, core, core->sp + 8, &temp_u64); // Read data
+		if (ret) return ret;
+		ret = mem_write64(mem, core, temp_addr, temp_u64); // Write to memory
+		if (ret) return ret;
+		core->pc += 1;
+		break;
 	case op_storepop8:
+		ret = mem_read64(mem, core, core->sp, &temp_addr); // Read addr
+		if (ret) return ret;
+		ret = mem_read8(mem, core, core->sp + 8, &temp_u8); // Read data
+		if (ret) return ret;
+		ret = mem_write8(mem, core, temp_addr, temp_u8); // Write to memory
+		if (ret) return ret;
+		core->sp += 8;
+		core->pc += 1;
+		break;
 	case op_storepop16:
+		ret = mem_read64(mem, core, core->sp, &temp_addr); // Read addr
+		if (ret) return ret;
+		ret = mem_read16(mem, core, core->sp + 8, &temp_u16); // Read data
+		if (ret) return ret;
+		ret = mem_write16(mem, core, temp_addr, temp_u16); // Write to memory
+		if (ret) return ret;
+		core->sp += 8;
+		core->pc += 1;
+		break;
 	case op_storepop32:
+		ret = mem_read64(mem, core, core->sp, &temp_addr); // Read addr
+		if (ret) return ret;
+		ret = mem_read32(mem, core, core->sp + 8, &temp_u32); // Read data
+		if (ret) return ret;
+		ret = mem_write32(mem, core, temp_addr, temp_u32); // Write to memory
+		if (ret) return ret;
+		core->sp += 8;
+		core->pc += 1;
+		break;
 	case op_storepop64:
+		ret = mem_read64(mem, core, core->sp, &temp_addr); // Read addr
+		if (ret) return ret;
+		ret = mem_read64(mem, core, core->sp + 8, &temp_u64); // Read data
+		if (ret) return ret;
+		ret = mem_write64(mem, core, temp_addr, temp_u64); // Write to memory
+		if (ret) return ret;
+		core->sp += 8;
+		core->pc += 1;
+		break;
 	case op_storesfp8:
+		ret = mem_read64(mem, core, core->sp, (uint64_t*)&temp_i64); // Read offset
+		if (ret) return ret;
+		ret = mem_read8(mem, core, core->sp + 8, &temp_u8); // Read data
+		if (ret) return ret;
+		ret = mem_write8(mem, core, core->sfp + temp_i64, temp_u8); // Write to memory
+		if (ret) return ret;
+		core->pc += 1;
+		break;
 	case op_storesfp16:
+		ret = mem_read64(mem, core, core->sp, (uint64_t*)&temp_i64); // Read offset
+		if (ret) return ret;
+		ret = mem_read16(mem, core, core->sp + 8, &temp_u16); // Read data
+		if (ret) return ret;
+		ret = mem_write16(mem, core, core->sfp + temp_i64, temp_u16); // Write to memory
+		if (ret) return ret;
+		core->pc += 1;
+		break;
 	case op_storesfp32:
+		ret = mem_read64(mem, core, core->sp, (uint64_t*)&temp_i64); // Read offset
+		if (ret) return ret;
+		ret = mem_read32(mem, core, core->sp + 8, &temp_u32); // Read data
+		if (ret) return ret;
+		ret = mem_write32(mem, core, core->sfp + temp_i64, temp_u32); // Write to memory
+		if (ret) return ret;
+		core->pc += 1;
+		break;
 	case op_storesfp64:
+		ret = mem_read64(mem, core, core->sp, (uint64_t*)&temp_i64); // Read offset
+		if (ret) return ret;
+		ret = mem_read64(mem, core, core->sp + 8, &temp_u64); // Read data
+		if (ret) return ret;
+		ret = mem_write64(mem, core, core->sfp + temp_i64, temp_u64); // Write to memory
+		if (ret) return ret;
+		core->pc += 1;
+		break;
 	case op_storepopsfp8:
+		ret = mem_read64(mem, core, core->sp, (uint64_t*)&temp_i64); // Read offset
+		if (ret) return ret;
+		ret = mem_read8(mem, core, core->sp + 8, &temp_u8); // Read data
+		if (ret) return ret;
+		ret = mem_write8(mem, core, core->sfp + temp_i64, temp_u8); // Write to memory
+		if (ret) return ret;
+		core->sp += 8;
+		core->pc += 1;
+		break;
 	case op_storepopsfp16:
+		ret = mem_read64(mem, core, core->sp, (uint64_t*)&temp_i64); // Read offset
+		if (ret) return ret;
+		ret = mem_read16(mem, core, core->sp + 8, &temp_u16); // Read data
+		if (ret) return ret;
+		ret = mem_write16(mem, core, core->sfp + temp_i64, temp_u16); // Write to memory
+		if (ret) return ret;
+		core->sp += 8;
+		core->pc += 1;
+		break;
 	case op_storepopsfp32:
+		ret = mem_read64(mem, core, core->sp, (uint64_t*)&temp_i64); // Read offset
+		if (ret) return ret;
+		ret = mem_read32(mem, core, core->sp + 8, &temp_u32); // Read data
+		if (ret) return ret;
+		ret = mem_write32(mem, core, core->sfp + temp_i64, temp_u32); // Write to memory
+		if (ret) return ret;
+		core->sp += 8;
+		core->pc += 1;
+		break;
 	case op_storepopsfp64:
+		ret = mem_read64(mem, core, core->sp, (uint64_t*)&temp_i64); // Read offset
+		if (ret) return ret;
+		ret = mem_read64(mem, core, core->sp + 8, &temp_u64); // Read data
+		if (ret) return ret;
+		ret = mem_write64(mem, core, core->sfp + temp_i64, temp_u64); // Write to memory
+		if (ret) return ret;
+		core->sp += 8;
+		core->pc += 1;
+		break;
 
 	//
 	// Special Operations
 	//
 	case op_setsbp:
+		ret = mem_read64(mem, core, core->sp, &temp_addr); // Read addr
+		if (ret) return ret;
+		core->sbp = temp_addr;
+		core->sp += 8;
+		break;
 	case op_setsfp:
+		ret = mem_read64(mem, core, core->sp, &temp_addr); // Read addr
+		if (ret) return ret;
+		core->sfp = temp_addr;
+		core->sp += 8;
+		break;
 	case op_setsp:
+		ret = mem_read64(mem, core, core->sp, &temp_addr); // Read addr
+		if (ret) return ret;
+		core->sp = temp_addr;
+		break;
+	case op_halt:
+		return STERR_HALT;
 	case op_ext:
 	case op_nop:
 		return -1;
+
+	default:
+		return -1;
 	}
+
 	return 0;
 }

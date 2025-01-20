@@ -37,7 +37,7 @@ To call a function that takes arguments, arguments are pushed onto the stack beg
 |         | RETV                  |
 |         | Called function data  |
 
-Functions are prohibited by the memory management unit from accessing (reading or writing) data outside their stack frame, that is, data between the SBP and SFP addresses. This prevents certain classes of attacks which seek to overwrite the return pointer and transfer control to insecure code.
+Functions are prohibited by the memory management unit from accessing (reading or writing) data in the stack frame itself. That is, data at addresses from SFP to SFP + 15, inclusively. This helps prevent certain classes of attacks which seek to overwrite the return pointer of a function and transfer control to insecure code.
 
 Instruction Set
 ---------------
@@ -356,14 +356,14 @@ These instructions load data from memory to the stack or store data from the sta
 | loadpop16     | PC + 1   | a64          | (a64)16              |                      |
 | loadpop32     | PC + 1   | a64          | (a64)32              |                      |
 | loadpop64     | PC + 1   | a64          | (a64)64              |                      |
-|  load8sfp     | PC + 1   | ai64         | ai64, (SFP + ai64)8  |                      |
-| load16sfp     | PC + 1   | ai64         | ai64, (SFP + ai64)16 |                      |
-| load32sfp     | PC + 1   | ai64         | ai64, (SFP + ai64)32 |                      |
-| load64sfp     | PC + 1   | ai64         | ai64, (SFP + ai64)64 |                      |
-|  loadpop8sfp  | PC + 1   | ai64         | (SFP + ai64)8        |                      |
-| loadpop16sfp  | PC + 1   | ai64         | (SFP + ai64)16       |                      |
-| loadpop32sfp  | PC + 1   | ai64         | (SFP + ai64)32       |                      |
-| loadpop64sfp  | PC + 1   | ai64         | (SFP + ai64)64       |                      |
+|  loadsfp8     | PC + 1   | ai64         | ai64, (SFP + ai64)8  |                      |
+| loadsfp16     | PC + 1   | ai64         | ai64, (SFP + ai64)16 |                      |
+| loadsfp32     | PC + 1   | ai64         | ai64, (SFP + ai64)32 |                      |
+| loadsfp64     | PC + 1   | ai64         | ai64, (SFP + ai64)64 |                      |
+|  loadpopsfp8  | PC + 1   | ai64         | (SFP + ai64)8        |                      |
+| loadpopsfp16  | PC + 1   | ai64         | (SFP + ai64)16       |                      |
+| loadpopsfp32  | PC + 1   | ai64         | (SFP + ai64)32       |                      |
+| loadpopsfp64  | PC + 1   | ai64         | (SFP + ai64)64       |                      |
 |  store8       | PC + 1   | a8, b64      |  a8, b64             |  (b64)8 =  a8        |
 | store16       | PC + 1   | a16, b64     | a16, b64             | (b64)16 = a16        |
 | store32       | PC + 1   | a32, b64     | a32, b64             | (b64)32 = a32        |
@@ -372,10 +372,10 @@ These instructions load data from memory to the stack or store data from the sta
 | storepop16    | PC + 1   | a8, b64      | a16                  | (b64)16 = a16        |
 | storepop32    | PC + 1   | a8, b64      | a32                  | (b64)32 = a32        |
 | storepop64    | PC + 1   | a8, b64      | a64                  | (b64)64 = a64        |
-|  storepop8sfp | PC + 1   | a8, bi64     |  a8                  |  (SFP + bi64)8 =  a8 |
-| storepop16sfp | PC + 1   | a8, bi64     | a16                  | (SFP + bi64)16 = a16 |
-| storepop32sfp | PC + 1   | a8, bi64     | a32                  | (SFP + bi64)32 = a32 |
-| storepop64sfp | PC + 1   | a8, bi64     | a64                  | (SFP + bi64)64 = a64 |
+|  storepopsfp8 | PC + 1   | a8, bi64     |  a8                  |  (SFP + bi64)8 =  a8 |
+| storepopsfp16 | PC + 1   | a8, bi64     | a16                  | (SFP + bi64)16 = a16 |
+| storepopsfp32 | PC + 1   | a8, bi64     | a32                  | (SFP + bi64)32 = a32 |
+| storepopsfp64 | PC + 1   | a8, bi64     | a64                  | (SFP + bi64)64 = a64 |
 
 ### Miscellaneous Operations
 
@@ -384,5 +384,3 @@ These instructions load data from memory to the stack or store data from the sta
 | nop     | PC + 1   | Performs no operation                                      |
 | ext     | PC + 1   | Introduces an extended opcode                              |
 | invalid |          | Intentionally invalid instruction, may be used for testing |
-
-

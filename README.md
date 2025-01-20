@@ -11,6 +11,7 @@ Projects
 
  * [bstr](bstr) is a custom B-string implementation used by other Starch projects.
  * [build.py](build.py) is a custom Python build script used by Starch.
+ * [distasm](distasm) is a Starch disassembler.
  * [starch](starch) contains code associated with the Starch instruction set.
  * [starg](starg) is a command-line argument parsing library used by other Starch projects.
  * [stasm](stasm) is a Starch assembler.
