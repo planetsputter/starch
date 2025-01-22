@@ -118,7 +118,7 @@ int main(int argc, const char *argv[])
 	struct core core;
 	core_init(&core);
 
-	// @todo: load input file into memory
+	// Load input file into memory
 	int ret = mem_load_image(&memory, 0, infile);
 	if (ret) {
 		fprintf(stderr, "error: failed to load memory from \"%s\" to address 0\n", arg_image);
@@ -127,7 +127,7 @@ int main(int argc, const char *argv[])
 		for (int cycles = 0; (max_cycles < 0 || cycles < max_cycles) && ret == 0; cycles++) {
 			ret = core_step(&core, &memory);
 		}
-		// @todo: print an error message for non-halt opcodes
+		// Print an error message for non-halt error codes
 		if (ret != STERR_HALT && ret != STERR_NONE) {
 			fprintf(stderr, "error: an error occurred during emulation: %s (0x%08x)\n", name_for_sterr(ret), ret);
 		}
@@ -141,8 +141,6 @@ int main(int argc, const char *argv[])
 			ret = 1;
 		}
 		else {
-			// @todo: the memory range does not include highest byte
-			// would be better to have a function that dumps all modified memory
 			ret = mem_dump_hex(&memory, 0, 0, dumpfile);
 			fclose(dumpfile);
 		}

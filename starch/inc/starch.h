@@ -328,7 +328,7 @@ enum {
 
 // Get the data types of the immediate arguments for the given opcode.
 // Use imm_count_for_opcode() to determine the minimum length of dts.
-// Returns -1 on error.
+// Returns 0 on success.
 int imm_types_for_opcode(int opcode, int *dts);
 
 //

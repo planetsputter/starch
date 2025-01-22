@@ -964,7 +964,7 @@ int imm_types_for_opcode(int opcode, int *dts)
 		break;
 
 	default:
-		ret = -1;
+		ret = 1;
 		break;
 	}
 

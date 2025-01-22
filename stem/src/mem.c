@@ -59,13 +59,13 @@ static struct mem_node *mem_node_get_page(struct mem_node *node, uint64_t addr)
 	else if (addr < node->addr) {
 		retnode = mem_node_get_page(node->prev, addr);
 		if (!node->prev) {
-		   node->prev = node;
+		   node->prev = retnode;
 		}
 	}
 	else if (addr >= node->addr + MEM_PAGE_SIZE) {
 		retnode = mem_node_get_page(node->next, addr);
 		if (!node->next) {
-		   node->next = node;
+		   node->next = retnode;
 		}
 	}
 	else {
