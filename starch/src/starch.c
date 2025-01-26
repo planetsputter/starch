@@ -70,12 +70,9 @@ static const char *names[256] = {
 	//
 	// Demotion operations
 	//
-	[op_dem64to32] = "dem64to32",
 	[op_dem64to16] = "dem64to16",
 	[op_dem64to8] = "dem64to8",
-	[op_dem32to16] = "dem32to16",
 	[op_dem32to8] = "dem32to8",
-	[op_dem16to8] = "dem16to8",
 
 	//
 	// Integer arithmetic operations
@@ -88,6 +85,10 @@ static const char *names[256] = {
 	[op_sub16] = "sub16",
 	[op_sub32] = "sub32",
 	[op_sub64] = "sub64",
+	[op_subr8] = "subr8",
+	[op_subr16] = "subr16",
+	[op_subr32] = "subr32",
+	[op_subr64] = "subr64",
 	[op_mulu8] = "mulu8",
 	[op_mulu16] = "mulu16",
 	[op_mulu32] = "mulu32",
@@ -100,18 +101,34 @@ static const char *names[256] = {
 	[op_divu16] = "divu16",
 	[op_divu32] = "divu32",
 	[op_divu64] = "divu64",
+	[op_divru8] = "divru8",
+	[op_divru16] = "divru16",
+	[op_divru32] = "divru32",
+	[op_divru64] = "divru64",
 	[op_divi8] = "divi8",
 	[op_divi16] = "divi16",
 	[op_divi32] = "divi32",
 	[op_divi64] = "divi64",
+	[op_divri8] = "divri8",
+	[op_divri16] = "divri16",
+	[op_divri32] = "divri32",
+	[op_divri64] = "divri64",
 	[op_modu8] = "modu8",
 	[op_modu16] = "modu16",
 	[op_modu32] = "modu32",
 	[op_modu64] = "modu64",
+	[op_modru8] = "modru8",
+	[op_modru16] = "modru16",
+	[op_modru32] = "modru32",
+	[op_modru64] = "modru64",
 	[op_modi8] = "modi8",
 	[op_modi16] = "modi16",
 	[op_modi32] = "modi32",
 	[op_modi64] = "modi64",
+	[op_modri8] = "modri8",
+	[op_modri16] = "modri16",
+	[op_modri32] = "modri32",
+	[op_modri64] = "modri64",
 
 	//
 	// Bitwise shift operations
@@ -233,18 +250,6 @@ static const char *names[256] = {
 	[op_brz16] = "brz16",
 	[op_brz32] = "brz32",
 	[op_brz64] = "brz64",
-	[op_rbrz8i8] = "rbrz8i8",
-	[op_rbrz16i8] = "rbrz16i8",
-	[op_rbrz32i8] = "rbrz32i8",
-	[op_rbrz64i8] = "rbrz64i8",
-	[op_rbrz8i16] = "rbrz8i16",
-	[op_rbrz16i16] = "rbrz16i16",
-	[op_rbrz32i16] = "rbrz32i16",
-	[op_rbrz64i16] = "rbrz64i16",
-	[op_rbrz8i32] = "rbrz8i32",
-	[op_rbrz16i32] = "rbrz16i32",
-	[op_rbrz32i32] = "rbrz32i32",
-	[op_rbrz64i32] = "rbrz64i32",
 	[op_rbrz8i64] = "rbrz8i64",
 	[op_rbrz16i64] = "rbrz16i64",
 	[op_rbrz32i64] = "rbrz32i64",
@@ -285,6 +290,22 @@ static const char *names[256] = {
 	[op_storepopsfp16] = "storepopsfp16",
 	[op_storepopsfp32] = "storepopsfp32",
 	[op_storepopsfp64] = "storepopsfp64",
+	[op_storer8] = "storer8",
+	[op_storer16] = "storer16",
+	[op_storer32] = "storer32",
+	[op_storer64] = "storer64",
+	[op_storerpop8] = "storerpop8",
+	[op_storerpop16] = "storerpop16",
+	[op_storerpop32] = "storerpop32",
+	[op_storerpop64] = "storerpop64",
+	[op_storersfp8] = "storersfp8",
+	[op_storersfp16] = "storersfp16",
+	[op_storersfp32] = "storersfp32",
+	[op_storersfp64] = "storersfp64",
+	[op_storerpopsfp8] = "storerpopsfp8",
+	[op_storerpopsfp16] = "storerpopsfp16",
+	[op_storerpopsfp32] = "storerpopsfp32",
+	[op_storerpopsfp64] = "storerpopsfp64",
 
 	//
 	// Special Operations
@@ -388,12 +409,9 @@ int imm_count_for_opcode(int opcode)
 	//
 	// Demotion Operations
 	//
-	case op_dem64to32:
 	case op_dem64to16:
 	case op_dem64to8:
-	case op_dem32to16:
 	case op_dem32to8:
-	case op_dem16to8:
 		break;
 
 	//
@@ -407,6 +425,10 @@ int imm_count_for_opcode(int opcode)
 	case op_sub16:
 	case op_sub32:
 	case op_sub64:
+	case op_subr8:
+	case op_subr16:
+	case op_subr32:
+	case op_subr64:
 	case op_mulu8:
 	case op_mulu16:
 	case op_mulu32:
@@ -419,18 +441,34 @@ int imm_count_for_opcode(int opcode)
 	case op_divu16:
 	case op_divu32:
 	case op_divu64:
+	case op_divru8:
+	case op_divru16:
+	case op_divru32:
+	case op_divru64:
 	case op_divi8:
 	case op_divi16:
 	case op_divi32:
 	case op_divi64:
+	case op_divri8:
+	case op_divri16:
+	case op_divri32:
+	case op_divri64:
 	case op_modu8:
 	case op_modu16:
 	case op_modu32:
 	case op_modu64:
+	case op_modru8:
+	case op_modru16:
+	case op_modru32:
+	case op_modru64:
 	case op_modi8:
 	case op_modi16:
 	case op_modi32:
 	case op_modi64:
+	case op_modri8:
+	case op_modri16:
+	case op_modri32:
+	case op_modri64:
 		break;
 
 	//
@@ -565,18 +603,6 @@ int imm_count_for_opcode(int opcode)
 	case op_brz16:
 	case op_brz32:
 	case op_brz64:
-	case op_rbrz8i8:
-	case op_rbrz16i8:
-	case op_rbrz32i8:
-	case op_rbrz64i8:
-	case op_rbrz8i16:
-	case op_rbrz16i16:
-	case op_rbrz32i16:
-	case op_rbrz64i16:
-	case op_rbrz8i32:
-	case op_rbrz16i32:
-	case op_rbrz32i32:
-	case op_rbrz64i32:
 	case op_rbrz8i64:
 	case op_rbrz16i64:
 	case op_rbrz32i64:
@@ -619,6 +645,22 @@ int imm_count_for_opcode(int opcode)
 	case op_storepopsfp16:
 	case op_storepopsfp32:
 	case op_storepopsfp64:
+	case op_storer8:
+	case op_storer16:
+	case op_storer32:
+	case op_storer64:
+	case op_storerpop8:
+	case op_storerpop16:
+	case op_storerpop32:
+	case op_storerpop64:
+	case op_storersfp8:
+	case op_storersfp16:
+	case op_storersfp32:
+	case op_storersfp64:
+	case op_storerpopsfp8:
+	case op_storerpopsfp16:
+	case op_storerpopsfp32:
+	case op_storerpopsfp64:
 		break;
 
 	//
@@ -713,12 +755,9 @@ int imm_types_for_opcode(int opcode, int *dts)
 	//
 	// Demotion Operations
 	//
-	case op_dem64to32:
 	case op_dem64to16:
 	case op_dem64to8:
-	case op_dem32to16:
 	case op_dem32to8:
-	case op_dem16to8:
 		break;
 
 	//
@@ -732,6 +771,10 @@ int imm_types_for_opcode(int opcode, int *dts)
 	case op_sub16:
 	case op_sub32:
 	case op_sub64:
+	case op_subr8:
+	case op_subr16:
+	case op_subr32:
+	case op_subr64:
 	case op_mulu8:
 	case op_mulu16:
 	case op_mulu32:
@@ -744,18 +787,34 @@ int imm_types_for_opcode(int opcode, int *dts)
 	case op_divu16:
 	case op_divu32:
 	case op_divu64:
+	case op_divru8:
+	case op_divru16:
+	case op_divru32:
+	case op_divru64:
 	case op_divi8:
 	case op_divi16:
 	case op_divi32:
 	case op_divi64:
+	case op_divri8:
+	case op_divri16:
+	case op_divri32:
+	case op_divri64:
 	case op_modu8:
 	case op_modu16:
 	case op_modu32:
 	case op_modu64:
+	case op_modru8:
+	case op_modru16:
+	case op_modru32:
+	case op_modru64:
 	case op_modi8:
 	case op_modi16:
 	case op_modi32:
 	case op_modi64:
+	case op_modri8:
+	case op_modri16:
+	case op_modri32:
+	case op_modri64:
 		break;
 
 	//
@@ -887,24 +946,6 @@ int imm_types_for_opcode(int opcode, int *dts)
 	case op_brz64:
 		*dts = dt_u64;
 		break;
-	case op_rbrz8i8:
-	case op_rbrz16i8:
-	case op_rbrz32i8:
-	case op_rbrz64i8:
-		*dts = dt_i8;
-		break;
-	case op_rbrz8i16:
-	case op_rbrz16i16:
-	case op_rbrz32i16:
-	case op_rbrz64i16:
-		*dts = dt_i16;
-		break;
-	case op_rbrz8i32:
-	case op_rbrz16i32:
-	case op_rbrz32i32:
-	case op_rbrz64i32:
-		*dts = dt_i32;
-		break;
 	case op_rbrz8i64:
 	case op_rbrz16i64:
 	case op_rbrz32i64:
@@ -947,6 +988,22 @@ int imm_types_for_opcode(int opcode, int *dts)
 	case op_storepopsfp16:
 	case op_storepopsfp32:
 	case op_storepopsfp64:
+	case op_storer8:
+	case op_storer16:
+	case op_storer32:
+	case op_storer64:
+	case op_storerpop8:
+	case op_storerpop16:
+	case op_storerpop32:
+	case op_storerpop64:
+	case op_storersfp8:
+	case op_storersfp16:
+	case op_storersfp32:
+	case op_storersfp64:
+	case op_storerpopsfp8:
+	case op_storerpopsfp16:
+	case op_storerpopsfp32:
+	case op_storerpopsfp64:
 		break;
 
 	//

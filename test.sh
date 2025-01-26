@@ -33,12 +33,10 @@ check_op0 invalid \
 	set8 set16 set32 set64 \
 	prom8u16 prom8u32 prom8u64 prom8i16 prom8i32 prom8i64 \
 	prom16u32 prom16u64 prom16i32 prom16i64 \
-	prom32u64 prom32i64 \
-	dem64to32 dem64to16 dem64to8 \
-	dem32to16 dem32to8 \
-	dem16to8 \
+	prom32u64 prom32i64 dem64to8 dem32to8 \
 	add8 add16 add32 add64 \
 	sub8 sub16 sub32 sub64 \
+	subr8 subr16 subr32 subr64 \
 	mulu8 mulu16 mulu32 mulu64 \
 	muli8 muli16 muli32 muli64 \
 	divu8 divu16 divu32 divu64 \
@@ -371,6 +369,61 @@ $STEM a.stb
 # Test invalid
 #
 echo invalid | $STASM
-if $STEM a.stb 2>/dev/null; then false; else [ $? -eq 1 ]; fi
+if $STEM a.stb 2>/dev/null; then false; else test $? -eq 1; fi
+
+#
+# Test push8
+#
+echo "test push8"
+$STASM <<EOF
+push8 0xff
+push8 0x01
+push8 0x00
+push8 -1
+push8 -128
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "000000003ffffff0: 00 00 00 00 00 00 00 00 00 00 00 80 ff 00 01 ff" x.hex > /dev/null
+
+#
+# Test push8u16
+#
+echo "test push8u16"
+$STASM <<EOF
+push8u16 0xff
+push8u16 0x00
+push8u16 0x01
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "000000003ffffff0: 00 00 00 00 00 00 00 00 00 00 01 00 00 00 ff 00" x.hex > /dev/null
+
+#
+# Test push8u32
+#
+echo "test push8u32"
+$STASM <<EOF
+push8u32 0xff
+push8u32 0x00
+push8u32 0x01
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "000000003ffffff0: 00 00 00 00 01 00 00 00 00 00 00 00 ff 00 00 00" x.hex > /dev/null
+
+#
+# Test push8u64
+#
+echo "test push8u64"
+$STASM <<EOF
+push8u64 0xff
+push8u64 0x00
+push8u64 0x01
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "000000003fffffe0: 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00" x.hex > /dev/null
+grep "000000003ffffff0: 00 00 00 00 00 00 00 00 ff 00 00 00 00 00 00 00" x.hex > /dev/null
 
 echo all tests passed

@@ -110,7 +110,7 @@ These operations copy the value at the top of the stack down to the position bel
 
 ### Promotion and Demotion Operations
 
-These operations promote or demote the integer value at the top of the stack to a larger or smaller size respectively. Promotion can be done in a signed or unsigned manner. Demotion is done by truncation.
+These operations promote or demote the integer value at the top of the stack to a larger or smaller size respectively. Promotion can be done in a signed or unsigned manner. Demotion is done by truncation. Some demotions can be accomplished with a pop and are not included here.
 
 | Op Code   | PC After | Stack Before | Stack After |
 |:--------- |:-------- |:------------ |:----------- |
@@ -126,12 +126,9 @@ These operations promote or demote the integer value at the top of the stack to 
 | prom16i64 | PC+1     | d16          | d16 as i64  |
 | prom32u64 | PC+1     | d32          | d32 as u64  |
 | prom32i64 | PC+1     | d32          | d32 as i64  |
-| dem64to32 | PC+1     | d64          | d64 as  32  |
 | dem64to16 | PC+1     | d64          | d64 as  16  |
 | dem64to8  | PC+1     | d64          | d64 as   8  |
-| dem32to16 | PC+1     | d32          | d32 as  16  |
 | dem32to8  | PC+1     | d32          | d32 as   8  |
-| dem16to8  | PC+1     | d16          | d16 as   8  |
 
 ### Integer Arithmetic Operations
 
@@ -344,38 +341,58 @@ These instructions will transfer control flow to an immediate address if their a
 
 ### Memory Operations
 
-These instructions load data from memory to the stack or store data from the stack to memory. Instructions with "sfp" use offsets from the stack frame pointer address, SFP. This allows to bring arguments to the current function and local variables within the current function to the top of the stack, because they reside at known offsets from SFP. The offset operand is always 64 bits wide.
+These instructions load data from memory to the stack or store data from the stack to memory. Instructions with "sfp" use offsets from the stack frame pointer address, SFP. This allows to bring arguments to the current function and local variables within the current function to the top of the stack, because they reside at known offsets from SFP. The offset operand is always 64 bits wide. Opcode names with an additional "r" indicate an order-reversed variant.
 
-| Op Code       | PC After | Stack Before | Stack After          | Side Effect          |
-|:------------- |:-------- |:------------ |:-------------------- |:-------------------- |
-|  load8        | PC + 1   | a64          | a64, (a64)8          |                      |
-| load16        | PC + 1   | a64          | a64, (a64)16         |                      |
-| load32        | PC + 1   | a64          | a64, (a64)32         |                      |
-| load64        | PC + 1   | a64          | a64, (a64)64         |                      |
-|  loadpop8     | PC + 1   | a64          | (a64)8               |                      |
-| loadpop16     | PC + 1   | a64          | (a64)16              |                      |
-| loadpop32     | PC + 1   | a64          | (a64)32              |                      |
-| loadpop64     | PC + 1   | a64          | (a64)64              |                      |
-|  loadsfp8     | PC + 1   | ai64         | ai64, (SFP + ai64)8  |                      |
-| loadsfp16     | PC + 1   | ai64         | ai64, (SFP + ai64)16 |                      |
-| loadsfp32     | PC + 1   | ai64         | ai64, (SFP + ai64)32 |                      |
-| loadsfp64     | PC + 1   | ai64         | ai64, (SFP + ai64)64 |                      |
-|  loadpopsfp8  | PC + 1   | ai64         | (SFP + ai64)8        |                      |
-| loadpopsfp16  | PC + 1   | ai64         | (SFP + ai64)16       |                      |
-| loadpopsfp32  | PC + 1   | ai64         | (SFP + ai64)32       |                      |
-| loadpopsfp64  | PC + 1   | ai64         | (SFP + ai64)64       |                      |
-|  store8       | PC + 1   | a8, b64      |  a8, b64             |  (b64)8 =  a8        |
-| store16       | PC + 1   | a16, b64     | a16, b64             | (b64)16 = a16        |
-| store32       | PC + 1   | a32, b64     | a32, b64             | (b64)32 = a32        |
-| store64       | PC + 1   | a64, b64     | a64, b64             | (b64)64 = a64        |
-|  storepop8    | PC + 1   | a8, b64      |  a8                  |  (b64)8 =  a8        |
-| storepop16    | PC + 1   | a8, b64      | a16                  | (b64)16 = a16        |
-| storepop32    | PC + 1   | a8, b64      | a32                  | (b64)32 = a32        |
-| storepop64    | PC + 1   | a8, b64      | a64                  | (b64)64 = a64        |
-|  storepopsfp8 | PC + 1   | a8, bi64     |  a8                  |  (SFP + bi64)8 =  a8 |
-| storepopsfp16 | PC + 1   | a8, bi64     | a16                  | (SFP + bi64)16 = a16 |
-| storepopsfp32 | PC + 1   | a8, bi64     | a32                  | (SFP + bi64)32 = a32 |
-| storepopsfp64 | PC + 1   | a8, bi64     | a64                  | (SFP + bi64)64 = a64 |
+| Op Code        | PC After | Stack Before | Stack After          | Side Effect          |
+|:-------------- |:-------- |:------------ |:-------------------- |:-------------------- |
+|  load8         | PC + 1   | a64          | a64, (a64)8          |                      |
+| load16         | PC + 1   | a64          | a64, (a64)16         |                      |
+| load32         | PC + 1   | a64          | a64, (a64)32         |                      |
+| load64         | PC + 1   | a64          | a64, (a64)64         |                      |
+|  loadpop8      | PC + 1   | a64          | (a64)8               |                      |
+| loadpop16      | PC + 1   | a64          | (a64)16              |                      |
+| loadpop32      | PC + 1   | a64          | (a64)32              |                      |
+| loadpop64      | PC + 1   | a64          | (a64)64              |                      |
+|  loadsfp8      | PC + 1   | ai64         | ai64, (SFP + ai64)8  |                      |
+| loadsfp16      | PC + 1   | ai64         | ai64, (SFP + ai64)16 |                      |
+| loadsfp32      | PC + 1   | ai64         | ai64, (SFP + ai64)32 |                      |
+| loadsfp64      | PC + 1   | ai64         | ai64, (SFP + ai64)64 |                      |
+|  loadpopsfp8   | PC + 1   | ai64         | (SFP + ai64)8        |                      |
+| loadpopsfp16   | PC + 1   | ai64         | (SFP + ai64)16       |                      |
+| loadpopsfp32   | PC + 1   | ai64         | (SFP + ai64)32       |                      |
+| loadpopsfp64   | PC + 1   | ai64         | (SFP + ai64)64       |                      |
+|  store8        | PC + 1   |  a8, b64     |  a8, b64             |  (b64)8 =  a8        |
+| store16        | PC + 1   | a16, b64     | a16, b64             | (b64)16 = a16        |
+| store32        | PC + 1   | a32, b64     | a32, b64             | (b64)32 = a32        |
+| store64        | PC + 1   | a64, b64     | a64, b64             | (b64)64 = a64        |
+|  storepop8     | PC + 1   |  a8, b64     |  a8                  |  (b64)8 =  a8        |
+| storepop16     | PC + 1   | a16, b64     | a16                  | (b64)16 = a16        |
+| storepop32     | PC + 1   | a32, b64     | a32                  | (b64)32 = a32        |
+| storepop64     | PC + 1   | a64, b64     | a64                  | (b64)64 = a64        |
+|  storesfp8     | PC + 1   |  a8, bi64    |  a8, bi64            |  (SFP + bi64)8 =  a8 |
+| storesfp16     | PC + 1   | a16, bi64    | a16, bi64            | (SFP + bi64)16 = a16 |
+| storesfp32     | PC + 1   | a32, bi64    | a32, bi64            | (SFP + bi64)32 = a32 |
+| storesfp64     | PC + 1   | a64, bi64    | a64, bi64            | (SFP + bi64)64 = a64 |
+|  storepopsfp8  | PC + 1   |  a8, bi64    |  a8                  |  (SFP + bi64)8 =  a8 |
+| storepopsfp16  | PC + 1   | a16, bi64    | a16                  | (SFP + bi64)16 = a16 |
+| storepopsfp32  | PC + 1   | a32, bi64    | a32                  | (SFP + bi64)32 = a32 |
+| storepopsfp64  | PC + 1   | a64, bi64    | a64                  | (SFP + bi64)64 = a64 |
+|  storer8       | PC + 1   | a64,  b8     | a64,  b8             |  (a64)8 =  b8        |
+| storer16       | PC + 1   | a64, b16     | a64, b16             | (a64)16 = b16        |
+| storer32       | PC + 1   | a64, b32     | a64, b32             | (a64)32 = b32        |
+| storer64       | PC + 1   | a64, b64     | a64, b64             | (a64)64 = b64        |
+|  storerpop8    | PC + 1   | a64,  b8     | a64                  |  (a64)8 =  b8        |
+| storerpop16    | PC + 1   | a64, b16     | a64                  | (a64)16 = b16        |
+| storerpop32    | PC + 1   | a64, b32     | a64                  | (a64)32 = b32        |
+| storerpop64    | PC + 1   | a64, b64     | a64                  | (a64)64 = b64        |
+|  storersfp8    | PC + 1   | ai64,  b8    | ai64,  b8            |  (SFP + ai64)8 =  b8 |
+| storersfp16    | PC + 1   | ai64, b16    | ai64, b16            | (SFP + ai64)16 = b16 |
+| storersfp32    | PC + 1   | ai64, b32    | ai64, b32            | (SFP + ai64)32 = b32 |
+| storersfp64    | PC + 1   | ai64, b64    | ai64, b64            | (SFP + ai64)64 = b64 |
+|  storerpopsfp8 | PC + 1   | ai64,  b8    | ai64                 |  (SFP + ai64)8 =  b8 |
+| storerpopsfp16 | PC + 1   | ai64, b16    | ai64                 | (SFP + ai64)16 = b16 |
+| storerpopsfp32 | PC + 1   | ai64, b32    | ai64                 | (SFP + ai64)32 = b32 |
+| storerpopsfp64 | PC + 1   | ai64, b64    | ai64                 | (SFP + ai64)64 = b64 |
 
 ### Miscellaneous Operations
 

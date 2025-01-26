@@ -376,6 +376,9 @@ int Parser_Terminate(struct Parser *parser)
 			else {
 				parser->docFront = next;
 			}
+			if (!next) {
+				parser->docBack = prev;
+			}
 			Token_Destroy(token);
 			free(token);
 			token = prev;
@@ -494,6 +497,9 @@ int Parser_Terminate(struct Parser *parser)
 				else {
 					parser->docFront = next;
 				}
+				if (!next) {
+					parser->docBack = prev;
+				}
 				Token_Destroy(token);
 				free(token);
 				token = prev;
@@ -538,6 +544,9 @@ int Parser_Terminate(struct Parser *parser)
 			}
 			else {
 				parser->docFront = next;
+			}
+			if (!next) {
+				parser->docBack = prev;
 			}
 			Token_Destroy(token);
 			free(token);
