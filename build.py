@@ -55,7 +55,9 @@ def process_cfg(filename):
 		if flags == None: flags = ''
 
 		# Generate dependencies for all source files
-		sources = glob.glob(src, recursive=True)
+		srcs = shell_unescape(src)
+		sources = []
+		for s in srcs: sources += glob.glob(s, recursive=True)
 		objs = []
 		for source in sources:
 			# Make the directory in which to build the object file

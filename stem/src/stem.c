@@ -110,9 +110,9 @@ int main(int argc, const char *argv[])
 		return errno;
 	}
 
-	// Initialize memory
+	// Initialize memory. Give ourselves 1 GiB.
 	struct mem memory;
-	mem_init(&memory);
+	mem_init(&memory, 0x40000000);
 
 	// Initialize a core
 	struct core core;

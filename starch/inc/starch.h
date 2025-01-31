@@ -369,6 +369,7 @@ enum {
 	STERR_BAD_ALIGN, // Bad alignment
 	STERR_BAD_IO_ACCESS, // Access to unused IO memory
 	STERR_BAD_FRAME_ACCESS, // Access to protected stack frame data
+	STERR_BAD_ADDR, // Address out of range
 	STERR_HALT, // Processor halted
 };
 

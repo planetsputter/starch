@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "core.h"
 #include "mem.h"
 #include "starch.h"
 
@@ -20,15 +19,14 @@ enum {
 struct mem_node {
 	struct mem_node *prev, *next;
 	uint64_t addr; // Start address
-	uint8_t *data; // Page data
+	uint8_t depth; // Max following generations
+	uint8_t data[MEM_PAGE_SIZE]; // Page data
 };
 
 static void mem_node_init(struct mem_node *node, uint64_t addr)
 {
 	memset(node, 0, sizeof(struct mem_node));
 	node->addr = addr;
-	node->data = (uint8_t*)malloc(MEM_PAGE_SIZE);
-	memset(node->data, 0, MEM_PAGE_SIZE);
 }
 
 static void mem_node_destroy(struct mem_node *node)
@@ -41,31 +39,116 @@ static void mem_node_destroy(struct mem_node *node)
 		mem_node_destroy(node->next);
 		node->next = NULL;
 	}
-	if (node->data) {
-		free(node->data);
-		node->data = NULL;
+}
+
+static void mem_node_update_depth(struct mem_node *node)
+{
+	if (node->prev) {
+		uint64_t prevdepth = node->prev->depth;
+		if (node->next) {
+			uint64_t nextdepth = node->next->depth;
+			node->depth = prevdepth > nextdepth ? prevdepth + 1 : nextdepth + 1;
+		}
+		else {
+			node->depth = prevdepth + 1;
+		}
+	}
+	else {
+		if (node->next) {
+			node->depth = node->next->depth + 1;
+		}
+		else {
+			node->depth = 0;
+		}
 	}
 }
 
-static struct mem_node *mem_node_get_page(struct mem_node *node, uint64_t addr)
+// Rebalance the tree beginning at the given node, returning the new root
+static struct mem_node *mem_node_rebalance(struct mem_node *node)
+{
+	struct mem_node *newroot, *mid;
+	if ((!node->prev && node->depth > 1) ||
+		(node->prev && node->depth > node->prev->depth + 2)) {
+		// node->next has too much depth
+		// node->next->prev is going to end up at the same depth, while
+		// node->next->next is going to move closer to root
+		if (!node->next->next || node->next->next->depth < node->next->depth + 1) {
+			// Greater depth comes from node->next->prev. Double-rotation is needed.
+			newroot = node->next->prev;
+			mid = newroot->next;
+			newroot->next = node->next;
+			node->next->prev = mid;
+			node->next = newroot;
+			mem_node_update_depth(newroot->next);
+			mem_node_update_depth(newroot);
+		}
+		newroot = node->next;
+		mid = newroot->prev;
+		newroot->prev = node;
+		node->next = mid;
+		mem_node_update_depth(node);
+		mem_node_update_depth(newroot);
+	}
+	else if ((!node->next && node->depth > 1) ||
+		(node->next && node->depth > node->next->depth + 2)) {
+		// node->prev has too much depth
+		// node->prev->next is going to end up at the same depth, while
+		// node->prev->prev is going to move closer to root
+		if (!node->prev->prev || node->prev->prev->depth < node->prev->depth + 1) {
+			// Greater depth comes from node->prev->next. Double-rotation is needed.
+			newroot = node->prev->next;
+			mid = newroot->prev;
+			newroot->prev = node->prev;
+			node->prev->next = mid;
+			node->prev = newroot;
+			mem_node_update_depth(newroot->prev);
+			mem_node_update_depth(newroot);
+		}
+		newroot = node->prev;
+		mid = newroot->next;
+		newroot->next = node;
+		node->prev = mid;
+		mem_node_update_depth(node);
+		mem_node_update_depth(newroot);
+	}
+	else {
+		// No rotation necessary
+		newroot = node;
+	}
+	return newroot;
+}
+
+static struct mem_node *mem_node_get_page(struct mem *mem, struct mem_node *node, uint64_t addr)
 {
 	struct mem_node *retnode;
 	if (!node) {
 		// Allocate a new memory node for the page
-		// @todo: increment node count, rebalance
 		retnode = (struct mem_node*)malloc(sizeof(struct mem_node));
-		mem_node_init(retnode, addr & ~0xfff);
+		mem_node_init(retnode, addr & ~MEM_PAGE_MASK);
+		mem->node_count++;
 	}
 	else if (addr < node->addr) {
-		retnode = mem_node_get_page(node->prev, addr);
+		retnode = mem_node_get_page(mem, node->prev, addr);
 		if (!node->prev) {
 		   node->prev = retnode;
 		}
+		else {
+			node->prev = mem_node_rebalance(node->prev);
+		}
+		if (node->depth < node->prev->depth + 1) {
+			node->depth = node->prev->depth + 1;
+		}
 	}
 	else if (addr >= node->addr + MEM_PAGE_SIZE) {
-		retnode = mem_node_get_page(node->next, addr);
+		retnode = mem_node_get_page(mem, node->next, addr);
 		if (!node->next) {
 		   node->next = retnode;
+		}
+		else {
+			node->next = mem_node_rebalance(node->next);
+		}
+		if (node->depth < node->next->depth + 1) {
+			node->depth = node->next->depth + 1;
 		}
 	}
 	else {
@@ -111,9 +194,10 @@ static int mem_node_iterate(struct mem_node *node, struct iter_params *params)
 //
 // Memory object
 //
-void mem_init(struct mem *mem)
+void mem_init(struct mem *mem, uint64_t size)
 {
 	memset(mem, 0, sizeof(struct mem));
+	mem->size = size;
 }
 
 void mem_destroy(struct mem *mem)
@@ -125,36 +209,20 @@ void mem_destroy(struct mem *mem)
 
 static struct mem_node *mem_get_page(struct mem *mem, uint64_t addr)
 {
-	struct mem_node *page = mem_node_get_page(mem->root, addr);
+	struct mem_node *page = mem_node_get_page(mem, mem->root, addr);
 	if (mem->root == NULL) {
 		mem->root = page;
+	}
+	else {
+		mem->root = mem_node_rebalance(mem->root);
 	}
 	return page;
 }
 
-//
-// IO memory constants
-//
-enum {
-	BEGIN_IO_ADDR         = 0xfffffffffff00000,
-	IO_STDOUT_ADDR        = 0xfffffffffff00000,
-	IO_STDIN_ADDR         = 0xfffffffffff00001,
-};
-
-int mem_write8(struct mem *mem, struct core *core, uint64_t addr, uint8_t data)
+int mem_write8(struct mem *mem, uint64_t addr, uint8_t data)
 {
-	// Check frame access
-	if (addr >= core->sfp && addr < core->sfp + STFRAME_SIZE) {
-		return STERR_BAD_FRAME_ACCESS;
-	}
-
-	// Check IO memory
-	if (addr >= BEGIN_IO_ADDR) {
-		if (addr == IO_STDOUT_ADDR) {
-			printf("%c", data);
-			return STERR_NONE;
-		}
-		return STERR_BAD_IO_ACCESS;
+	if (addr >= mem->size) {
+		return STERR_BAD_ADDR;
 	}
 
 	struct mem_node *page = mem_get_page(mem, addr);
@@ -162,19 +230,10 @@ int mem_write8(struct mem *mem, struct core *core, uint64_t addr, uint8_t data)
 	return STERR_NONE;
 }
 
-int mem_write16(struct mem *mem, struct core *core, uint64_t addr, uint16_t data)
+int mem_write16(struct mem *mem, uint64_t addr, uint16_t data)
 {
-	// Check frame access
-	if (addr >= core->sfp - 1 && addr < core->sfp + STFRAME_SIZE) {
-		return STERR_BAD_FRAME_ACCESS;
-	}
-
-	// Check IO memory
-	if (addr > BEGIN_IO_ADDR - 2) {
-		if (addr < BEGIN_IO_ADDR) {
-			return STERR_BAD_ALIGN; // Write partially to IO memory
-		}
-		return STERR_BAD_IO_ACCESS; // No 16-bit IO write operations currently
+	if (addr >= mem->size - 1) {
+		return STERR_BAD_ADDR;
 	}
 
 	struct mem_node *page = mem_get_page(mem, addr);
@@ -187,19 +246,10 @@ int mem_write16(struct mem *mem, struct core *core, uint64_t addr, uint16_t data
 	return STERR_NONE;
 }
 
-int mem_write32(struct mem *mem, struct core *core, uint64_t addr, uint32_t data)
+int mem_write32(struct mem *mem, uint64_t addr, uint32_t data)
 {
-	// Check frame access
-	if (addr >= core->sfp - 3 && addr < core->sfp + STFRAME_SIZE) {
-		return STERR_BAD_FRAME_ACCESS;
-	}
-
-	// Check IO memory
-	if (addr > BEGIN_IO_ADDR - 4) {
-		if (addr < BEGIN_IO_ADDR) {
-			return STERR_BAD_ALIGN; // Write partially to IO memory
-		}
-		return STERR_BAD_IO_ACCESS; // No 32-bit IO write operations currently
+	if (addr >= mem->size - 3) {
+		return STERR_BAD_ADDR;
 	}
 
 	struct mem_node *page = mem_get_page(mem, addr);
@@ -215,19 +265,10 @@ int mem_write32(struct mem *mem, struct core *core, uint64_t addr, uint32_t data
 	return STERR_NONE;
 }
 
-int mem_write64(struct mem *mem, struct core *core, uint64_t addr, uint64_t data)
+int mem_write64(struct mem *mem, uint64_t addr, uint64_t data)
 {
-	// Check frame access
-	if (addr >= core->sfp - 7 && addr < core->sfp + STFRAME_SIZE) {
-		return STERR_BAD_FRAME_ACCESS;
-	}
-
-	// Check IO memory
-	if (addr > BEGIN_IO_ADDR - 8) {
-		if (addr < BEGIN_IO_ADDR) {
-			return STERR_BAD_ALIGN; // Write partially to IO memory
-		}
-		return STERR_BAD_IO_ACCESS; // No 64-bit IO write operations currently
+	if (addr >= mem->size - 7) {
+		return STERR_BAD_ADDR;
 	}
 
 	struct mem_node *page = mem_get_page(mem, addr);
@@ -243,16 +284,10 @@ int mem_write64(struct mem *mem, struct core *core, uint64_t addr, uint64_t data
 	return STERR_NONE;
 }
 
-int mem_read8(struct mem *mem, struct core *core, uint64_t addr, uint8_t *data)
+int mem_read8(struct mem *mem, uint64_t addr, uint8_t *data)
 {
-	// Check frame access
-	if (addr >= core->sfp && addr < core->sfp + STFRAME_SIZE) {
-		return STERR_BAD_FRAME_ACCESS;
-	}
-
-	// Check IO memory
-	if (addr >= BEGIN_IO_ADDR) {
-		return STERR_BAD_IO_ACCESS; // No 8-bit IO read operations currently
+	if (addr >= mem->size) {
+		return STERR_BAD_ADDR;
 	}
 
 	struct mem_node *page = mem_get_page(mem, addr);
@@ -260,19 +295,10 @@ int mem_read8(struct mem *mem, struct core *core, uint64_t addr, uint8_t *data)
 	return STERR_NONE;
 }
 
-int mem_read16(struct mem *mem, struct core *core, uint64_t addr, uint16_t *data)
+int mem_read16(struct mem *mem, uint64_t addr, uint16_t *data)
 {
-	// Check frame access
-	if (addr >= core->sfp - 1 && addr < core->sfp + STFRAME_SIZE) {
-		return STERR_BAD_FRAME_ACCESS;
-	}
-
-	// Check IO memory
-	if (addr > BEGIN_IO_ADDR - 2) {
-		if (addr < BEGIN_IO_ADDR) {
-			return STERR_BAD_ALIGN; // Read partially from IO memory
-		}
-		return STERR_BAD_IO_ACCESS; // No 16-bit IO read operations currently
+	if (addr >= mem->size - 1) {
+		return STERR_BAD_ADDR;
 	}
 
 	struct mem_node *page = mem_get_page(mem, addr);
@@ -290,22 +316,10 @@ int mem_read16(struct mem *mem, struct core *core, uint64_t addr, uint16_t *data
 	return STERR_NONE;
 }
 
-int mem_read32(struct mem *mem, struct core *core, uint64_t addr, uint32_t *data)
+int mem_read32(struct mem *mem, uint64_t addr, uint32_t *data)
 {
-	// Check frame access
-	if (addr >= core->sfp - 3 && addr < core->sfp + STFRAME_SIZE) {
-		return STERR_BAD_FRAME_ACCESS;
-	}
-
-	// Check IO memory
-	if (addr > BEGIN_IO_ADDR - 4) {
-		if (addr < BEGIN_IO_ADDR) {
-			return STERR_BAD_ALIGN; // Read partially from IO memory
-		}
-		if (addr == IO_STDIN_ADDR) {
-			return getchar();
-		}
-		return STERR_BAD_IO_ACCESS; // No 16-bit IO read operations currently
+	if (addr >= mem->size - 3) {
+		return STERR_BAD_ADDR;
 	}
 
 	struct mem_node *page = mem_get_page(mem, addr);
@@ -323,19 +337,10 @@ int mem_read32(struct mem *mem, struct core *core, uint64_t addr, uint32_t *data
 	return STERR_NONE;
 }
 
-int mem_read64(struct mem *mem, struct core *core, uint64_t addr, uint64_t *data)
+int mem_read64(struct mem *mem, uint64_t addr, uint64_t *data)
 {
-	// Check frame access
-	if (addr >= core->sfp - 7 && addr < core->sfp + STFRAME_SIZE) {
-		return STERR_BAD_FRAME_ACCESS;
-	}
-
-	// Check IO memory
-	if (addr > BEGIN_IO_ADDR - 8) {
-		if (addr < BEGIN_IO_ADDR) {
-			return STERR_BAD_ALIGN; // Read partially from IO memory
-		}
-		return STERR_BAD_IO_ACCESS; // No 16-bit IO read operations currently
+	if (addr >= mem->size - 7) {
+		return STERR_BAD_ADDR;
 	}
 
 	struct mem_node *page = mem_get_page(mem, addr);

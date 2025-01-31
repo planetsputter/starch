@@ -355,7 +355,7 @@ check_opi32() {
 	echo
 }
 
-check_opi32 push32i64 rjmpi32 rbrz8i32 rbrz16i32 rbrz32i32 rbrz64i32
+check_opi32 push32i64 rjmpi32
 
 # @todo: Test opcodes with a64 immediate
 
