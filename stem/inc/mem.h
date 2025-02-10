@@ -32,7 +32,7 @@ int mem_read32(struct mem*, uint64_t addr, uint32_t *data);
 int mem_read64(struct mem*, uint64_t addr, uint64_t *data);
 
 // Load a binary image file into memory. Returns 0 on success.
-int mem_load_image(struct mem*, uint64_t addr, FILE *image_file);
+int mem_load_image(struct mem*, uint64_t addr, uint64_t size, FILE *image_file);
 // Dump the given range of memory to a hex file.
 // If addr and size are both zero, dumps all modified memory.
 // Returns 0 on success.

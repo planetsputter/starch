@@ -591,7 +591,8 @@ int Parser_WriteBytecode(struct Parser *parser, FILE *outstream)
 			ret = -1;
 		}
 		for (int i = 0; i < len; i++) {
-			ret = fprintf(outstream, "%c", (unsigned char)(token->val.integer >> (i * 8)));
+			unsigned char val = (unsigned char)(token->val.integer >> (i * 8));
+			ret = fwrite(&val, 1, 1, outstream);
 			if (ret != 1) {
 				fprintf(stderr, "error: failed to write to output file\n");
 				break;

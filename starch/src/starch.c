@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "starch.h"
+#include "stub.h" // Only for error codes
 
 static const char *names[256] = {
 	[op_invalid] = "invalid",
@@ -1031,6 +1032,7 @@ int imm_types_for_opcode(int opcode, int *dts)
 const char *name_for_sterr(int sterr)
 {
 	switch (sterr) {
+	// Generic starch errors
 	case STERR_NONE:
 		return "STERR_NONE";
 	case STERR_BAD_INST:
@@ -1041,8 +1043,25 @@ const char *name_for_sterr(int sterr)
 		return "STERR_BAD_IO_ACCESS";
 	case STERR_BAD_FRAME_ACCESS:
 		return "STERR_BAD_FRAME_ACCESS";
+	case STERR_BAD_ADDR:
+		return "STERR_BAD_ADDR";
 	case STERR_HALT:
 		return "STERR_HALT";
+	// Stub errors
+	case STUB_ERROR_PREMATURE_EOF:
+		return "STUB_ERROR_PREMATURE_EOF";
+	case STUB_ERROR_INVALID_HEADER:
+		return "STUB_ERROR_INVALID_HEADER";
+	case STUB_ERROR_INVALID_SECTION_COUNT:
+		return "STUB_ERROR_INVALID_SECTION_COUNT";
+	case STUB_ERROR_INVALID_FILE_OFFSET:
+		return "STUB_ERROR_INVALID_FILE_OFFSET";
+	case STUB_ERROR_SEEK_ERROR:
+		return "STUB_ERROR_SEEK_ERROR";
+	case STUB_ERROR_INVALID_SECTION_INDEX:
+		return "STUB_ERROR_INVALID_SECTION_INDEX";
+	case STUB_ERROR_WRITE_FAILURE:
+		return "STUB_ERROR_WRITE_FAILURE";
 	}
 	return "STERR_UNKNOWN";
 }

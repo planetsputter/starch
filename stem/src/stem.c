@@ -7,6 +7,7 @@
 #include "mem.h"
 #include "starch.h"
 #include "starg.h"
+#include "stub.h"
 
 // Variables set by command-line arguments
 const char *arg_cycles = NULL;
@@ -110,7 +111,15 @@ int main(int argc, const char *argv[])
 		return errno;
 	}
 
-	// Initialize memory. Give ourselves 1 GiB.
+	// Verify the image file is a stub file
+	int ret = stub_verify(infile);
+	if (ret) {
+		fclose(infile);
+		fprintf(stderr, "error: \"%s\" is not a valid stub file\n", arg_image);
+		return ret;
+	}
+
+	// Initialize emulated memory. Give ourselves 1 GiB.
 	struct mem memory;
 	mem_init(&memory, 0x40000000);
 
@@ -118,8 +127,18 @@ int main(int argc, const char *argv[])
 	struct core core;
 	core_init(&core);
 
+	// Load first stub section information
+	struct stub_sec sec;
+	ret = stub_load_section(infile, 0, &sec);
+	if (ret) {
+		core_destroy(&core);
+		fclose(infile);
+		fprintf(stderr, "error: failed to load section 0 from \"%s\"\n", arg_image);
+		return ret;
+	}
+
 	// Load input file into memory
-	int ret = mem_load_image(&memory, 0, infile);
+	ret = mem_load_image(&memory, sec.addr, sec.size, infile);
 	if (ret) {
 		fprintf(stderr, "error: failed to load memory from \"%s\" to address 0\n", arg_image);
 	}

@@ -358,11 +358,12 @@ int mem_read64(struct mem *mem, uint64_t addr, uint64_t *data)
 	return STERR_NONE;
 }
 
-int mem_load_image(struct mem *mem, uint64_t addr, FILE *image_file)
+int mem_load_image(struct mem *mem, uint64_t addr, uint64_t size, FILE *image_file)
 {
+	uint64_t end_addr = addr + size;
 	int ret;
 	struct mem_node *node = NULL;
-	for (; (ret = fgetc(image_file)) != EOF; addr++) {
+	for (; addr < end_addr && (ret = fgetc(image_file)) != EOF; addr++) {
 		if (node == NULL || (addr & MEM_PAGE_MASK) == 0) {
 			node = mem_get_page(mem, addr);
 		}

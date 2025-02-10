@@ -1,7 +1,8 @@
 // stasm.c
 
-#include "starg.h"
 #include "parser.h"
+#include "starg.h"
+#include "stub.h"
 
 // Variables set by command-line arguments
 const char *arg_help = NULL;
@@ -118,7 +119,19 @@ int main(int argc, const char *argv[])
 					error = 1;
 				}
 				else {
-					error = Parser_WriteBytecode(&parser, outfile);
+					// Initialize output stub file with one section
+					error = stub_init(outfile, 1);
+					if (error == 0) {
+						error = Parser_WriteBytecode(&parser, outfile);
+						if (error == 0) {
+							// Save the first section
+							struct stub_sec sec;
+							// @todo: make configurable
+							sec.addr = 0x1000;
+							sec.flags = STUB_FLAG_TEXT;
+							error = stub_save_section(outfile, 0, &sec);
+						}
+					}
 					fclose(outfile);
 				}
 			}
@@ -127,5 +140,8 @@ int main(int argc, const char *argv[])
 
 	Parser_Destroy(&parser);
 
+	if (error) {
+		fprintf(stderr, "program exiting with error code %d (%s)\n", error, name_for_sterr(error));
+	}
 	return error;
 }

@@ -1,7 +1,8 @@
 // distasm.c
 
-#include "starg.h"
 #include "starch.h"
+#include "starg.h"
+#include "stub.h"
 
 // Variables set by command-line arguments
 const char *arg_help = NULL;
@@ -81,8 +82,23 @@ int main(int argc, const char *argv[])
 	// Open input binary
 	FILE *infile = fopen(arg_bin, "rb");
 	if (!infile) {
-		fprintf(stderr, "error: failed to open %s\n", arg_bin);
+		fprintf(stderr, "error: failed to open \"%s\"\n", arg_bin);
 		return 1;
+	}
+	// Verify the input file is a valid stub file
+	int ret = stub_verify(infile);
+	if (ret) {
+		fclose(infile);
+		fprintf(stderr, "error: \"%s\" is not a valid stub file\n", arg_bin);
+		return ret;
+	}
+	// Load the first section, seeking to the beginning of the section data
+	struct stub_sec sec;
+	ret = stub_load_section(infile, 0, &sec);
+	if (ret) {
+		fclose(infile);
+		fprintf(stderr, "error: failed to load section 0 from \"%s\"\n", arg_bin);
+		return ret;
 	}
 
 	// Open output file
@@ -100,7 +116,9 @@ int main(int argc, const char *argv[])
 	}
 
 	// Read in input binary
-	int opcode, ret = 0, num_imm;
+	// @todo: limit reads to section 0 size
+	int opcode, num_imm;
+	ret = 0;
 	while ((opcode = fgetc(infile)) != EOF) {
 		// Print opcode name
 		ret = fprintf(outfile, "%s", name_for_opcode(opcode));

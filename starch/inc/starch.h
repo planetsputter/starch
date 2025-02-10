@@ -371,6 +371,7 @@ enum {
 	STERR_BAD_FRAME_ACCESS, // Access to protected stack frame data
 	STERR_BAD_ADDR, // Address out of range
 	STERR_HALT, // Processor halted
+	STERR_NUM_ERRORS,
 };
 
 const char *name_for_sterr(int);
