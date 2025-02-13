@@ -12,6 +12,7 @@
 enum {
 	STUB_FLAG_TEXT = 0,
 	STUB_FLAG_DATA = 1,
+	STUB_FLAG_STACK = 2,
 };
 
 // Section of a stub file

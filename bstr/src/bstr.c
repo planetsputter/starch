@@ -20,6 +20,11 @@ char *bstr_alloc(void)
 	return s;
 }
 
+char *bstr_dup(const char *cstr)
+{
+	return bstr_cat(bstr_alloc(), cstr);
+}
+
 void bstr_free(char *s)
 {
 	free(s - sizeof(struct bstr_hdr));

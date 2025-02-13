@@ -37,7 +37,7 @@ static bool parse_int(const char *s, long long *val)
 			case '\"': temp_val = '\"'; break;
 			case '?': temp_val = '\?'; break;
 			default:
-				// @todo: allow hexadecimal notation
+				// @todo: allow hexadecimal notation as in '\x00'
 				return false;
 			}
 		}

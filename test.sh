@@ -11,6 +11,14 @@ DISTASM=../distasm/bin/distasm
 STASM=../stasm/bin/stasm
 STEM=../stem/bin/stem
 
+# Run unit test executables
+echo testing smap
+../starch/test/smaptest
+echo testing emulated memory
+../stem/test/memtest
+echo testing utf8 library
+../utf8/test/test
+
 # Check for symmetric dis/assembly of opcodes with zero immediates
 check_op0() {
 	echo -n testing symmetric dis/assembly of opcodes with no immediate:

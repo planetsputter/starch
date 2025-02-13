@@ -1,6 +1,7 @@
 // stub.c
 
 #include <errno.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,7 +11,7 @@
 
 enum {
 	STUB_HEADER_SIZE = 4,
-	STUB_SECTION_HEADER_SIZE = 21,
+	STUB_SECTION_HEADER_SIZE = 25,
 };
 
 static const uint8_t expected_hdr[STUB_HEADER_SIZE] = {
@@ -26,6 +27,7 @@ static uint64_t u64_from_little8(uint8_t *data)
 		((uint64_t)data[6] << 48) | ((uint64_t)data[7] << 56);
 }
 
+// Write the 64-bit unsigned value to eight bytes in little-endian order
 static void u64_to_little8(uint64_t val, uint8_t *data)
 {
 	data[0] = val;
@@ -36,24 +38,6 @@ static void u64_to_little8(uint64_t val, uint8_t *data)
 	data[5] = val >> 40;
 	data[6] = val >> 48;
 	data[7] = val >> 56;
-}
-
-// Get a 64-bit unsigned value from six bytes in little-endian order
-static uint64_t u64_from_little6(uint8_t *data)
-{
-	return (uint64_t)data[0] | ((uint64_t)data[1] << 8) |
-		((uint64_t)data[2] << 16) | ((uint64_t)data[3] << 24) |
-		((uint64_t)data[4] << 32) | ((uint64_t)data[5] << 40);
-}
-
-static void u64_to_little6(uint64_t val, uint8_t *data)
-{
-	data[0] = val;
-	data[1] = val >> 8;
-	data[2] = val >> 16;
-	data[3] = val >> 24;
-	data[4] = val >> 32;
-	data[5] = val >> 40;
 }
 
 // Get 32-bit signed value from four bytes in little-endian order
@@ -68,11 +52,11 @@ int stub_verify(FILE *file)
 	// The format of the file is as follows, with byte sizes in parenthesis:
 	// header (4)
 	// number of sections (4)
-	// section header (21):
+	// section header (25):
 	//     addr (8)
 	//     flags (1)
-	//     begin file offset (6)
-	//     end file offset (6)
+	//     begin file offset or {efo less stack size} (8)
+	//     end file offset (8)
 	// [...]
 	// section data (N)
 	// [...]
@@ -107,6 +91,7 @@ int stub_verify(FILE *file)
 	}
 
 	uint64_t first_bfo = 0, last_efo = 0;
+	bool has_first_bfo = false;
 	long fpos;
 
 	// Read section headers
@@ -117,11 +102,17 @@ int stub_verify(FILE *file)
 			return STUB_ERROR_PREMATURE_EOF;
 		}
 
+		// Get flags
+		uint8_t flags = temp_array[8];
+
 		// Get section data begin file offset
-		uint64_t bfo = u64_from_little6(temp_array + 9);
+		uint64_t bfo = u64_from_little8(temp_array + 9);
+		if (!has_first_bfo && flags != STUB_FLAG_STACK) {
+			has_first_bfo = true;
+		}
 
 		// Get section data end file offset
-		uint64_t efo = u64_from_little6(temp_array + 15);
+		uint64_t efo = u64_from_little8(temp_array + 17);
 
 		// Get current file offset
 		fpos = ftell(file);
@@ -135,9 +126,9 @@ int stub_verify(FILE *file)
 		}
 
 		// Check offsets
-		if ((uint64_t)fpos > first_bfo || // Headers extend into section data
-			bfo != last_efo || // Section data does not immediately follow previous
-			efo < bfo) { // Section has negative length
+		if ((has_first_bfo && (uint64_t)fpos > first_bfo) || // Headers extend into section data
+			(flags != STUB_FLAG_STACK && bfo != last_efo) || // Section data does not immediately follow previous
+			(flags != STUB_FLAG_STACK && efo < bfo)) { // Section has negative length
 			return STUB_ERROR_INVALID_FILE_OFFSET;
 		}
 
@@ -151,7 +142,7 @@ int stub_verify(FILE *file)
 	}
 
 	// Last section header must take us to the beginning of section data
-	if ((uint64_t)fpos != first_bfo) {
+	if (has_first_bfo && (uint64_t)fpos != first_bfo) {
 		return STUB_ERROR_INVALID_FILE_OFFSET;
 	}
 
@@ -205,14 +196,18 @@ int stub_load_section(FILE *file, int section, struct stub_sec *sec)
 	}
 
 	// Interpret section header
-	uint64_t bfo = u64_from_little6(temp_array + 9);
-	uint64_t efo = u64_from_little6(temp_array + 15);
-	if (bfo > efo) {
+	uint8_t flags = temp_array[8];
+	uint64_t bfo = u64_from_little8(temp_array + 9);
+	uint64_t efo = u64_from_little8(temp_array + 17);
+	if (flags != STUB_FLAG_STACK && bfo > efo) {
 		return STUB_ERROR_INVALID_FILE_OFFSET;
 	}
 	sec->addr = u64_from_little8(temp_array);
-	sec->flags = temp_array[8];
+	sec->flags = flags;
 	sec->size = efo - bfo;
+	if (flags == STUB_FLAG_STACK) {
+		bfo = efo;
+	}
 
 	// Seek to beginning of section data
 	ret = fseek(file, bfo, SEEK_SET);
@@ -303,7 +298,7 @@ int stub_save_section(FILE *file, int seci, struct stub_sec *sec)
 		if (bc != 6) {
 			return STUB_ERROR_PREMATURE_EOF;
 		}
-		prev_efo = u64_from_little6(temp_array);
+		prev_efo = u64_from_little8(temp_array);
 	}
 
 	// Check the previous efo
@@ -315,9 +310,9 @@ int stub_save_section(FILE *file, int seci, struct stub_sec *sec)
 	u64_to_little8(sec->addr, temp_array);
 	temp_array[8] = sec->flags;
 	// The bfo of the current section is the efo of the previous section
-	u64_to_little6(prev_efo, temp_array + 9);
+	u64_to_little8(prev_efo, temp_array + 9);
 	// The efo of the current section is the orginal file position
-	u64_to_little6((uint64_t)fpos, temp_array + 15);
+	u64_to_little8((uint64_t)fpos, temp_array + 17);
 
 	// Write the section header
 	size_t bc = fwrite(temp_array, 1, STUB_SECTION_HEADER_SIZE, file);
