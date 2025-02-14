@@ -37,7 +37,7 @@ To call a function that takes arguments, arguments are pushed onto the stack beg
 |         | RETV                  |
 |         | Called function data  |
 
-Functions are prohibited by the memory management unit from accessing (reading or writing) data in the stack frame itself. That is, data at addresses from SFP to SFP + 15, inclusively. This helps prevent certain classes of attacks which seek to overwrite the return pointer of a function and transfer control to insecure code.
+Functions are prohibited by the memory management unit from accessing (reading or writing) stack frame control data, that is, data at addresses from SFP to SFP + 15, inclusively. This helps prevent certain classes of attacks which seek to overwrite the return pointer of a function and transfer control to insecure code.
 
 Instruction Set
 ---------------
@@ -114,21 +114,21 @@ These operations promote or demote the integer value at the top of the stack to 
 
 | Op Code   | PC After | Stack Before | Stack After |
 |:--------- |:-------- |:------------ |:----------- |
-| prom8u16  | PC+1     | d8           | d8  as u16  |
-| prom8u32  | PC+1     | d8           | d8  as u32  |
-| prom8u64  | PC+1     | d8           | d8  as u64  |
-| prom8i16  | PC+1     | d8           | d8  as i16  |
-| prom8i32  | PC+1     | d8           | d8  as i32  |
-| prom8i64  | PC+1     | d8           | d8  as i64  |
-| prom16u32 | PC+1     | d16          | d16 as u32  |
-| prom16u64 | PC+1     | d16          | d16 as u64  |
-| prom16i32 | PC+1     | d16          | d16 as i32  |
-| prom16i64 | PC+1     | d16          | d16 as i64  |
-| prom32u64 | PC+1     | d32          | d32 as u64  |
-| prom32i64 | PC+1     | d32          | d32 as i64  |
-| dem64to16 | PC+1     | d64          | d64 as  16  |
-| dem64to8  | PC+1     | d64          | d64 as   8  |
-| dem32to8  | PC+1     | d32          | d32 as   8  |
+| prom8u16  | PC+1     | a8           | a8  as u16  |
+| prom8u32  | PC+1     | a8           | a8  as u32  |
+| prom8u64  | PC+1     | a8           | a8  as u64  |
+| prom8i16  | PC+1     | a8           | a8  as i16  |
+| prom8i32  | PC+1     | a8           | a8  as i32  |
+| prom8i64  | PC+1     | a8           | a8  as i64  |
+| prom16u32 | PC+1     | a16          | a16 as u32  |
+| prom16u64 | PC+1     | a16          | a16 as u64  |
+| prom16i32 | PC+1     | a16          | a16 as i32  |
+| prom16i64 | PC+1     | a16          | a16 as i64  |
+| prom32u64 | PC+1     | a32          | a32 as u64  |
+| prom32i64 | PC+1     | a32          | a32 as i64  |
+| dem64to16 | PC+1     | a64          | a64 as  16  |
+| dem64to8  | PC+1     | a64          | a64 as   8  |
+| dem32to8  | PC+1     | a32          | a32 as   8  |
 
 ### Integer Arithmetic Operations
 
@@ -237,14 +237,14 @@ Boolean logical operations result in a Boolean value, either a zero or a one, re
 
 | Op Code   | PC After | Stack Before | Stack After   |
 |:--------- |:-------- |:------------ |:------------- |
-| land8     | PC+1     |  a8, b8      |   a8   &&  b8 |
-| land16    | PC+1     | a16, b8      |  a16   && b16 |
-| land32    | PC+1     | a32, b8      |  a32   && b32 |
-| land64    | PC+1     | a64, b8      |  a64   && b64 |
-| lor8      | PC+1     |  a8, b8      |   a8 \|\|  b8 |
-| lor16     | PC+1     | a16, b8      |  a16 \|\| b16 |
-| lor32     | PC+1     | a32, b8      |  a32 \|\| b32 |
-| lor64     | PC+1     | a64, b8      |  a64 \|\| b64 |
+| land8     | PC+1     |  a8,  b8     |   a8   &&  b8 |
+| land16    | PC+1     | a16, b16     |  a16   && b16 |
+| land32    | PC+1     | a32, b32     |  a32   && b32 |
+| land64    | PC+1     | a64, b64     |  a64   && b64 |
+| lor8      | PC+1     |  a8,  b8     |   a8 \|\|  b8 |
+| lor16     | PC+1     | a16, b16     |  a16 \|\| b16 |
+| lor32     | PC+1     | a32, b32     |  a32 \|\| b32 |
+| lor64     | PC+1     | a64, b64     |  a64 \|\| b64 |
 | linv8     | PC+1     |  a8          |  !a8          |
 | linv16    | PC+1     | a16          | !a16          |
 | linv32    | PC+1     | a32          | !a32          |
@@ -304,7 +304,7 @@ These instructions call functions and return from them.
 | Op Code   | PC After   | Stack Before                  | Stack After | SFP After   |
 |:--------- |:---------- |:----------------------------- |:----------- |:----------- |
 | call      | (PC + 1)64 |                               | SFP64, PC64 | SP - 16     |
-| calls     | (a64)64    | a64                           | SFP64, PC64 | SP - 16     |
+| calls     | a64        | a64                           | SFP64, PC64 | SP - 8      |
 | ret       | (SFP)64    | PSFP64, RETA64 @ SFP64, [...] |             | (SFP + 8)64 |
 
 ### Branching Instructions
@@ -320,9 +320,9 @@ These instructions can transfer control flow to a non-sequential instruction.
 | rjmpi32   | PC + (PC + 1)i32 |              |             |
 | rjmpi64   | PC + (PC + 1)i64 |              |             |
 |  rjmpsi8  | PC +  ai8        |  ai8         |             |
-| rjmpis16  | PC + ai16        | ai16         |             |
-| rjmpis32  | PC + ai32        | ai32         |             |
-| rjmpis64  | PC + ai64        | ai64         |             |
+| rjmpsi16  | PC + ai16        | ai16         |             |
+| rjmpsi32  | PC + ai32        | ai32         |             |
+| rjmpsi64  | PC + ai64        | ai64         |             |
 
 ### Conditional Branching Instructions
 
