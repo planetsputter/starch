@@ -49,8 +49,12 @@ check_op0 invalid \
 	muli8 muli16 muli32 muli64 \
 	divu8 divu16 divu32 divu64 \
 	divi8 divi16 divi32 divi64 \
+	divru8 divru16 divru32 divru64 \
+	divri8 divri16 divri32 divri64 \
 	modu8 modu16 modu32 modu64 \
 	modi8 modi16 modi32 modi64 \
+	modru8 modru16 modru32 modru64 \
+	modri8 modri16 modri32 modri64 \
 	lshift8 lshift16 lshift32 lshift64 \
 	rshiftu8 rshiftu16 rshiftu32 rshiftu64 \
 	rshifti8 rshifti16 rshifti32 rshifti64 \
@@ -80,6 +84,10 @@ check_op0 invalid \
 	storepop8 storepop16 storepop32 storepop64 \
 	storesfp8 storesfp16 storesfp32 storesfp64 \
 	storepopsfp8 storepopsfp16 storepopsfp32 storepopsfp64 \
+	storer8 storer16 storer32 storer64 \
+	storerpop8 storerpop16 storerpop32 storerpop64 \
+	storersfp8 storersfp16 storersfp32 storersfp64 \
+	storerpopsfp8 storerpopsfp16 storerpopsfp32 storerpopsfp64 \
 	setsbp setsfp setsp halt \
 	ext nop
 
@@ -175,7 +183,7 @@ check_opi8() {
 	echo
 }
 
-check_opi8 push8i16 push8i32 push8i64
+check_opi8 push8i16 push8i32 push8i64 rjmpi8
 
 #
 # Check for symmetric dis/assembly of opcodes with a16 immediate
@@ -269,7 +277,7 @@ check_opi16() {
 	echo
 }
 
-check_opi16 push16i32 push16i64
+check_opi16 push16i32 push16i64 rjmpi16
 
 #
 # Check for symmetric dis/assembly of opcodes with a32 immediate
@@ -365,7 +373,37 @@ check_opi32() {
 
 check_opi32 push32i64 rjmpi32
 
-# @todo: Test opcodes with a64 immediate
+#
+# Check for symmetric dis/assembly of opcodes with u64 immediate
+#
+check_opu64() {
+	echo -n testing symmetric dis/assembly of opcodes with u64 immediate
+	local I=0
+	while [ "$#" -ne 0 ]; do
+		if [ $(($I % 8)) -eq 0 ]; then echo; fi
+		echo -n " $1"
+
+		# Check with imm 0
+		echo "$1 0" | $STASM
+		local RESULT=$($DISTASM a.stb)
+		[ "$RESULT" = "$1 0" ]
+
+		# @todo: test for rejection of negative immediate
+
+		# Check with most positive immediate
+		echo "$1 0xffffffffffffffff" | $STASM
+		local RESULT=$($DISTASM a.stb)
+		[ "$RESULT" = "$1 18446744073709551615" ]
+
+		I=$((I + 1))
+		shift
+	done
+	echo
+}
+
+check_opu64 call jmp brnz8 brnz16 brnz32 brnz64
+
+# @todo: test opcodes which expect i64 immediate such as rjmpi64 rbrnz8 rbrnz16 rbrnz32 rbrnz64
 
 #
 # Test halt

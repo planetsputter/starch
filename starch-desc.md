@@ -17,10 +17,11 @@ The processor state is small, consisting of the following registers:
 | SBP      | Stack Bottom Pointer |
 | SFP      | Stack Frame Pointer  |
 | SP       | Stack Pointer        |
+| SLP      | Stack Limit Pointer  |
 
 ### Stack Diagram
 
-The stack grows downward with the "top" of the stack being at the lowest address and the "bottom" of the stack being at the highest address. The stack top address is stored in the stack pointer register (SP). The stack bottom address is stored in the stack bottom pointer register (SBP).
+The stack grows downward with the "top" of the stack being at the lowest address and the "bottom" of the stack being at the highest address. The stack top address is stored in the stack pointer register (SP). The stack bottom address is stored in the stack bottom pointer register (SBP). The uppermost limit of stack data is stored in the stack limit pointer register (SLP).
 
 Though the stack is a contiguous region of memory it is logically segmented into stack frames, each of which contains values used in the execution of a single function invocation. When one function calls another a new stack frame is created for the called function. When the called function returns the stack frame is popped. The stack frame pointer register (SFP) keeps track of the address just above the current stack frame. The return address (RETA) and the previous stack frame pointer (PSFP) are stored at the SFP address.
 
@@ -299,7 +300,7 @@ These instructions result in a Boolean value, either a zero or a one, replacing 
 
 ### Call and Return Instructions
 
-These instructions call functions and return from them.
+These instructions call functions and return from them. Variants with an "s" use an address on the stack.
 
 | Op Code   | PC After   | Stack Before                  | Stack After | SFP After   |
 |:--------- |:---------- |:----------------------------- |:----------- |:----------- |
@@ -319,25 +320,21 @@ These instructions can transfer control flow to a non-sequential instruction.
 | rjmpi16   | PC + (PC + 1)i16 |              |             |
 | rjmpi32   | PC + (PC + 1)i32 |              |             |
 | rjmpi64   | PC + (PC + 1)i64 |              |             |
-|  rjmpsi8  | PC +  ai8        |  ai8         |             |
-| rjmpsi16  | PC + ai16        | ai16         |             |
-| rjmpsi32  | PC + ai32        | ai32         |             |
-| rjmpsi64  | PC + ai64        | ai64         |             |
 
 ### Conditional Branching Instructions
 
-These instructions will transfer control flow to an immediate address if their argument is non-zero. "pop" variants consume the argument.
+These instructions will transfer control flow to an immediate address if their argument is non-zero.
 
-| Op Code   | PC After                           | Stack Before | Stack After |
-|:--------- |:---------------------------------- |:------------ |:----------- |
-|  brz8     | if  a8 then (PC + 1)64 else PC + 5 |  a8          |  a8         |
-| brz16     | if a16 then (PC + 1)64 else PC + 5 | a16          | a16         |
-| brz32     | if a32 then (PC + 1)64 else PC + 5 | a32          | a32         |
-| brz64     | if a64 then (PC + 1)64 else PC + 5 | a64          | a64         |
-|  brzpop8  | if  a8 then (PC + 1)64 else PC + 5 |  a8          |             |
-| brzpop16  | if a16 then (PC + 1)64 else PC + 5 | a16          |             |
-| brzpop32  | if a32 then (PC + 1)64 else PC + 5 | a32          |             |
-| brzpop64  | if a64 then (PC + 1)64 else PC + 5 | a64          |             |
+| Op Code   | PC After                                | Stack Before | Stack After |
+|:--------- |:--------------------------------------- |:------------ |:----------- |
+|  brnz8    | if  a8 then (PC + 1)64 else PC + 9      |  a8          |             |
+| brnz16    | if a16 then (PC + 1)64 else PC + 9      | a16          |             |
+| brnz32    | if a32 then (PC + 1)64 else PC + 9      | a32          |             |
+| brnz64    | if a64 then (PC + 1)64 else PC + 9      | a64          |             |
+|  rbrnz8   | if  a8 then PC + (PC + 1)64 else PC + 9 |  a8          |             |
+| rbrnz16   | if a16 then PC + (PC + 1)64 else PC + 9 | a16          |             |
+| rbrnz32   | if a32 then PC + (PC + 1)64 else PC + 9 | a32          |             |
+| rbrnz64   | if a64 then PC + (PC + 1)64 else PC + 9 | a64          |             |
 
 ### Memory Operations
 
@@ -361,43 +358,47 @@ These instructions load data from memory to the stack or store data from the sta
 | loadpopsfp16   | PC + 1   | ai64         | (SFP + ai64)16       |                      |
 | loadpopsfp32   | PC + 1   | ai64         | (SFP + ai64)32       |                      |
 | loadpopsfp64   | PC + 1   | ai64         | (SFP + ai64)64       |                      |
-|  store8        | PC + 1   |  a8, b64     |  a8, b64             |  (b64)8 =  a8        |
-| store16        | PC + 1   | a16, b64     | a16, b64             | (b64)16 = a16        |
-| store32        | PC + 1   | a32, b64     | a32, b64             | (b64)32 = a32        |
-| store64        | PC + 1   | a64, b64     | a64, b64             | (b64)64 = a64        |
-|  storepop8     | PC + 1   |  a8, b64     |  a8                  |  (b64)8 =  a8        |
-| storepop16     | PC + 1   | a16, b64     | a16                  | (b64)16 = a16        |
-| storepop32     | PC + 1   | a32, b64     | a32                  | (b64)32 = a32        |
-| storepop64     | PC + 1   | a64, b64     | a64                  | (b64)64 = a64        |
-|  storesfp8     | PC + 1   |  a8, bi64    |  a8, bi64            |  (SFP + bi64)8 =  a8 |
-| storesfp16     | PC + 1   | a16, bi64    | a16, bi64            | (SFP + bi64)16 = a16 |
-| storesfp32     | PC + 1   | a32, bi64    | a32, bi64            | (SFP + bi64)32 = a32 |
-| storesfp64     | PC + 1   | a64, bi64    | a64, bi64            | (SFP + bi64)64 = a64 |
-|  storepopsfp8  | PC + 1   |  a8, bi64    |  a8                  |  (SFP + bi64)8 =  a8 |
-| storepopsfp16  | PC + 1   | a16, bi64    | a16                  | (SFP + bi64)16 = a16 |
-| storepopsfp32  | PC + 1   | a32, bi64    | a32                  | (SFP + bi64)32 = a32 |
-| storepopsfp64  | PC + 1   | a64, bi64    | a64                  | (SFP + bi64)64 = a64 |
-|  storer8       | PC + 1   | a64,  b8     | a64,  b8             |  (a64)8 =  b8        |
-| storer16       | PC + 1   | a64, b16     | a64, b16             | (a64)16 = b16        |
-| storer32       | PC + 1   | a64, b32     | a64, b32             | (a64)32 = b32        |
-| storer64       | PC + 1   | a64, b64     | a64, b64             | (a64)64 = b64        |
-|  storerpop8    | PC + 1   | a64,  b8     | a64                  |  (a64)8 =  b8        |
-| storerpop16    | PC + 1   | a64, b16     | a64                  | (a64)16 = b16        |
-| storerpop32    | PC + 1   | a64, b32     | a64                  | (a64)32 = b32        |
-| storerpop64    | PC + 1   | a64, b64     | a64                  | (a64)64 = b64        |
-|  storersfp8    | PC + 1   | ai64,  b8    | ai64,  b8            |  (SFP + ai64)8 =  b8 |
-| storersfp16    | PC + 1   | ai64, b16    | ai64, b16            | (SFP + ai64)16 = b16 |
-| storersfp32    | PC + 1   | ai64, b32    | ai64, b32            | (SFP + ai64)32 = b32 |
-| storersfp64    | PC + 1   | ai64, b64    | ai64, b64            | (SFP + ai64)64 = b64 |
-|  storerpopsfp8 | PC + 1   | ai64,  b8    | ai64                 |  (SFP + ai64)8 =  b8 |
-| storerpopsfp16 | PC + 1   | ai64, b16    | ai64                 | (SFP + ai64)16 = b16 |
-| storerpopsfp32 | PC + 1   | ai64, b32    | ai64                 | (SFP + ai64)32 = b32 |
-| storerpopsfp64 | PC + 1   | ai64, b64    | ai64                 | (SFP + ai64)64 = b64 |
+|  store8        | PC + 1   | a64,  b8     | a64,  b8             |  (a64)8 =  b8        |
+| store16        | PC + 1   | a64, b16     | a64, b16             | (a64)16 = b16        |
+| store32        | PC + 1   | a64, b32     | a64, b32             | (a64)32 = b32        |
+| store64        | PC + 1   | a64, b64     | a64, b64             | (a64)64 = b64        |
+|  storepop8     | PC + 1   | a64,  b8     | a64                  |  (a64)8 =  b8        |
+| storepop16     | PC + 1   | a64, b16     | a64                  | (a64)16 = b16        |
+| storepop32     | PC + 1   | a64, b32     | a64                  | (a64)32 = b32        |
+| storepop64     | PC + 1   | a64, b64     | a64                  | (a64)64 = b64        |
+|  storesfp8     | PC + 1   | ai64,  b8    | ai64,  b8            |  (SFP + ai64)8 =  b8 |
+| storesfp16     | PC + 1   | ai64, b16    | ai64, b16            | (SFP + ai64)16 = b16 |
+| storesfp32     | PC + 1   | ai64, b32    | ai64, b32            | (SFP + ai64)32 = b32 |
+| storesfp64     | PC + 1   | ai64, b64    | ai64, b64            | (SFP + ai64)64 = b64 |
+|  storepopsfp8  | PC + 1   | ai64,  b8    | ai64                 |  (SFP + ai64)8 =  b8 |
+| storepopsfp16  | PC + 1   | ai64, b16    | ai64                 | (SFP + ai64)16 = b16 |
+| storepopsfp32  | PC + 1   | ai64, b32    | ai64                 | (SFP + ai64)32 = b32 |
+| storepopsfp64  | PC + 1   | ai64, b64    | ai64                 | (SFP + ai64)64 = b64 |
+|  storer8       | PC + 1   |  a8, b64     |  a8, b64             |  (b64)8 =  a8        |
+| storer16       | PC + 1   | a16, b64     | a16, b64             | (b64)16 = a16        |
+| storer32       | PC + 1   | a32, b64     | a32, b64             | (b64)32 = a32        |
+| storer64       | PC + 1   | a64, b64     | a64, b64             | (b64)64 = a64        |
+|  storerpop8    | PC + 1   |  a8, b64     |  a8                  |  (b64)8 =  a8        |
+| storerpop16    | PC + 1   | a16, b64     | a16                  | (b64)16 = a16        |
+| storerpop32    | PC + 1   | a32, b64     | a32                  | (b64)32 = a32        |
+| storerpop64    | PC + 1   | a64, b64     | a64                  | (b64)64 = a64        |
+|  storersfp8    | PC + 1   |  a8, bi64    |  a8, bi64            |  (SFP + bi64)8 =  a8 |
+| storersfp16    | PC + 1   | a16, bi64    | a16, bi64            | (SFP + bi64)16 = a16 |
+| storersfp32    | PC + 1   | a32, bi64    | a32, bi64            | (SFP + bi64)32 = a32 |
+| storersfp64    | PC + 1   | a64, bi64    | a64, bi64            | (SFP + bi64)64 = a64 |
+|  storerpopsfp8 | PC + 1   |  a8, bi64    |  a8                  |  (SFP + bi64)8 =  a8 |
+| storerpopsfp16 | PC + 1   | a16, bi64    | a16                  | (SFP + bi64)16 = a16 |
+| storerpopsfp32 | PC + 1   | a32, bi64    | a32                  | (SFP + bi64)32 = a32 |
+| storerpopsfp64 | PC + 1   | a64, bi64    | a64                  | (SFP + bi64)64 = a64 |
 
 ### Miscellaneous Operations
 
 | Op Code | PC After | Note                                                       |
 |:------- |:-------- |:---------------------------------------------------------- |
+| setsbp  | PC + 9   | Sets SBP to the 64-bit immediate value                     |
+| setsfp  | PC + 9   | Sets SFP to the 64-bit immediate value                     |
+| setsp   | PC + 9   | Sets SP to the 64-bit immediate value                      |
 | nop     | PC + 1   | Performs no operation                                      |
 | ext     | PC + 1   | Introduces an extended opcode                              |
+| halt    | PC       | Halts the processor                                        |
 | invalid |          | Intentionally invalid instruction, may be used for testing |

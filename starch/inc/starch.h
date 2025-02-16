@@ -249,14 +249,14 @@ enum {
 	//
 	// Conditional branching operations
 	//
-	op_brz8,      // Jump to 8 byte imm addr if top 1 byte popped non-zero
-	op_brz16,     // Jump to 8 byte imm addr if top 2 byte popped non-zero
-	op_brz32,     // Jump to 8 byte imm addr if top 4 byte popped non-zero
-	op_brz64,     // Jump to 8 byte imm addr if top 8 byte popped non-zero
-	op_rbrz8i64,  // Relative jump by signed 8 byte imm addr if top 1 byte popped non-zero
-	op_rbrz16i64, // Relative jump by signed 8 byte imm addr if top 2 byte popped non-zero
-	op_rbrz32i64, // Relative jump by signed 8 byte imm addr if top 4 byte popped non-zero
-	op_rbrz64i64, // Relative jump by signed 8 byte imm addr if top 8 byte popped non-zero
+	op_brnz8,   // Jump to 8 byte imm addr if top 1 byte popped non-zero
+	op_brnz16,  // Jump to 8 byte imm addr if top 2 byte popped non-zero
+	op_brnz32,  // Jump to 8 byte imm addr if top 4 byte popped non-zero
+	op_brnz64,  // Jump to 8 byte imm addr if top 8 byte popped non-zero
+	op_rbrnz8,  // Relative jump by signed 8 byte imm addr if top 1 byte popped non-zero
+	op_rbrnz16, // Relative jump by signed 8 byte imm addr if top 2 byte popped non-zero
+	op_rbrnz32, // Relative jump by signed 8 byte imm addr if top 4 byte popped non-zero
+	op_rbrnz64, // Relative jump by signed 8 byte imm addr if top 8 byte popped non-zero
 
 	//
 	// Memory operations
@@ -277,38 +277,38 @@ enum {
 	op_loadpopsfp16,   // Push 2 byte from top 8 byte popped signed offset from SFP
 	op_loadpopsfp32,   // Push 4 byte from top 8 byte popped signed offset from SFP
 	op_loadpopsfp64,   // Push 8 byte from top 8 byte popped signed offset from SFP
-	op_store8,         // Store 1 byte to top 8 byte address
-	op_store16,        // Store 2 byte to top 8 byte address
-	op_store32,        // Store 4 byte to top 8 byte address
-	op_store64,        // Store 8 byte to top 8 byte address
-	op_storepop8,      // Store 1 byte to top 8 byte popped address
-	op_storepop16,     // Store 2 byte to top 8 byte popped address
-	op_storepop32,     // Store 4 byte to top 8 byte popped address
-	op_storepop64,     // Store 8 byte to top 8 byte popped address
-	op_storesfp8,      // Store 1 byte to top 8 byte signed offset from SFP
-	op_storesfp16,     // Store 2 byte to top 8 byte signed offset from SFP
-	op_storesfp32,     // Store 4 byte to top 8 byte signed offset from SFP
-	op_storesfp64,     // Store 8 byte to top 8 byte signed offset from SFP
-	op_storepopsfp8,   // Store 1 byte to top 8 byte popped signed offset from SFP
-	op_storepopsfp16,  // Store 2 byte to top 8 byte popped signed offset from SFP
-	op_storepopsfp32,  // Store 4 byte to top 8 byte popped signed offset from SFP
-	op_storepopsfp64,  // Store 8 byte to top 8 byte popped signed offset from SFP
-	op_storer8,        // Store top 1 byte to 8 byte address below
-	op_storer16,       // Store top 2 byte to 8 byte address below
-	op_storer32,       // Store top 4 byte to 8 byte address below
-	op_storer64,       // Store top 8 byte to 8 byte address below
-	op_storerpop8,     // Store popped 1 byte to 8 byte address below
-	op_storerpop16,    // Store popped 2 byte to 8 byte address below
-	op_storerpop32,    // Store popped 4 byte to 8 byte address below
-	op_storerpop64,    // Store popped 8 byte to 8 byte address below
-	op_storersfp8,     // Store top 1 byte to 8 byte signed offset from SFP below
-	op_storersfp16,    // Store top 2 byte to 8 byte signed offset from SFP below
-	op_storersfp32,    // Store top 4 byte to 8 byte signed offset from SFP below
-	op_storersfp64,    // Store top 8 byte to 8 byte signed offset from SFP below
-	op_storerpopsfp8,  // Store popped 1 byte to 8 byte signed offset from SFP below
-	op_storerpopsfp16, // Store popped 2 byte to 8 byte signed offset from SFP below
-	op_storerpopsfp32, // Store popped 4 byte to 8 byte signed offset from SFP below
-	op_storerpopsfp64, // Store popped 8 byte to 8 byte signed offset from SFP below
+	op_store8,         // Store top 1 byte to 8 byte address below
+	op_store16,        // Store top 2 byte to 8 byte address below
+	op_store32,        // Store top 4 byte to 8 byte address below
+	op_store64,        // Store top 8 byte to 8 byte address below
+	op_storepop8,      // Store popped 1 byte to 8 byte address below
+	op_storepop16,     // Store popped 2 byte to 8 byte address below
+	op_storepop32,     // Store popped 4 byte to 8 byte address below
+	op_storepop64,     // Store popped 8 byte to 8 byte address below
+	op_storesfp8,      // Store top 1 byte to 8 byte signed offset from SFP below
+	op_storesfp16,     // Store top 2 byte to 8 byte signed offset from SFP below
+	op_storesfp32,     // Store top 4 byte to 8 byte signed offset from SFP below
+	op_storesfp64,     // Store top 8 byte to 8 byte signed offset from SFP below
+	op_storepopsfp8,   // Store popped 1 byte to 8 byte signed offset from SFP below
+	op_storepopsfp16,  // Store popped 2 byte to 8 byte signed offset from SFP below
+	op_storepopsfp32,  // Store popped 4 byte to 8 byte signed offset from SFP below
+	op_storepopsfp64,  // Store popped 8 byte to 8 byte signed offset from SFP below
+	op_storer8,        // Store 1 byte to top 8 byte address
+	op_storer16,       // Store 2 byte to top 8 byte address
+	op_storer32,       // Store 4 byte to top 8 byte address
+	op_storer64,       // Store 8 byte to top 8 byte address
+	op_storerpop8,     // Store 1 byte to top 8 byte popped address
+	op_storerpop16,    // Store 2 byte to top 8 byte popped address
+	op_storerpop32,    // Store 4 byte to top 8 byte popped address
+	op_storerpop64,    // Store 8 byte to top 8 byte popped address
+	op_storersfp8,     // Store 1 byte to top 8 byte signed offset from SFP
+	op_storersfp16,    // Store 2 byte to top 8 byte signed offset from SFP
+	op_storersfp32,    // Store 4 byte to top 8 byte signed offset from SFP
+	op_storersfp64,    // Store 8 byte to top 8 byte signed offset from SFP
+	op_storerpopsfp8,  // Store 1 byte to top 8 byte popped signed offset from SFP
+	op_storerpopsfp16, // Store 2 byte to top 8 byte popped signed offset from SFP
+	op_storerpopsfp32, // Store 4 byte to top 8 byte popped signed offset from SFP
+	op_storerpopsfp64, // Store 8 byte to top 8 byte popped signed offset from SFP
 
 	//
 	// Special Operations
@@ -369,6 +369,7 @@ enum {
 	STERR_BAD_ALIGN, // Bad alignment
 	STERR_BAD_IO_ACCESS, // Access to unused IO memory
 	STERR_BAD_FRAME_ACCESS, // Access to protected stack frame data
+	STERR_BAD_STACK_ACCESS, // Access out of stack memory region
 	STERR_BAD_ADDR, // Address out of range
 	STERR_HALT, // Processor halted
 	STERR_NUM_ERRORS,

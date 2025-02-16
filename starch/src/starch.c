@@ -247,14 +247,14 @@ static const char *names[256] = {
 	//
 	// Conditional branching operations
 	//
-	[op_brz8] = "brz8",
-	[op_brz16] = "brz16",
-	[op_brz32] = "brz32",
-	[op_brz64] = "brz64",
-	[op_rbrz8i64] = "rbrz8i64",
-	[op_rbrz16i64] = "rbrz16i64",
-	[op_rbrz32i64] = "rbrz32i64",
-	[op_rbrz64i64] = "rbrz64i64",
+	[op_brnz8] = "brnz8",
+	[op_brnz16] = "brnz16",
+	[op_brnz32] = "brnz32",
+	[op_brnz64] = "brnz64",
+	[op_rbrnz8] = "op_rbrnz8",
+	[op_rbrnz16] = "op_rbrnz16",
+	[op_rbrnz32] = "op_rbrnz32",
+	[op_rbrnz64] = "op_rbrnz64",
 
 	//
 	// Memory operations
@@ -600,14 +600,14 @@ int imm_count_for_opcode(int opcode)
 	//
 	// Conditional branching operations
 	//
-	case op_brz8:
-	case op_brz16:
-	case op_brz32:
-	case op_brz64:
-	case op_rbrz8i64:
-	case op_rbrz16i64:
-	case op_rbrz32i64:
-	case op_rbrz64i64:
+	case op_brnz8:
+	case op_brnz16:
+	case op_brnz32:
+	case op_brnz64:
+	case op_rbrnz8:
+	case op_rbrnz16:
+	case op_rbrnz32:
+	case op_rbrnz64:
 		ret = 1;
 		break;
 
@@ -941,16 +941,16 @@ int imm_types_for_opcode(int opcode, int *dts)
 	//
 	// Conditional branching operations
 	//
-	case op_brz8:
-	case op_brz16:
-	case op_brz32:
-	case op_brz64:
+	case op_brnz8:
+	case op_brnz16:
+	case op_brnz32:
+	case op_brnz64:
 		*dts = dt_u64;
 		break;
-	case op_rbrz8i64:
-	case op_rbrz16i64:
-	case op_rbrz32i64:
-	case op_rbrz64i64:
+	case op_rbrnz8:
+	case op_rbrnz16:
+	case op_rbrnz32:
+	case op_rbrnz64:
 		*dts = dt_i64;
 		break;
 
@@ -1043,6 +1043,8 @@ const char *name_for_sterr(int sterr)
 		return "STERR_BAD_IO_ACCESS";
 	case STERR_BAD_FRAME_ACCESS:
 		return "STERR_BAD_FRAME_ACCESS";
+	case STERR_BAD_STACK_ACCESS:
+		return "STERR_BAD_STACK_ACCESS";
 	case STERR_BAD_ADDR:
 		return "STERR_BAD_ADDR";
 	case STERR_HALT:

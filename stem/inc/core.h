@@ -6,7 +6,7 @@
 #include "mem.h"
 
 struct core {
-	uint64_t pc, sbp, sfp, sp;
+	uint64_t pc, sbp, sfp, sp, slp;
 };
 
 void core_init(struct core*);
