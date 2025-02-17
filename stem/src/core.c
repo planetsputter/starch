@@ -1979,11 +1979,6 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) return ret;
 		core->pc += temp_i32;
 		break;
-	case op_rjmpi64:
-		ret = core_mem_read64(core, mem, core->pc + 1, (uint64_t*)&temp_i64); // Read operand
-		if (ret) return ret;
-		core->pc += temp_i64;
-		break;
 
 	//
 	// Conditional branching operations
@@ -2040,57 +2035,161 @@ int core_step(struct core *core, struct mem *mem)
 		}
 		core->sp += 8;
 		break;
-	case op_rbrnz8:
-		ret = core_mem_read64(core, mem, core->pc + 1, (uint64_t*)&temp_i64); // Read address
+	case op_rbrnz8i8:
+		ret = core_mem_read8(core, mem, core->pc + 1, (uint8_t*)&temp_i8); // Read offset
 		if (ret) return ret;
 		ret = core_stack_read8(core, mem, core->sp, &temp_u8); // Read condition
 		if (ret) return ret;
+		core->sp += 1;
 		if (temp_u8) {
-			core->pc += temp_i64;
+			core->pc += temp_i8;
 		}
 		else {
-			core->pc += 9;
+			core->pc += 2;
 		}
-		core->sp += 1;
 		break;
-	case op_rbrnz16:
-		ret = core_mem_read64(core, mem, core->pc + 1, (uint64_t*)&temp_i64); // Read address
+	case op_rbrnz8i16:
+		ret = core_mem_read16(core, mem, core->pc + 1, (uint16_t*)&temp_i16); // Read offset
+		if (ret) return ret;
+		ret = core_stack_read8(core, mem, core->sp, &temp_u8); // Read condition
+		if (ret) return ret;
+		core->sp += 1;
+		if (temp_u8) {
+			core->pc += temp_i16;
+		}
+		else {
+			core->pc += 3;
+		}
+		break;
+	case op_rbrnz8i32:
+		ret = core_mem_read32(core, mem, core->pc + 1, (uint32_t*)&temp_i32); // Read offset
+		if (ret) return ret;
+		ret = core_stack_read8(core, mem, core->sp, &temp_u8); // Read condition
+		if (ret) return ret;
+		core->sp += 1;
+		if (temp_u8) {
+			core->pc += temp_i32;
+		}
+		else {
+			core->pc += 5;
+		}
+		break;
+	case op_rbrnz16i8:
+		ret = core_mem_read8(core, mem, core->pc + 1, (uint8_t*)&temp_i8); // Read offset
 		if (ret) return ret;
 		ret = core_stack_read16(core, mem, core->sp, &temp_u16); // Read condition
 		if (ret) return ret;
+		core->sp += 2;
 		if (temp_u16) {
-			core->pc += temp_i64;
+			core->pc += temp_i8;
 		}
 		else {
-			core->pc += 9;
+			core->pc += 2;
 		}
-		core->sp += 2;
 		break;
-	case op_rbrnz32:
-		ret = core_mem_read64(core, mem, core->pc + 1, (uint64_t*)&temp_i64); // Read address
+	case op_rbrnz16i16:
+		ret = core_mem_read16(core, mem, core->pc + 1, (uint16_t*)&temp_i16); // Read offset
+		if (ret) return ret;
+		ret = core_stack_read16(core, mem, core->sp, &temp_u16); // Read condition
+		if (ret) return ret;
+		core->sp += 2;
+		if (temp_u16) {
+			core->pc += temp_i16;
+		}
+		else {
+			core->pc += 3;
+		}
+		break;
+	case op_rbrnz16i32:
+		ret = core_mem_read32(core, mem, core->pc + 1, (uint32_t*)&temp_i32); // Read offset
+		if (ret) return ret;
+		ret = core_stack_read16(core, mem, core->sp, &temp_u16); // Read condition
+		if (ret) return ret;
+		core->sp += 2;
+		if (temp_u16) {
+			core->pc += temp_i32;
+		}
+		else {
+			core->pc += 5;
+		}
+		break;
+	case op_rbrnz32i8:
+		ret = core_mem_read8(core, mem, core->pc + 1, (uint8_t*)&temp_i8); // Read offset
 		if (ret) return ret;
 		ret = core_stack_read32(core, mem, core->sp, &temp_u32); // Read condition
 		if (ret) return ret;
+		core->sp += 4;
 		if (temp_u32) {
-			core->pc += temp_i64;
+			core->pc += temp_i8;
 		}
 		else {
-			core->pc += 9;
+			core->pc += 2;
 		}
-		core->sp += 4;
 		break;
-	case op_rbrnz64:
-		ret = core_mem_read64(core, mem, core->pc + 1, (uint64_t*)&temp_i64); // Read address
+	case op_rbrnz32i16:
+		ret = core_mem_read16(core, mem, core->pc + 1, (uint16_t*)&temp_i16); // Read offset
+		if (ret) return ret;
+		ret = core_stack_read32(core, mem, core->sp, &temp_u32); // Read condition
+		if (ret) return ret;
+		core->sp += 4;
+		if (temp_u32) {
+			core->pc += temp_i16;
+		}
+		else {
+			core->pc += 3;
+		}
+		break;
+	case op_rbrnz32i32:
+		ret = core_mem_read32(core, mem, core->pc + 1, (uint32_t*)&temp_i32); // Read offset
+		if (ret) return ret;
+		ret = core_stack_read32(core, mem, core->sp, &temp_u32); // Read condition
+		if (ret) return ret;
+		core->sp += 4;
+		if (temp_u32) {
+			core->pc += temp_i32;
+		}
+		else {
+			core->pc += 5;
+		}
+		break;
+	case op_rbrnz64i8:
+		ret = core_mem_read8(core, mem, core->pc + 1, (uint8_t*)&temp_i8); // Read offset
 		if (ret) return ret;
 		ret = core_stack_read64(core, mem, core->sp, &temp_u64); // Read condition
 		if (ret) return ret;
-		if (temp_i64) {
-			core->pc += temp_i64;
+		core->sp += 8;
+		if (temp_u64) {
+			core->pc += temp_i8;
 		}
 		else {
-			core->pc += 9;
+			core->pc += 2;
 		}
+		break;
+	case op_rbrnz64i16:
+		ret = core_mem_read16(core, mem, core->pc + 1, (uint16_t*)&temp_i16); // Read offset
+		if (ret) return ret;
+		ret = core_stack_read64(core, mem, core->sp, &temp_u64); // Read condition
+		if (ret) return ret;
 		core->sp += 8;
+		if (temp_u64) {
+			core->pc += temp_i16;
+		}
+		else {
+			core->pc += 3;
+		}
+		break;
+	case op_rbrnz64i32:
+		ret = core_mem_read32(core, mem, core->pc + 1, (uint32_t*)&temp_i32); // Read offset
+		if (ret) return ret;
+		ret = core_stack_read64(core, mem, core->sp, &temp_u64); // Read condition
+		if (ret) return ret;
+		core->sp += 8;
+		if (temp_u64) {
+			core->pc += temp_i32;
+		}
+		else {
+			core->pc += 5;
+		}
 		break;
 
 	//

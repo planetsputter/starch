@@ -242,7 +242,6 @@ static const char *names[256] = {
 	[op_rjmpi8] = "rjmpi8",
 	[op_rjmpi16] = "rjmpi16",
 	[op_rjmpi32] = "rjmpi32",
-	[op_rjmpi64] = "rjmpi64",
 
 	//
 	// Conditional branching operations
@@ -251,10 +250,18 @@ static const char *names[256] = {
 	[op_brnz16] = "brnz16",
 	[op_brnz32] = "brnz32",
 	[op_brnz64] = "brnz64",
-	[op_rbrnz8] = "op_rbrnz8",
-	[op_rbrnz16] = "op_rbrnz16",
-	[op_rbrnz32] = "op_rbrnz32",
-	[op_rbrnz64] = "op_rbrnz64",
+	[op_rbrnz8i8] = "rbrnz8i8",
+	[op_rbrnz8i16] = "rbrnz8i16",
+	[op_rbrnz8i32] = "rbrnz8i32",
+	[op_rbrnz16i8] = "rbrnz16i8",
+	[op_rbrnz16i16] = "rbrnz16i16",
+	[op_rbrnz16i32] = "rbrnz16i32",
+	[op_rbrnz32i8] = "rbrnz32i8",
+	[op_rbrnz32i16] = "rbrnz32i16",
+	[op_rbrnz32i32] = "rbrnz32i32",
+	[op_rbrnz64i8] = "rbrnz64i8",
+	[op_rbrnz64i16] = "rbrnz64i16",
+	[op_rbrnz64i32] = "rbrnz64i32",
 
 	//
 	// Memory operations
@@ -593,7 +600,6 @@ int imm_count_for_opcode(int opcode)
 	case op_rjmpi8:
 	case op_rjmpi16:
 	case op_rjmpi32:
-	case op_rjmpi64:
 		ret = 1;
 		break;
 
@@ -604,10 +610,18 @@ int imm_count_for_opcode(int opcode)
 	case op_brnz16:
 	case op_brnz32:
 	case op_brnz64:
-	case op_rbrnz8:
-	case op_rbrnz16:
-	case op_rbrnz32:
-	case op_rbrnz64:
+	case op_rbrnz8i8:
+	case op_rbrnz8i16:
+	case op_rbrnz8i32:
+	case op_rbrnz16i8:
+	case op_rbrnz16i16:
+	case op_rbrnz16i32:
+	case op_rbrnz32i8:
+	case op_rbrnz32i16:
+	case op_rbrnz32i32:
+	case op_rbrnz64i8:
+	case op_rbrnz64i16:
+	case op_rbrnz64i32:
 		ret = 1;
 		break;
 
@@ -936,7 +950,6 @@ int imm_types_for_opcode(int opcode, int *dts)
 	case op_rjmpi8:  *dts = dt_i8; break;
 	case op_rjmpi16: *dts = dt_i16; break;
 	case op_rjmpi32: *dts = dt_i32; break;
-	case op_rjmpi64: *dts = dt_i64; break;
 
 	//
 	// Conditional branching operations
@@ -947,11 +960,23 @@ int imm_types_for_opcode(int opcode, int *dts)
 	case op_brnz64:
 		*dts = dt_u64;
 		break;
-	case op_rbrnz8:
-	case op_rbrnz16:
-	case op_rbrnz32:
-	case op_rbrnz64:
-		*dts = dt_i64;
+	case op_rbrnz8i8:
+	case op_rbrnz16i8:
+	case op_rbrnz32i8:
+	case op_rbrnz64i8:
+		*dts = dt_i8;
+		break;
+	case op_rbrnz8i16:
+	case op_rbrnz16i16:
+	case op_rbrnz32i16:
+	case op_rbrnz64i16:
+		*dts = dt_i16;
+		break;
+	case op_rbrnz8i32:
+	case op_rbrnz16i32:
+	case op_rbrnz32i32:
+	case op_rbrnz64i32:
+		*dts = dt_i32;
 		break;
 
 	//

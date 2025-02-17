@@ -183,7 +183,7 @@ check_opi8() {
 	echo
 }
 
-check_opi8 push8i16 push8i32 push8i64 rjmpi8
+check_opi8 push8i16 push8i32 push8i64 rjmpi8 rbrnz8i8 rbrnz16i8 rbrnz32i8 rbrnz64i8
 
 #
 # Check for symmetric dis/assembly of opcodes with a16 immediate
@@ -277,7 +277,7 @@ check_opi16() {
 	echo
 }
 
-check_opi16 push16i32 push16i64 rjmpi16
+check_opi16 push16i32 push16i64 rjmpi16 rbrnz8i16 rbrnz16i16 rbrnz32i16 rbrnz64i16
 
 #
 # Check for symmetric dis/assembly of opcodes with a32 immediate
@@ -371,7 +371,7 @@ check_opi32() {
 	echo
 }
 
-check_opi32 push32i64 rjmpi32
+check_opi32 push32i64 rjmpi32 rbrnz8i32 rbrnz16i32 rbrnz32i32 rbrnz64i32
 
 #
 # Check for symmetric dis/assembly of opcodes with u64 immediate
@@ -403,7 +403,7 @@ check_opu64() {
 
 check_opu64 call jmp brnz8 brnz16 brnz32 brnz64
 
-# @todo: test opcodes which expect i64 immediate such as rjmpi64 rbrnz8 rbrnz16 rbrnz32 rbrnz64
+# @todo: test opcodes which expect i64 immediates
 
 #
 # Test halt
