@@ -79,6 +79,7 @@ int main(int argc, const char *argv[])
 	}
 	// Arguments parsed, no errors
 
+	// Open input file
 	FILE *infile;
 	if (arg_src) {
 		infile = fopen(arg_src, "r");
@@ -91,13 +92,35 @@ int main(int argc, const char *argv[])
 		infile = stdin;
 	}
 
-	struct Parser parser;
-	Parser_Init(&parser);
-	int error = 0, c;
-	while ((c = fgetc(infile)) != EOF) {
-		Parser_ParseByte(&parser, c, &error);
+	// Open output file
+	FILE *outfile = fopen(arg_output, "wb");
+	if (!outfile) {
+		if (infile != stdin) {
+			fclose(infile);
+		}
+		fprintf(stderr, "error: failed to open \"%s\" for writing\n", arg_output);
+		return 1;
+	}
+
+	// Initialize parser
+	struct parser parser;
+	int error = parser_init(&parser, outfile);
+	if (error) {
+		fclose(outfile);
+		if (infile != stdin) {
+			fclose(infile);
+		}
+		fprintf(stderr, "error: failed to initialize output stub file \"%s\"\n", arg_output);
+		return 1;
+	}
+
+	// Parse all bytes of input file
+	for (int c; (c = fgetc(infile)) != EOF;) {
+		error = parser_parse_byte(&parser, c);
 		if (error) break;
 	}
+
+	// Check for errors
 	if (!error && ferror(infile)) {
 		fprintf(stderr, "error: failed to read from %s\n", arg_src ? arg_src : "stdin");
 		error = 1;
@@ -106,42 +129,20 @@ int main(int argc, const char *argv[])
 		fclose(infile);
 	}
 	if (!error) {
-		if (!Parser_CanTerminate(&parser)) {
+		if (!parser_can_terminate(&parser)) {
 			fprintf(stderr, "error: unexpected end of file in %s\n", arg_src ? arg_src : "stdin");
 			error = 1;
 		}
 		else {
-			error = Parser_Terminate(&parser);
-			if (!error) {
-				FILE *outfile = fopen(arg_output, "wb");
-				if (!outfile) {
-					fprintf(stderr, "error: failed to open output file for writing: %s\n", arg_output);
-					error = 1;
-				}
-				else {
-					// Initialize output stub file with one section
-					error = stub_init(outfile, 1);
-					if (error == 0) {
-						error = Parser_WriteBytecode(&parser, outfile);
-						if (error == 0) {
-							// Save the first section
-							struct stub_sec sec;
-							// @todo: make configurable
-							sec.addr = 0x1000;
-							sec.flags = STUB_FLAG_TEXT;
-							error = stub_save_section(outfile, 0, &sec);
-						}
-					}
-					fclose(outfile);
-				}
+			error = parser_terminate(&parser);
+			if (error) {
+				fprintf(stderr, "error: failed to terminate parser\n");
 			}
 		}
 	}
 
-	Parser_Destroy(&parser);
+	parser_destroy(&parser);
+	fclose(outfile);
 
-	if (error) {
-		fprintf(stderr, "program exiting with error code %d (%s)\n", error, name_for_sterr(error));
-	}
 	return error;
 }

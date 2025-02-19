@@ -54,4 +54,4 @@ int stub_init(FILE *file, int nsec);
 // Sets the address and flags for the given section in the given stub file,
 // using the current file position as the section end to determine the section size.
 // Returns 0 on success.
-int stub_save_section(FILE *file, int seci, struct stub_sec*);
+int stub_save_section(FILE *file, int index, struct stub_sec *sec);

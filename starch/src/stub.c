@@ -262,9 +262,9 @@ int stub_init(FILE *file, int nsec)
 	return 0;
 }
 
-int stub_save_section(FILE *file, int seci, struct stub_sec *sec)
+int stub_save_section(FILE *file, int index, struct stub_sec *sec)
 {
-	if (seci < 0) {
+	if (index < 0) {
 		return STUB_ERROR_INVALID_SECTION_INDEX;
 	}
 
@@ -284,7 +284,7 @@ int stub_save_section(FILE *file, int seci, struct stub_sec *sec)
 	// For section 0, this is calculated from the number of sections.
 	uint64_t prev_efo;
 	uint8_t temp_array[STUB_SECTION_HEADER_SIZE];
-	if (seci == 0) {
+	if (index == 0) {
 		prev_efo = STUB_HEADER_SIZE + 4 + STUB_SECTION_HEADER_SIZE * nsec;
 	}
 	else {

@@ -8,6 +8,7 @@
 #include "bstr.h"
 #include "parser.h"
 #include "starch.h"
+#include "stub.h"
 
 // Parse an integer literal. Returns whether the conversion was successful.
 static bool parse_int(const char *s, long long *val)
@@ -91,232 +92,289 @@ static bool parse_int(const char *s, long long *val)
 	return true;
 }
 
-// Token types
-enum {
-	// Before second pass
-	TT_EOL,
-	TT_WORD,
-	// After second pass
-	TT_OPCODE,
-	TT_INT1,
-	TT_INT2,
-	TT_INT4,
-	TT_INT8,
-};
-
-//
-// Token structure
-//
-struct Token {
-	int type;
-	union {
-		char *string; // B-string
-		long long integer;
-	} val;
-	int line, col;
-	struct Token *next;
-};
-
-static void Token_Init(struct Token *token, int line, int col)
+int parser_init(struct parser *parser, FILE *outfile)
 {
-	memset(token, 0, sizeof(struct Token));
-	token->line = line;
-	token->col = col;
-}
-
-static void Token_Destroy(struct Token *token)
-{
-	if (token->type == TT_WORD) {
-		if (token->val.string) {
-			bstr_free(token->val.string);
-		}
-	}
-}
-
-//
-// SP structure
-//
-struct SP {
-	char *key, *val; // B-Strings
-	struct SP *next;
-};
-
-void SP_Init(struct SP *sp)
-{
-	memset(sp, 0, sizeof(*sp));
-}
-
-void SP_Destroy(struct SP *sp)
-{
-	if (sp->key) {
-		bstr_free(sp->key);
-	}
-	if (sp->val) {
-		bstr_free(sp->val);
-	}
-}
-
-//
-// Parser
-//
-
-void Parser_Init(struct Parser *parser)
-{
-	memset(parser, 0, sizeof(struct Parser));
+	memset(parser, 0, sizeof(struct parser));
 	utf8_decoder_init(&parser->decoder);
 	parser->line = 1;
-	parser->col = 1;
+	parser->ch = 1;
+	smap_init(&parser->defs, bstr_free);
+	parser->outfile = outfile;
+	return stub_init(parser->outfile, 1);
 }
 
-void Parser_Destroy(struct Parser *parser)
+void parser_destroy(struct parser *parser)
 {
-	// Destroy all tokens in document
-	for (struct Token *token = parser->docFront; token;) {
-		struct Token *next = token->next;
-		Token_Destroy(token);
-		free(token);
-		token = next;
+	if (parser->token) {
+		bstr_free(parser->token);
+		parser->token = NULL;
 	}
-	// Destroy all symbol string pairs
-	for (struct SP *symbol = parser->symbolFront;
-		symbol;) {
-		struct SP *next = symbol->next;
-		SP_Destroy(symbol);
-		free(symbol);
-		symbol = next;
-	}
+	smap_destroy(&parser->defs);
 }
 
-static void Parser_FinishWord(struct Parser *parser)
+// Write the 64-bit unsigned value to eight bytes in little-endian order
+static void u64_to_little8(uint64_t val, uint8_t *data)
 {
-	if (parser->word != NULL) {
-		// Add word as token to end of document
-		struct Token *newToken = (struct Token*)malloc(sizeof(struct Token));
-		Token_Init(newToken, parser->line, parser->col - bstr_len(parser->word));
-		newToken->type = TT_WORD;
-		newToken->val.string = parser->word;
-		if (parser->docBack == NULL) {
-			parser->docFront = parser->docBack = newToken;
-		}
-		else {
-			parser->docBack->next = newToken;
-			parser->docBack = newToken;
-		}
-		parser->word = NULL;
-	}
+	data[0] = val;
+	data[1] = val >> 8;
+	data[2] = val >> 16;
+	data[3] = val >> 24;
+	data[4] = val >> 32;
+	data[5] = val >> 40;
+	data[6] = val >> 48;
+	data[7] = val >> 56;
 }
 
-static void Parser_FinishLine(struct Parser *parser)
-{
-	// First finish the current word
-	Parser_FinishWord(parser);
-
-	// Create EOL token
-	struct Token *newToken = (struct Token*)malloc(sizeof(struct Token));
-	Token_Init(newToken, parser->line, parser->col);
-	newToken->type = TT_EOL;
-	if (parser->docBack == NULL) {
-		parser->docFront = parser->docBack = newToken;
-	}
-	else {
-		parser->docBack->next = newToken;
-		parser->docBack = newToken;
-	}
-}
-
-// Takes ownership of the given B-string key and adds it to the back of the symbol list
-static void Parser_AddSymbolKey(struct Parser *parser, char *key)
-{
-	struct SP *sp = (struct SP*)malloc(sizeof(struct SP));
-	SP_Init(sp);
-	sp->key = key;
-	if (!parser->symbolBack) {
-		parser->symbolFront = parser->symbolBack = sp;
-	}
-	else {
-		parser->symbolBack->next = sp;
-		parser->symbolBack = sp;
-	}
-}
-
-static char *Parser_ValForSymbolKey(struct Parser *parser, const char *key)
-{
-	char *val = NULL;
-	for (struct SP *sp = parser->symbolFront; sp; sp = sp->next) {
-		if (strcmp(sp->key, key) == 0) {
-			val = sp->val;
-			break;
-		}
-	}
-	return val;
-}
-
-enum {
-	PARSER_STATE_DEFAULT,
-	PARSER_STATE_COMMENT,
+enum { // Parser syntax states
+	PSS_DEFAULT,
+	PSS_COMMENT,
 };
 
-void Parser_ParseByte(struct Parser *parser, byte b, int *error)
+enum { // Parser token states
+	PTS_DEFAULT,
+	PTS_IMM,
+	PTS_EOL = PTS_IMM + num_dt,
+	PTS_DEF_KEY,
+	PTS_DEF_VAL,
+};
+
+static int parser_finish_token(struct parser *parser)
 {
-	*error = 0;
+	if (!parser->token) return 0;
+
+	// Look up any existing symbol definition
+	// @todo: Require preceding "$" to look up symbols?
+	// This would make it more clear when a symbol is being used.
+	const char *symbol = smap_get(&parser->defs, parser->token);
+	if (!symbol) symbol = parser->token;
+
+	int ret = 0;
+	switch (parser->ts) {
+	case PTS_DEFAULT: {
+		// See if this is a symbol definition
+		if (strcmp(parser->token, ".define") == 0) {
+			parser->ts = PTS_DEF_KEY;
+			break;
+		}
+
+		// Look up opcode
+		int opcode = opcode_for_name(symbol);
+		if (opcode < 0) {
+			fprintf(stderr, "error: unrecognized opcode \"%s\" line %d char %d\n",
+				symbol, parser->tline, parser->tch);
+			ret = 1;
+			break;
+		}
+
+		// Look up immediate count for opcode
+		int imm_count = imm_count_for_opcode(opcode);
+		if (imm_count == 1) {
+			// Look up immediate type for opcode
+			int imm_type;
+			int ret = imm_types_for_opcode(opcode, &imm_type);
+			if (ret != 0) {
+				fprintf(stderr, "error: failed to look up immediate type for opcode %s line %d char %d\n",
+					symbol, parser->tline, parser->tch);
+				ret = 1;
+				break;
+			}
+			parser->ts = PTS_IMM + imm_type;
+		}
+		else if (imm_count != 0) {
+			fprintf(stderr, "error: invalid immediate count %d for opcode %s line %d char %d\n",
+				imm_count, symbol, parser->tline, parser->tch);
+			ret = 1;
+			break;
+		}
+
+		// Write opcode to file
+		uint8_t op = opcode;
+		size_t written = fwrite(&op, 1, 1, parser->outfile);
+		if (written != 1) {
+			fprintf(stderr, "error: failed to write to output file\n");
+			ret = 1;
+			break;
+		}
+	}	break;
+
+	case PTS_IMM + dt_a8:
+	case PTS_IMM + dt_u8:
+	case PTS_IMM + dt_i8:
+	case PTS_IMM + dt_a16:
+	case PTS_IMM + dt_u16:
+	case PTS_IMM + dt_i16:
+	case PTS_IMM + dt_a32:
+	case PTS_IMM + dt_u32:
+	case PTS_IMM + dt_i32:
+	case PTS_IMM + dt_a64:
+	case PTS_IMM + dt_u64:
+	case PTS_IMM + dt_i64: {
+		// Parse immediate literal
+		long long litval;
+		bool success = parse_int(symbol, &litval);
+		if (!success) {
+			fprintf(stderr, "error: failed to parse literal \"%s\" line %d char %d\n",
+				symbol, parser->tline, parser->tch);
+			ret = 1;
+			break;
+		}
+
+		// Check bounds
+		int dt = parser->ts - PTS_IMM;
+		int dt_size = size_for_dt(dt);
+		long long minval, maxval;
+		min_max_for_dt(dt, &minval, &maxval);
+		if (dt_size < 8 && (litval < minval || litval > maxval)) {
+			fprintf(stderr, "error: literal \"%s\" is out of bounds for type\n", symbol);
+			ret = 1;
+			break;
+		}
+
+		// Transform to byte array
+		uint8_t bytes[8];
+		u64_to_little8((uint64_t)litval, bytes);
+
+		// Write to file
+		size_t written = fwrite(bytes, 1, dt_size, parser->outfile);
+		if (written != (size_t)dt_size) {
+			fprintf(stderr, "error: failed to write to output file\n");
+			ret = 1;
+			break;
+		}
+
+		parser->ts = PTS_EOL; // Expect end of line
+	}	break;
+
+	case PTS_EOL:
+		fprintf(stderr, "error: expected eol at line %d char %d\n", parser->tline, parser->tch);
+		ret = 1;
+		break;
+
+	case PTS_DEF_KEY: // Symbol definition key
+		parser->defkey = parser->token;
+		parser->token = NULL;
+		parser->ts = PTS_DEF_VAL;
+		break;
+
+	case PTS_DEF_VAL: // Symbol definition value
+		// smap takes ownership of the strings
+		smap_insert(&parser->defs, parser->defkey, parser->token);
+		parser->token = NULL;
+		parser->ts = PTS_EOL;
+		break;
+
+	default:
+		fprintf(stderr, "error: bad token state\n");
+		ret = 1;
+		break;
+	}
+
+	if (parser->token) {
+		bstr_free(parser->token);
+		parser->token = NULL;
+	}
+	return ret;
+}
+
+static int parser_finish_line(struct parser *parser)
+{
+	if (parser->ts == PTS_EOL) { // Expected EOL
+		parser->ts = PTS_DEFAULT;
+	}
+	if (parser->ts != PTS_DEFAULT) {
+		fprintf(stderr, "error: unexpected EOL line %d char %d\n",
+			parser->line, parser->ch);
+		return 1;
+	}
+	return 0;
+}
+
+int parser_parse_byte(struct parser *parser, byte b)
+{
+	int ret = 0;
 
 	// Decode the given byte
 	ucp c;
-	ucp *next = utf8_decoder_decode(&parser->decoder, b, &c, error);
-	if (*error || next == &c) { // No character generated
-		return;
+	ucp *next = utf8_decoder_decode(&parser->decoder, b, &c, &ret);
+	if (ret) {
+		fprintf(stderr, "error: UTF-8 decoding error line %d char %d\n",
+			parser->line, parser->ch);
+		return ret;
+	}
+	if (next == &c) { // No character generated
+		return ret;
 	}
 
 	// Re-encode a completed character
 	byte enc[5];
-	*utf8_encode_char(c, enc, sizeof(enc) - 1, error) = '\0';
-	if (*error) return;
+	*utf8_encode_char(c, enc, sizeof(enc) - 1, &ret) = '\0';
+	if (ret) {
+		fprintf(stderr, "error: UTF-8 encoding error line %d char %d\n",
+			parser->line, parser->ch);
+		return ret;
+	}
 
 	// Process the decoded character
-	switch (parser->state) {
-	case PARSER_STATE_DEFAULT:
-		if (isalnum(c) || c == '.' || c == '-' || c == '_' || c == '\'' || c == '\\') { // These continue or start a word
-			if (parser->word == NULL) {
-				parser->word = bstr_alloc();
+	switch (parser->ss) {
+	case PSS_DEFAULT:
+		if (isalnum(c) || c == '.' || c == '-' || c == '_' || c == '\'' || c == '\\' ||
+			c >= 0x80) { // These continue or start a token
+			if (parser->token == NULL) { // Start a new token
+				parser->token = bstr_alloc();
+				parser->tline = parser->line;
+				parser->tch = parser->ch;
 			}
-			parser->word = bstr_cat(parser->word, (const char*)enc);
+			parser->token = bstr_cat(parser->token, (const char*)enc);
 		}
-		else { // Anything else finishes a word
-			Parser_FinishWord(parser);
+		else { // Anything else finishes a token
+			ret = parser_finish_token(parser);
+			if (ret) break;
 			if (c == ';') { // Comments are introduced by ';'
-				Parser_FinishLine(parser);
-				parser->state = PARSER_STATE_COMMENT;
+				parser->ss = PSS_COMMENT;
+				ret = parser_finish_line(parser);
 			}
 			else if (c == '\n') { // Line end
-				Parser_FinishLine(parser);
+				ret = parser_finish_line(parser);
 			}
-			else if (!isspace(c)) { // Everything else gets its own word
-				parser->word = bstr_alloc();
-				parser->word = bstr_cat(parser->word, (const char *)enc);
-				Parser_FinishWord(parser);
+			else if (!isspace(c)) { // Everything else gets its own single-character token
+				parser->token = bstr_alloc();
+				parser->tline = parser->line;
+				parser->tch = parser->ch;
+				parser->token = bstr_cat(parser->token, (const char *)enc);
+				ret = parser_finish_token(parser);
 			}
 		}
 		break;
-	case PARSER_STATE_COMMENT:
-		if (c == '\n') { // Comments are ended by newline
-			parser->state = PARSER_STATE_DEFAULT;
+
+	case PSS_COMMENT:
+		if (c == '\n') { // Comments are ended by netline
+			parser->ss = PSS_DEFAULT;
 		}
+		break;
+
+	default: // Bad parser syntax state
+		fprintf(stderr, "error: bad syntax state\n");
+		ret = 1;
 		break;
 	}
 
-	// Keep track of line and column
+	// Keep track of line and character
 	if (c == '\n') {
 		parser->line++;
-		parser->col = 1;
+		parser->ch = 1;
 	}
 	else {
-		parser->col++;
+		parser->ch++;
 	}
+
+	return ret;
 }
 
-int Parser_CanTerminate(struct Parser *parser)
+int parser_can_terminate(struct parser *parser)
 {
-	return utf8_decoder_can_terminate(&parser->decoder);
+	return utf8_decoder_can_terminate(&parser->decoder) &&
+		parser->token == NULL &&
+		(parser->ts == PTS_DEFAULT || parser->ts == PTS_EOL);
 }
 
 // Assembler commands
@@ -326,280 +384,12 @@ enum {
 	AC_DEFINE_VAL,
 };
 
-int Parser_Terminate(struct Parser *parser)
+int parser_terminate(struct parser *parser)
 {
-	Parser_FinishLine(parser);
-
-	int ret = 0, imm_dt = -1, ac = AC_NONE;
-	bool expect_eol = false;
-
-	// At this point all tokens are either of type TT_EOL or TT_WORD.
-	// We need to parse the tokens further to interpret instruction opcodes and arguments
-	// and to eliminate TT_EOL tokens.
-	struct Token *token, *prev, *next;
-	for (token = parser->docFront, prev = NULL, next = NULL;
-		token != NULL && ret == 0;
-		prev = token, token = next) {
-		next = token->next;
-
-		if (ac != AC_NONE) {
-			if (token->type != TT_WORD) { // Assembler commands expect words
-				break;
-			}
-			long long litval;
-			switch (ac) {
-			case AC_DEFINE_KEY:
-				if (parse_int(token->val.string, &litval)) {
-					fprintf(stderr, "error: symbol name cannot be integer literal on line %d\n", token->line);
-					ret = 1;
-				}
-				else {
-					Parser_AddSymbolKey(parser, token->val.string);
-					token->val.string = NULL;
-					ac++;
-				}
-				break;
-			case AC_DEFINE_VAL:
-				parser->symbolBack->val = token->val.string;
-				token->val.string = NULL;
-				expect_eol = true;
-				ac = AC_NONE;
-				break;
-			default:
-				fprintf(stderr, "error: invalid assembler command state %d\n", ac);
-				ret = 1;
-			}
-			// Remove the token
-			if (prev) {
-				prev->next = next;
-			}
-			else {
-				parser->docFront = next;
-			}
-			if (!next) {
-				parser->docBack = prev;
-			}
-			Token_Destroy(token);
-			free(token);
-			token = prev;
-		}
-		else if (imm_dt >= 0) { // Expecting an immediate value
-			if (token->type == TT_WORD) {
-				// Parse immediate value
-				long long litval;
-				const char *symVal = NULL;
-				bool success = parse_int(token->val.string, &litval);
-				if (!success) {
-					symVal = Parser_ValForSymbolKey(parser, token->val.string);
-					if (symVal) {
-						success = parse_int(symVal, &litval);
-					}
-				}
-				if (!success) {
-					fprintf(stderr, "error: invalid integer literal \"%s\"", token->val.string);
-					if (symVal) {
-						fprintf(stderr, " (\"%s\")", symVal);
-					}
-					fprintf(stderr, " on line %d\n", token->line);
-					ret = 1;
-				}
-				else { // Successfully parsed integer literal. Does it match the expected type?
-					// @todo: have a function which returns the min and max values for a given data type
-					// @todo: also have a function which returns how many bytes required for a given data type
-					switch (imm_dt) {
-					case dt_a8:
-						if (litval < -0x80 || litval > 0xff) success = false;
-						else token->type = TT_INT1;
-						break;
-					case dt_a16:
-						if (litval < -0x8000 || litval > 0xffff) success = false;
-						else token->type = TT_INT2;
-						break;
-					case dt_a32:
-						if (litval < -0x80000000l || litval > 0xffffffffl) success = false;
-						else token->type = TT_INT4;
-						break;
-					case dt_a64:
-						// @todo: range check?
-						token->type = TT_INT8;
-						break;
-					case dt_i8:
-						if (litval < -0x80 || litval > 0x7f) success = false;
-						else token->type = TT_INT1;
-						break;
-					case dt_i16:
-						if (litval < -0x8000 || litval > 0x7fff) success = false;
-						else token->type = TT_INT2;
-						break;
-					case dt_i32:
-						if (litval < -0x80000000l || litval > 0x7fffffffl) success = false;
-						else token->type = TT_INT4;
-						break;
-					case dt_i64:
-						// @todo: range check?
-						token->type = TT_INT8;
-						break;
-					case dt_u8:
-						if (litval < 0 || litval > 0xff) success = false;
-						else token->type = TT_INT1;
-						break;
-					case dt_u16:
-						if (litval < 0 || litval > 0xffff) success = false;
-						else token->type = TT_INT2;
-						break;
-					case dt_u32:
-						if (litval < 0 || litval > 0xffffffffl) success = false;
-						else token->type = TT_INT4;
-						break;
-					case dt_u64:
-						// @todo: range check?
-						token->type = TT_INT8;
-						break;
-					default:
-						fprintf(stderr, "error: invalid data type expected on line %d\n", token->line);
-						ret = 1;
-						break;
-					}
-
-					if (!success) {
-						fprintf(stderr, "error: integer literal \"%s\" out of range\n", token->val.string);
-						ret = 1;
-					}
-					else if (ret == 0) {
-						Token_Destroy(token);
-						token->val.integer = litval;
-					}
-				}
-				imm_dt = -1;
-			}
-			else { // Incomplete statement
-				break;
-			}
-		}
-		else if (expect_eol && token->type != TT_EOL) {
-			fprintf(stderr, "error: expected EOL on line %d col %d\n", token->line, token->col);
-			ret = 1;
-		}
-		else if (token->type == TT_WORD) { // Beginning of statement
-			if (token->val.string[0] == '.') {
-				// Assembler commands begin with '.'
-				if (strcmp(token->val.string, ".define") == 0) {
-					ac = AC_DEFINE_KEY;
-				}
-				else {
-					fprintf(stderr, "error: unrecognized assembler command \"%s\"\n", token->val.string);
-					ret = 1;
-				}
-				// Remove the token
-				if (prev) {
-					prev->next = next;
-				}
-				else {
-					parser->docFront = next;
-				}
-				if (!next) {
-					parser->docBack = prev;
-				}
-				Token_Destroy(token);
-				free(token);
-				token = prev;
-			}
-			else {
-				int opcode = opcode_for_name(token->val.string);
-				if (opcode < 0) {
-					fprintf(stderr, "error: invalid opcode \"%s\" on line %d\n", token->val.string, token->line);
-					ret = 1;
-				}
-				else {
-					// Replace word value with integer opcode value
-					Token_Destroy(token);
-					token->type = TT_OPCODE;
-					token->val.integer = opcode;
-
-					// See how many immediate arguments to expect
-					int count = imm_count_for_opcode(opcode);
-					if (count == 0) {
-						expect_eol = true;
-					}
-					else if (count == 1) {
-						// Get immediate argument type
-						ret = imm_types_for_opcode(opcode, &imm_dt);
-						if (ret) {
-							fprintf(stderr, "error: unable to determine immediate types for opcode 0x%02x on line %d\n",
-								opcode, token->line);
-						}
-					}
-					else { // For now we only handle zero or one immediate values
-						fprintf(stderr, "error: invalid imm count %d for opcode 0x%02x on line %d\n",
-							count, opcode, token->line);
-						ret = 1;
-					}
-				}
-			}
-		}
-		else if (token->type == TT_EOL) {
-			// Remove EOL tokens
-			if (prev) {
-				prev->next = next;
-			}
-			else {
-				parser->docFront = next;
-			}
-			if (!next) {
-				parser->docBack = prev;
-			}
-			Token_Destroy(token);
-			free(token);
-			token = prev;
-			expect_eol = false;
-		}
-		else {
-			fprintf(stderr, "error: invalid token type %d on line %d\n", token->type, token->line);
-			ret = 1;
-		}
-	}
-
-	if ((imm_dt >= 0 || ac != AC_NONE) && ret == 0) {
-		fprintf(stderr, "error: unexpected EOL on line %d\n", token ? token->line : 0);
-		ret = 1;
-	}
-
-	return ret;
-}
-
-int Parser_WriteBytecode(struct Parser *parser, FILE *outstream)
-{
-	int ret = 0;
-	for (struct Token *token = parser->docFront; token != NULL && ret == 0; token = token->next) {
-		int len = 0;
-		switch (token->type) {
-		case TT_OPCODE:
-		case TT_INT1:
-			len = 1;
-			break;
-		case TT_INT2:
-			len = 2;
-			break;
-		case TT_INT4:
-			len = 4;
-			break;
-		case TT_INT8:
-			len = 8;
-			break;
-		default:
-			fprintf(stderr, "error: invalid token type: %d\n", token->type);
-			ret = -1;
-		}
-		for (int i = 0; i < len; i++) {
-			unsigned char val = (unsigned char)(token->val.integer >> (i * 8));
-			ret = fwrite(&val, 1, 1, outstream);
-			if (ret != 1) {
-				fprintf(stderr, "error: failed to write to output file\n");
-				break;
-			}
-			ret = 0;
-		}
-	}
-	fflush(outstream);
-	return ret;
+	// Save the first section
+	struct stub_sec sec;
+	// @todo: make configurable
+	sec.addr = 0x1000;
+	sec.flags = STUB_FLAG_TEXT;
+	return stub_save_section(parser->outfile, 0, &sec);
 }

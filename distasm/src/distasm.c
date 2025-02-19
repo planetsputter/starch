@@ -150,35 +150,7 @@ int main(int argc, const char *argv[])
 			}
 			ret = 0;
 
-			int imm_len;
-			switch (dt) {
-			case dt_a8:
-			case dt_i8:
-			case dt_u8:
-				imm_len = 1;
-				break;
-			case dt_a16:
-			case dt_i16:
-			case dt_u16:
-				imm_len = 2;
-				break;
-			case dt_a32:
-			case dt_i32:
-			case dt_u32:
-				imm_len = 4;
-				break;
-			case dt_a64:
-			case dt_i64:
-			case dt_u64:
-				imm_len = 8;
-				break;
-			default:
-				fprintf(stderr, "error: invalid immediate type %d for opcode 0x%02x\n",
-					dt, opcode);
-				ret = 1;
-				break;
-			}
-			if (ret) break;
+			int imm_len = size_for_dt(dt);
 
 			// Read little-endian immediate value
 			int64_t val = 0;

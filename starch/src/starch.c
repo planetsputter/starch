@@ -698,6 +698,90 @@ int imm_count_for_opcode(int opcode)
 	return ret;
 }
 
+void min_max_for_dt(int dt, long long *min, long long *max)
+{
+	// Set minimum
+	if (min) switch (dt) {
+	case dt_a8:
+	case dt_i8:
+		*min = -0x80;
+		break;
+	case dt_a16:
+	case dt_i16:
+		*min = -0x8000;
+		break;
+	case dt_a32:
+	case dt_i32:
+		*min = -0x80000000l;
+		break;
+	case dt_a64:
+	case dt_i64:
+		*min = -0x8000000000000000l;
+		break;
+	case dt_u8:
+	case dt_u16:
+	case dt_u32:
+	case dt_u64:
+		*min = 0;
+		break;
+	}
+
+	// Set maximum
+	if (max) switch (dt) {
+	case dt_a8:
+	case dt_u8:
+		*max = 0xff;
+		break;
+	case dt_i8:
+		*max = 0x7f;
+		break;
+	case dt_a16:
+	case dt_u16:
+		*max = 0xffff;
+		break;
+	case dt_i16:
+		*max = 0x7fff;
+		break;
+	case dt_a32:
+	case dt_u32:
+		*max = 0xffffffffl;
+		break;
+	case dt_i32:
+		*max = 0x7fffffffl;
+		break;
+	case dt_a64:
+	case dt_u64:
+		*max = 0xfffffffffffffffflu;
+		break;
+	case dt_i64:
+		*max = 0x7ffffffffffffffflu;
+		break;
+	}
+}
+
+int size_for_dt(int dt)
+{
+	switch (dt) {
+	case dt_a8:
+	case dt_u8:
+	case dt_i8:
+		return 1;
+	case dt_a16:
+	case dt_u16:
+	case dt_i16:
+		return 2;
+	case dt_a32:
+	case dt_u32:
+	case dt_i32:
+		return 4;
+	case dt_a64:
+	case dt_u64:
+	case dt_i64:
+		return 8;
+	}
+	return 0;
+}
+
 int imm_types_for_opcode(int opcode, int *dts)
 {
 	int ret = 0;

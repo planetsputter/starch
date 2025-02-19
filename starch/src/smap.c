@@ -30,12 +30,12 @@ static void smap_node_delete(struct smap *smap, struct smap_node *node)
 static char *smap_node_get(struct smap *smap, struct smap_node *node, const char *key)
 {
 	if (!node) return NULL;
-	int comp = strcmp(node->key, key);
+	int comp = strcmp(key, node->key);
 	if (comp > 0) {
-		return smap_node_get(smap, node->prev, key);
+		return smap_node_get(smap, node->next, key);
 	}
 	if (comp < 0) {
-		return smap_node_get(smap, node->next, key);
+		return smap_node_get(smap, node->prev, key);
 	}
 	return node->val;
 }
@@ -52,15 +52,15 @@ static struct smap_node *smap_node_insert(struct smap *smap, struct smap_node *n
 	struct smap_node *retnode;
 	int comp = strcmp(key, node->key);
 	if (comp > 0) {
-		retnode = smap_node_insert(smap, node->prev, key, val);
-		if (!node->prev) {
-			node->prev = retnode;
-		}
-	}
-	else if (comp < 0) {
 		retnode = smap_node_insert(smap, node->next, key, val);
 		if (!node->next) {
 			node->next = retnode;
+		}
+	}
+	else if (comp < 0) {
+		retnode = smap_node_insert(smap, node->prev, key, val);
+		if (!node->prev) {
+			node->prev = retnode;
 		}
 	}
 	else {

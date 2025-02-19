@@ -341,19 +341,26 @@ int imm_count_for_opcode(int);
 // Data types
 //
 enum {
-	dt_a8, // Any 1 byte quantity
-	dt_a16, // Any 2 byte quantity
-	dt_a32, // Any 4 byte quantity
-	dt_a64, // Any 8 byte quantity
-	dt_i8,  // A signed 1 byte integer
-	dt_i16, // A signed 2 byte integer
-	dt_i32, // A signed 4 byte integer
-	dt_i64, // A signed 8 byte integer
+	dt_a8,  // Any 1 byte quantity
 	dt_u8,  // An unsigned 1 byte integer
+	dt_i8,  // A signed 1 byte integer
+	dt_a16, // Any 2 byte quantity
 	dt_u16, // An unsigned 2 byte integer
+	dt_i16, // A signed 2 byte integer
+	dt_a32, // Any 4 byte quantity
 	dt_u32, // An unsigned 4 byte integer
+	dt_i32, // A signed 4 byte integer
+	dt_a64, // Any 8 byte quantity
 	dt_u64, // An unsigned 8 byte integer
+	dt_i64, // A signed 8 byte integer
+	num_dt,
 };
+
+// Sets the minimum (inclusive) and maximum (inclusive) values for the given data type
+void min_max_for_dt(int dt, long long *min, long long *max);
+
+// Returns the byte size of the given data type
+int size_for_dt(int dt);
 
 // Get the data types of the immediate arguments for the given opcode.
 // Use imm_count_for_opcode() to determine the minimum length of dts.
@@ -382,4 +389,5 @@ enum {
 	STERR_NUM_ERRORS,
 };
 
+// Returns a string error code for the given integer error code
 const char *name_for_sterr(int);
