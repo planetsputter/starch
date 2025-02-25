@@ -88,8 +88,7 @@ check_op0 invalid \
 	storerpop8 storerpop16 storerpop32 storerpop64 \
 	storersfp8 storersfp16 storersfp32 storersfp64 \
 	storerpopsfp8 storerpopsfp16 storerpopsfp32 storerpopsfp64 \
-	setsbp setsfp setsp halt \
-	ext nop
+	halt ext nop
 
 #
 # Check for symmetric dis/assembly of opcodes with a8 immediate
@@ -401,7 +400,7 @@ check_opu64() {
 	echo
 }
 
-check_opu64 call jmp brnz8 brnz16 brnz32 brnz64
+check_opu64 call jmp brnz8 brnz16 brnz32 brnz64 setsbp setsfp setsp setslp
 
 # @todo: test opcodes which expect i64 immediates
 
@@ -422,6 +421,9 @@ if $STEM a.stb 2>/dev/null; then false; else test $? -eq 1; fi
 #
 echo "test push8"
 $STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
 push8 0xff
 push8 0x01
 push8 0x00
@@ -430,46 +432,342 @@ push8 -128
 halt
 EOF
 $STEM -d x.hex a.stb
-grep "000000003ffffff0: 00 00 00 00 00 00 00 00 00 00 00 80 ff 00 01 ff" x.hex > /dev/null
+grep "0000000000001ff0: 00 00 00 00 00 00 00 00 00 00 00 80 ff 00 01 ff" x.hex > /dev/null
 
 #
 # Test push8u16
 #
 echo "test push8u16"
 $STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
 push8u16 0xff
 push8u16 0x00
 push8u16 0x01
 halt
 EOF
 $STEM -d x.hex a.stb
-grep "000000003ffffff0: 00 00 00 00 00 00 00 00 00 00 01 00 00 00 ff 00" x.hex > /dev/null
+grep "0000000000001ff0: 00 00 00 00 00 00 00 00 00 00 01 00 00 00 ff 00" x.hex > /dev/null
 
 #
 # Test push8u32
 #
 echo "test push8u32"
 $STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
 push8u32 0xff
 push8u32 0x00
 push8u32 0x01
 halt
 EOF
 $STEM -d x.hex a.stb
-grep "000000003ffffff0: 00 00 00 00 01 00 00 00 00 00 00 00 ff 00 00 00" x.hex > /dev/null
+grep "0000000000001ff0: 00 00 00 00 01 00 00 00 00 00 00 00 ff 00 00 00" x.hex > /dev/null
 
 #
 # Test push8u64
 #
 echo "test push8u64"
 $STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
 push8u64 0xff
 push8u64 0x00
 push8u64 0x01
 halt
 EOF
 $STEM -d x.hex a.stb
-grep "000000003fffffe0: 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00" x.hex > /dev/null
-grep "000000003ffffff0: 00 00 00 00 00 00 00 00 ff 00 00 00 00 00 00 00" x.hex > /dev/null
+grep "0000000000001fe0: 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00" x.hex > /dev/null
+grep "0000000000001ff0: 00 00 00 00 00 00 00 00 ff 00 00 00 00 00 00 00" x.hex > /dev/null
+
+#
+# Test push8i16
+#
+echo "test push8i16"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push8i16 0x7f
+push8i16 0x01
+push8i16 0x00
+push8i16 -0x01
+push8i16 -0x80
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001ff0: 00 00 00 00 00 00 80 ff ff ff 00 00 01 00 7f 00" x.hex > /dev/null
+
+#
+# Test push8i32
+#
+echo "test push8i32"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push8i32 0x7f
+push8i32 0x01
+push8i32 0x00
+push8i32 -0x01
+push8i32 -0x80
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001fe0: 00 00 00 00 00 00 00 00 00 00 00 00 80 ff ff ff" x.hex > /dev/null
+grep "0000000000001ff0: ff ff ff ff 00 00 00 00 01 00 00 00 7f 00 00 00" x.hex > /dev/null
+
+#
+# Test push8i64
+#
+echo "test push8i64"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push8i64 0x7f
+push8i64 0x01
+push8i64 0x00
+push8i64 -0x01
+push8i64 -0x80
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001fd0: 00 00 00 00 00 00 00 00 80 ff ff ff ff ff ff ff" x.hex > /dev/null
+grep "0000000000001fe0: ff ff ff ff ff ff ff ff 00 00 00 00 00 00 00 00" x.hex > /dev/null
+grep "0000000000001ff0: 01 00 00 00 00 00 00 00 7f 00 00 00 00 00 00 00" x.hex > /dev/null
+
+#
+# Test push16
+#
+echo "test push16"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push16 0xffff
+push16 1
+push16 0
+push16 -1
+push16 -0x8000
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001ff0: 00 00 00 00 00 00 00 80 ff ff 00 00 01 00 ff ff" x.hex > /dev/null
+
+#
+# Test push16u32
+#
+echo "test push16u32"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push16u32 0xffff
+push16u32 1
+push16u32 0
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001ff0: 00 00 00 00 00 00 00 00 01 00 00 00 ff ff 00 00" x.hex > /dev/null
+
+#
+# Test push16u64
+#
+echo "test push16u64"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push16u64 0xffff
+push16u64 0
+push16u64 1
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001fe0: 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00" x.hex > /dev/null
+grep "0000000000001ff0: 00 00 00 00 00 00 00 00 ff ff 00 00 00 00 00 00" x.hex > /dev/null
+
+#
+# Test push16i32
+#
+echo "test push16i32"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push16i32 0x7fff
+push16i32 1
+push16i32 0
+push16i32 -1
+push16i32 -0x8000
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001fe0: 00 00 00 00 00 00 00 00 00 00 00 00 00 80 ff ff" x.hex > /dev/null
+grep "0000000000001ff0: ff ff ff ff 00 00 00 00 01 00 00 00 ff 7f 00 00" x.hex > /dev/null
+
+#
+# Test push16i64
+#
+echo "test push16i64"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push16i64 0x7fff
+push16i64 1
+push16i64 0
+push16i64 -1
+push16i64 -0x8000
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001fd0: 00 00 00 00 00 00 00 00 00 80 ff ff ff ff ff ff" x.hex > /dev/null
+grep "0000000000001fe0: ff ff ff ff ff ff ff ff 00 00 00 00 00 00 00 00" x.hex > /dev/null
+grep "0000000000001ff0: 01 00 00 00 00 00 00 00 ff 7f 00 00 00 00 00 00" x.hex > /dev/null
+
+#
+# Test push32
+#
+echo "test push32"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push32 0x7fffffff
+push32 1
+push32 0
+push32 -1
+push32 -0x80000000
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001fe0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 80" x.hex > /dev/null
+grep "0000000000001ff0: ff ff ff ff 00 00 00 00 01 00 00 00 ff ff ff 7f" x.hex > /dev/null
+
+#
+# Test push32u64
+#
+echo "test push32u64"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push32u64 0xffffffff
+push32u64 0
+push32u64 1
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001fe0: 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00" x.hex > /dev/null
+grep "0000000000001ff0: 00 00 00 00 00 00 00 00 ff ff ff ff 00 00 00 00" x.hex > /dev/null
+
+#
+# Test push32i64
+#
+echo "test push32i64"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push32i64 0x7fffffff
+push32i64 1
+push32i64 0
+push32i64 -1
+push32i64 -0x80000000
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001fd0: 00 00 00 00 00 00 00 00 00 00 00 80 ff ff ff ff" x.hex > /dev/null
+grep "0000000000001fe0: ff ff ff ff ff ff ff ff 00 00 00 00 00 00 00 00" x.hex > /dev/null
+grep "0000000000001ff0: 01 00 00 00 00 00 00 00 ff ff ff 7f 00 00 00 00" x.hex > /dev/null
+
+#
+# Test push64
+#
+echo "test push64"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push64 0xffffffffffffffff
+push64 1
+push64 0
+push64 -1
+push64 -0x8000000000000000
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001fd0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 80" x.hex > /dev/null
+grep "0000000000001fe0: ff ff ff ff ff ff ff ff 00 00 00 00 00 00 00 00" x.hex > /dev/null
+grep "0000000000001ff0: 01 00 00 00 00 00 00 00 ff ff ff ff ff ff ff ff" x.hex > /dev/null
+
+#
+# Test pop8
+#
+echo "test pop8"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push8 1
+pop8
+push8 2
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001ff0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 02" x.hex > /dev/null
+
+#
+# Test pop16
+#
+echo "test pop16"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push16 0x1234
+pop16
+push16 0x5678
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001ff0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 78 56" x.hex > /dev/null
+
+#
+# Test pop32
+#
+echo "test pop32"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push32 0x01234567
+pop32
+push32 0x89abcdef
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001ff0: 00 00 00 00 00 00 00 00 00 00 00 00 ef cd ab 89" x.hex > /dev/null
+
+#
+# Test pop64
+#
+echo "test pop64"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push64 0x0123456789abcdef
+pop64
+push64 0xfedcba9876543210
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001ff0: 00 00 00 00 00 00 00 00 10 32 54 76 98 ba dc fe" x.hex > /dev/null
 
 echo all tests passed

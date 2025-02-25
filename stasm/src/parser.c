@@ -142,18 +142,33 @@ static int parser_finish_token(struct parser *parser)
 {
 	if (!parser->token) return 0;
 
-	// Look up any existing symbol definition
-	// @todo: Require preceding "$" to look up symbols?
-	// This would make it more clear when a symbol is being used.
-	const char *symbol = smap_get(&parser->defs, parser->token);
-	if (!symbol) symbol = parser->token;
-
 	int ret = 0;
-	switch (parser->ts) {
+	const char *symbol = NULL;
+	if (parser->token[0] == '$') {
+		// Look up an existing symbol definition
+		symbol = smap_get(&parser->defs, parser->token + 1);
+		if (!symbol) {
+			fprintf(stderr, "error: undefined symbol \"%s\" line %d char %d\n",
+				parser->token + 1, parser->tline, parser->tch);
+			ret = 1;
+		}
+	}
+	else {
+		symbol = parser->token;
+	}
+
+	if (ret == 0) switch (parser->ts) {
 	case PTS_DEFAULT: {
-		// See if this is a symbol definition
-		if (strcmp(parser->token, ".define") == 0) {
-			parser->ts = PTS_DEF_KEY;
+		if (parser->token[0] == '.') { // '.' introduces an assembler command
+			if (strcmp(parser->token + 1, "define") == 0) {
+				parser->ts = PTS_DEF_KEY;
+			}
+			// @todo: allow to ".include" a file
+			else {
+				fprintf(stderr, "error: unrecognized assembler command \"%s\" line %d char %d\n",
+					parser->token, parser->tline, parser->tch);
+				ret = 1;
+			}
 			break;
 		}
 
@@ -180,7 +195,11 @@ static int parser_finish_token(struct parser *parser)
 			}
 			parser->ts = PTS_IMM + imm_type;
 		}
-		else if (imm_count != 0) {
+		else if (imm_count == 0) {
+			// Opcode has no immediates
+			parser->ts = PTS_EOL;
+		}
+		else {
 			fprintf(stderr, "error: invalid immediate count %d for opcode %s line %d char %d\n",
 				imm_count, symbol, parser->tline, parser->tch);
 			ret = 1;
@@ -317,8 +336,8 @@ int parser_parse_byte(struct parser *parser, byte b)
 	// Process the decoded character
 	switch (parser->ss) {
 	case PSS_DEFAULT:
-		if (isalnum(c) || c == '.' || c == '-' || c == '_' || c == '\'' || c == '\\' ||
-			c >= 0x80) { // These continue or start a token
+		if (isalnum(c) || c == '$' || c == '.' || c == '-' || c == '_' || c == '\'' ||
+			c == '\\' || c >= 0x80) { // These continue or start a token
 			if (parser->token == NULL) { // Start a new token
 				parser->token = bstr_alloc();
 				parser->tline = parser->line;

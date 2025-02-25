@@ -148,7 +148,7 @@ int main(int argc, const char *argv[])
 		}
 		// Print an error message for non-halt error codes
 		if (ret != STERR_HALT && ret != STERR_NONE) {
-			fprintf(stderr, "error: an error occurred during emulation: %s (0x%08x)\n", name_for_sterr(ret), ret);
+			fprintf(stderr, "error: an error occurred during emulation: %s (%d)\n", name_for_sterr(ret), ret);
 		}
 	}
 

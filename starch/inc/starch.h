@@ -323,6 +323,7 @@ enum {
 	op_setsbp, // Set SBP to top 8 byte address
 	op_setsfp, // Set SFP to top 8 byte address
 	op_setsp,  // Set SP to top 8 byte address
+	op_setslp, // Set SLP to top 8 byte address
 	op_halt,   // Halts the processor
 	op_ext,    // Introduces an extended operation
 	op_nop,    // No op

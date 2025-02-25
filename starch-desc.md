@@ -398,6 +398,7 @@ These instructions load data from memory to the stack or store data from the sta
 | setsbp  | PC + 9   | Sets SBP to the 64-bit immediate value                     |
 | setsfp  | PC + 9   | Sets SFP to the 64-bit immediate value                     |
 | setsp   | PC + 9   | Sets SP to the 64-bit immediate value                      |
+| setslp  | PC + 9   | Sets SLP to the 64-bit immediate value                     |
 | nop     | PC + 1   | Performs no operation                                      |
 | ext     | PC + 1   | Introduces an extended opcode                              |
 | halt    | PC       | Halts the processor                                        |

@@ -258,7 +258,7 @@ int mem_write32(struct mem *mem, uint64_t addr, uint32_t data)
 		data >>= 8;
 		addr++;
 		if (addr >= last_addr) break;
-		else if ((addr & MEM_PAGE_MASK) == 0) {
+		if ((addr & MEM_PAGE_MASK) == 0) {
 			page = mem_get_page(mem, addr);
 		}
 	}
@@ -277,7 +277,7 @@ int mem_write64(struct mem *mem, uint64_t addr, uint64_t data)
 		data >>= 8;
 		addr++;
 		if (addr >= last_addr) break;
-		else if ((addr & MEM_PAGE_MASK) == 0) {
+		if ((addr & MEM_PAGE_MASK) == 0) {
 			page = mem_get_page(mem, addr);
 		}
 	}
@@ -303,12 +303,10 @@ int mem_read16(struct mem *mem, uint64_t addr, uint16_t *data)
 
 	struct mem_node *page = mem_get_page(mem, addr);
 	uint16_t temp = 0;
-	for (uint64_t last_addr = addr + 2; ;) {
-		temp <<= 8;
-		temp |= page->data[addr & MEM_PAGE_MASK];
-		addr++;
-		if (addr >= last_addr) break;
-		else if ((addr & MEM_PAGE_MASK) == 0) {
+	for (int i = 0; ;) {
+		temp |= page->data[addr & MEM_PAGE_MASK] << (8 * i);
+		if (++i >= 2) break;
+		if ((++addr & MEM_PAGE_MASK) == 0) {
 			page = mem_get_page(mem, addr);
 		}
 	}
@@ -324,12 +322,10 @@ int mem_read32(struct mem *mem, uint64_t addr, uint32_t *data)
 
 	struct mem_node *page = mem_get_page(mem, addr);
 	uint32_t temp = 0;
-	for (uint64_t last_addr = addr + 4; ;) {
-		temp <<= 8;
-		temp |= page->data[addr & MEM_PAGE_MASK];
-		addr++;
-		if (addr >= last_addr) break;
-		else if ((addr & MEM_PAGE_MASK) == 0) {
+	for (int i = 0; ;) {
+		temp |= page->data[addr & MEM_PAGE_MASK] << (8 * i);
+		if (++i >= 4) break;
+		if ((++addr & MEM_PAGE_MASK) == 0) {
 			page = mem_get_page(mem, addr);
 		}
 	}
@@ -345,12 +341,10 @@ int mem_read64(struct mem *mem, uint64_t addr, uint64_t *data)
 
 	struct mem_node *page = mem_get_page(mem, addr);
 	uint64_t temp = 0;
-	for (uint64_t last_addr = addr + 8; ;) {
-		temp <<= 8;
-		temp |= page->data[addr & MEM_PAGE_MASK];
-		addr++;
-		if (addr >= last_addr) break;
-		else if ((addr & MEM_PAGE_MASK) == 0) {
+	for (int i = 0; ;) {
+		temp |= (uint64_t)page->data[addr & MEM_PAGE_MASK] << (8 * i);
+		if (++i >= 8) break;
+		if ((++addr & MEM_PAGE_MASK) == 0) {
 			page = mem_get_page(mem, addr);
 		}
 	}
@@ -369,7 +363,7 @@ int mem_load_image(struct mem *mem, uint64_t addr, uint64_t size, FILE *image_fi
 		}
 		node->data[addr & MEM_PAGE_MASK] = ret;
 	}
-	return ferror(image_file) ? errno : 0;
+	return feof(image_file) ? 1 : 0;
 }
 
 static int print_hex_iter_func(struct mem_node *node, struct iter_params *params)

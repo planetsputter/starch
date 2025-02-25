@@ -321,6 +321,7 @@ static const char *names[256] = {
 	[op_setsbp] = "setsbp",
 	[op_setsfp] = "setsfp",
 	[op_setsp] = "setsp",
+	[op_setslp] = "setslp",
 	[op_halt] = "halt",
 	[op_ext] = "ext",
 	[op_nop] = "nop",
@@ -684,6 +685,9 @@ int imm_count_for_opcode(int opcode)
 	case op_setsbp:
 	case op_setsfp:
 	case op_setsp:
+	case op_setslp:
+		ret = 1;
+		break;
 	case op_halt:
 	case op_ext:
 		// @todo
@@ -1122,6 +1126,7 @@ int imm_types_for_opcode(int opcode, int *dts)
 	case op_setsbp:
 	case op_setsfp:
 	case op_setsp:
+	case op_setslp:
 		*dts = dt_u64;
 		break;
 	case op_halt:
