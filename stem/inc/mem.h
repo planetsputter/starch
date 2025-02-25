@@ -17,6 +17,8 @@ struct mem {
 // Initializes the given mem struct with the given size.
 // Addresses must be less than size.
 void mem_init(struct mem*, uint64_t size);
+
+// Destroys the given mem struct, deallocating all its memory
 void mem_destroy(struct mem*);
 
 // Memory write operations. Return 0 on success.
@@ -33,6 +35,7 @@ int mem_read64(struct mem*, uint64_t addr, uint64_t *data);
 
 // Load a binary image file into memory. Returns 0 on success.
 int mem_load_image(struct mem*, uint64_t addr, uint64_t size, FILE *image_file);
+
 // Dump the given range of memory to a hex file.
 // If addr and size are both zero, dumps all modified memory.
 // Returns 0 on success.

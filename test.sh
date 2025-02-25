@@ -770,4 +770,448 @@ EOF
 $STEM -d x.hex a.stb
 grep "0000000000001ff0: 00 00 00 00 00 00 00 00 10 32 54 76 98 ba dc fe" x.hex > /dev/null
 
+#
+# Test dup8
+#
+echo "test dup8"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push8 1
+dup8
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001ff0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 01" x.hex > /dev/null
+
+#
+# Test dup16
+#
+echo "test dup16"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push16 0x1234
+dup16
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001ff0: 00 00 00 00 00 00 00 00 00 00 00 00 34 12 34 12" x.hex > /dev/null
+
+#
+# Test dup32
+#
+echo "test dup32"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push32 0x12345678
+dup32
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001ff0: 00 00 00 00 00 00 00 00 78 56 34 12 78 56 34 12" x.hex > /dev/null
+
+#
+# Test dup64
+#
+echo "test dup64"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push64 0x0123456789abcdef
+dup64
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001ff0: ef cd ab 89 67 45 23 01 ef cd ab 89 67 45 23 01" x.hex > /dev/null
+
+#
+# Test set8
+#
+echo "test set8"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push8 1
+push8 2
+set8
+push8 1
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001ff0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 02" x.hex > /dev/null
+
+#
+# Test set16
+#
+echo "test set16"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push16 1
+push16 2
+set16
+push16 1
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001ff0: 00 00 00 00 00 00 00 00 00 00 00 00 01 00 02 00" x.hex > /dev/null
+
+#
+# Test set32
+#
+echo "test set32"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push32 1
+push32 2
+set32
+push32 1
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001ff0: 00 00 00 00 00 00 00 00 01 00 00 00 02 00 00 00" x.hex > /dev/null
+
+#
+# Test set64
+#
+echo "test set64"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push64 1
+push64 2
+set64
+push64 1
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001ff0: 01 00 00 00 00 00 00 00 02 00 00 00 00 00 00 00" x.hex > /dev/null
+
+#
+# Test prom8u16
+#
+echo "test prom8u16"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push8 0x80
+prom8u16
+push8 1
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001ff0: 00 00 00 00 00 00 00 00 00 00 00 00 00 01 80 00" x.hex > /dev/null
+
+#
+# Test prom8u32
+#
+echo "test prom8u32"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push8 0x80
+prom8u32
+push8 1
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001ff0: 00 00 00 00 00 00 00 00 00 00 00 01 80 00 00 00" x.hex > /dev/null
+
+#
+# Test prom8u64
+#
+echo "test prom8u64"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push8 0x80
+prom8u64
+push8 1
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001ff0: 00 00 00 00 00 00 00 01 80 00 00 00 00 00 00 00" x.hex > /dev/null
+
+#
+# Test prom8i16
+#
+echo "test prom8i16"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push8 0x80
+prom8i16
+push8 1
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001ff0: 00 00 00 00 00 00 00 00 00 00 00 00 00 01 80 ff" x.hex > /dev/null
+
+#
+# Test prom8i32
+#
+echo "test prom8i32"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push8 0x80
+prom8i32
+push8 1
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001ff0: 00 00 00 00 00 00 00 00 00 00 00 01 80 ff ff ff" x.hex > /dev/null
+
+#
+# Test prom8i64
+#
+echo "test prom8i64"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push8 0x80
+prom8i64
+push8 1
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001ff0: 00 00 00 00 00 00 00 01 80 ff ff ff ff ff ff ff" x.hex > /dev/null
+
+#
+# Test prom16u32
+#
+echo "test prom16u32"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push16 0x8002
+prom16u32
+push8 1
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001ff0: 00 00 00 00 00 00 00 00 00 00 00 01 02 80 00 00" x.hex > /dev/null
+
+#
+# Test prom16u64
+#
+echo "test prom16u64"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push16 0x8002
+prom16u64
+push8 1
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001ff0: 00 00 00 00 00 00 00 01 02 80 00 00 00 00 00 00" x.hex > /dev/null
+
+#
+# Test prom16i32
+#
+echo "test prom16i32"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push16 0x8002
+prom16i32
+push8 1
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001ff0: 00 00 00 00 00 00 00 00 00 00 00 01 02 80 ff ff" x.hex > /dev/null
+
+#
+# Test prom16i64
+#
+echo "test prom16i64"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push16 0x8002
+prom16i64
+push8 1
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001ff0: 00 00 00 00 00 00 00 01 02 80 ff ff ff ff ff ff" x.hex > /dev/null
+
+#
+# Test prom32u64
+#
+echo "test prom32u64"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push32 0x87654321
+prom32u64
+push8 1
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001ff0: 00 00 00 00 00 00 00 01 21 43 65 87 00 00 00 00" x.hex > /dev/null
+
+#
+# Test prom32i64
+#
+echo "test prom32i64"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push32 0x87654321
+prom32i64
+push8 1
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001ff0: 00 00 00 00 00 00 00 01 21 43 65 87 ff ff ff ff" x.hex > /dev/null
+
+#
+# Test dem64to16
+#
+echo "test dem64to16"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push64 0xfedcba9876543210
+dem64to16
+push8 0
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001ff0: 00 00 00 00 00 00 00 00 10 32 54 76 98 00 dc fe" x.hex > /dev/null
+
+#
+# Test dem64to8
+#
+echo "test dem64to8"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push64 0xfedcba9876543210
+dem64to8
+push8 0
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001ff0: 00 00 00 00 00 00 00 00 10 32 54 76 98 ba 00 fe" x.hex > /dev/null
+
+#
+# Test dem32to8
+#
+echo "test dem32to8"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push32 0xfedcba98
+dem32to8
+push8 0
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001ff0: 00 00 00 00 00 00 00 00 00 00 00 00 98 ba 00 fe" x.hex > /dev/null
+
+# Get random bytes in hexadecimal notation
+RAND1A=$(head -c 1 /dev/urandom | xxd -ps)
+RAND1B=$(head -c 1 /dev/urandom | xxd -ps)
+RAND1SUM=$(printf "%x" $(((0x$RAND1A + 0x$RAND1B) % 256)))
+echo RAND1A=$RAND1A
+echo RAND1B=$RAND1B
+echo RAND1SUM=$RAND1SUM
+
+#
+# Test add8
+#
+echo "test add8"
+$STASM <<EOF
+.define STACK_BOTTOM 0x2000
+setsbp \$STACK_BOTTOM
+setsp \$STACK_BOTTOM
+push8 0x$RAND1A
+push8 0x$RAND1B
+add8
+halt
+EOF
+$STEM -d x.hex a.stb
+grep "0000000000001ff0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 $RAND1B $RAND1SUM" x.hex > /dev/null
+
+#	op_add16,   // Add 2 byte integers replacing with sum
+#	op_add32,   // Add 4 byte integers replacing with sum
+#	op_add64,   // Add 8 byte integers replacing with sum
+#	op_sub8,    // Subtract 1 byte integers replacing with difference
+#	op_sub16,   // Subtract 2 byte integers replacing with difference
+#	op_sub32,   // Subtract 4 byte integers replacing with difference
+#	op_sub64,   // Subtract 8 byte integers replacing with difference
+#	op_subr8,    // Subtract 1 byte integers replacing with difference
+#	op_subr16,   // Subtract 2 byte integers replacing with difference
+#	op_subr32,   // Subtract 4 byte integers replacing with difference
+#	op_subr64,   // Subtract 8 byte integers replacing with difference
+#	op_mulu8,   // Multiply 1 byte unsigned integers replacing with product
+#	op_mulu16,  // Multiply 2 byte unsigned integers replacing with product
+#	op_mulu32,  // Multiply 4 byte unsigned integers replacing with product
+#	op_mulu64,  // Multiply 8 byte unsigned integers replacing with product
+#	op_muli8,   // Multiply 1 byte signed integers replacing with product
+#	op_muli16,  // Multiply 2 byte signed integers replacing with product
+#	op_muli32,  // Multiply 4 byte signed integers replacing with product
+#	op_muli64,  // Multiply 8 byte signed integers replacing with product
+#	op_divu8,   // Divide 1 byte unsigned integers replacing with quotient
+#	op_divu16,  // Divide 2 byte unsigned integers replacing with quotient
+#	op_divu32,  // Divide 4 byte unsigned integers replacing with quotient
+#	op_divu64,  // Divide 8 byte unsigned integers replacing with quotient
+#	op_divru8,  // Divide reversed 1 byte unsigned integers replacing with quotient
+#	op_divru16, // Divide reversed 2 byte unsigned integers replacing with quotient
+#	op_divru32, // Divide reversed 4 byte unsigned integers replacing with quotient
+#	op_divru64, // Divide reversed 8 byte unsigned integers replacing with quotient
+#	op_divi8,   // Divide 1 byte signed integers replacing with quotient
+#	op_divi16,  // Divide 2 byte signed integers replacing with quotient
+#	op_divi32,  // Divide 4 byte signed integers replacing with quotient
+#	op_divi64,  // Divide 8 byte signed integers replacing with quotient
+#	op_divri8,  // Divide reversed 1 byte signed integers replacing with quotient
+#	op_divri16, // Divide reversed 2 byte signed integers replacing with quotient
+#	op_divri32, // Divide reversed 4 byte signed integers replacing with quotient
+#	op_divri64, // Divide reversed 8 byte signed integers replacing with quotient
+#	op_modu8,   // Divide 1 byte unsigned integers replacing with remainder
+#	op_modu16,  // Divide 2 byte unsigned integers replacing with remainder
+#	op_modu32,  // Divide 4 byte unsigned integers replacing with remainder
+#	op_modu64,  // Divide 8 byte unsigned integers replacing with remainder
+#	op_modru8,  // Divide reversed 1 byte unsigned integers replacing with remainder
+#	op_modru16, // Divide reversed 2 byte unsigned integers replacing with remainder
+#	op_modru32, // Divide reversed 4 byte unsigned integers replacing with remainder
+#	op_modru64, // Divide reversed 8 byte unsigned integers replacing with remainder
+#	op_modi8,   // Divide 1 byte signed integers replacing with remainder
+#	op_modi16,  // Divide 2 byte signed integers replacing with remainder
+#	op_modi32,  // Divide 4 byte signed integers replacing with remainder
+#	op_modi64,  // Divide 8 byte signed integers replacing with remainder
+#	op_modri8,  // Divide reversed 1 byte signed integers replacing with remainder
+#	op_modri16, // Divide reversed 2 byte signed integers replacing with remainder
+#	op_modri32, // Divide reversed 4 byte signed integers replacing with remainder
+#	op_modri64, // Divide reversed 8 byte signed integers replacing with remainder
+
 echo all tests passed

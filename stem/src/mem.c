@@ -44,9 +44,9 @@ static void mem_node_destroy(struct mem_node *node)
 static void mem_node_update_depth(struct mem_node *node)
 {
 	if (node->prev) {
-		uint64_t prevdepth = node->prev->depth;
+		uint8_t prevdepth = node->prev->depth;
 		if (node->next) {
-			uint64_t nextdepth = node->next->depth;
+			uint8_t nextdepth = node->next->depth;
 			node->depth = prevdepth > nextdepth ? prevdepth + 1 : nextdepth + 1;
 		}
 		else {
@@ -72,7 +72,7 @@ static struct mem_node *mem_node_rebalance(struct mem_node *node)
 		// node->next has too much depth
 		// node->next->prev is going to end up at the same depth, while
 		// node->next->next is going to move closer to root
-		if (!node->next->next || node->next->next->depth < node->next->depth + 1) {
+		if (!node->next->next || node->next->next->depth < node->next->depth - 1) {
 			// Greater depth comes from node->next->prev. Double-rotation is needed.
 			newroot = node->next->prev;
 			mid = newroot->next;
@@ -94,7 +94,7 @@ static struct mem_node *mem_node_rebalance(struct mem_node *node)
 		// node->prev has too much depth
 		// node->prev->next is going to end up at the same depth, while
 		// node->prev->prev is going to move closer to root
-		if (!node->prev->prev || node->prev->prev->depth < node->prev->depth + 1) {
+		if (!node->prev->prev || node->prev->prev->depth < node->prev->depth - 1) {
 			// Greater depth comes from node->prev->next. Double-rotation is needed.
 			newroot = node->prev->next;
 			mid = newroot->prev;
