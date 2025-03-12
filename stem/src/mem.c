@@ -39,6 +39,7 @@ static void mem_node_destroy(struct mem_node *node)
 		mem_node_destroy(node->next);
 		node->next = NULL;
 	}
+	free(node);
 }
 
 static void mem_node_update_depth(struct mem_node *node)
@@ -204,6 +205,8 @@ void mem_destroy(struct mem *mem)
 {
 	if (mem->root) {
 		mem_node_destroy(mem->root);
+		mem->root = NULL;
+		mem->node_count = 0;
 	}
 }
 

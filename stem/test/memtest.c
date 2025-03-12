@@ -16,51 +16,16 @@ int main()
 	struct mem mem;
 	mem_init(&mem, TEST_MEM_SIZE);
 
+	//
 	// Test initial conditions
+	//
 	assert(mem.node_count == 0);
 	assert(mem.size == TEST_MEM_SIZE);
 	assert(mem.root == NULL);
 
-	// Test reading memory and tree balancing
-	uint8_t temp_u8 = 1;
-	int ret = mem_read8(&mem, 0, &temp_u8);
-	assert(ret == 0);
-	assert(temp_u8 == 0);
-	assert(mem.node_count == 1);
-	assert(mem.root != NULL);
-	assert(mem.root->depth == 0);
-	assert(mem.root->addr == 0);
-	temp_u8 = 1;
-	ret = mem_read8(&mem, TEST_MEM_SIZE, &temp_u8);
-	assert(ret == STERR_BAD_ADDR && temp_u8 == 1);
-	ret = mem_read8(&mem, TEST_MEM_SIZE - 1, &temp_u8);
-	assert(ret == 0 && temp_u8 == 0);
-	assert(mem.node_count == 2);
-	assert(mem.root->depth == 1);
-	assert(mem.root->prev == NULL);
-	assert(mem.root->next != NULL);
-	assert(mem.root->next->depth == 0);
-	assert(mem.root->next->addr == TEST_MEM_SIZE - MEM_PAGE_SIZE);
-	temp_u8 = 1;
-	ret = mem_read8(&mem, MEM_PAGE_SIZE, &temp_u8);
-	assert(ret == 0 && temp_u8 == 0);
-	assert(mem.node_count == 3);
-	assert(mem.root->depth == 1);
-	assert(mem.root->addr == MEM_PAGE_SIZE);
-	assert(mem.root->prev != NULL);
-	assert(mem.root->next != NULL);
-	assert(mem.root->prev->depth == 0);
-	assert(mem.root->prev->addr == 0);
-	assert(mem.root->prev->prev == NULL);
-	assert(mem.root->prev->next == NULL);
-	assert(mem.root->next->depth == 0);
-	assert(mem.root->next->addr == TEST_MEM_SIZE - MEM_PAGE_SIZE);
-	assert(mem.root->next->prev == NULL);
-	assert(mem.root->next->next == NULL);
-
 	// Get current time
 	struct timeval tv;
-	ret = gettimeofday(&tv, NULL);
+	int ret = gettimeofday(&tv, NULL);
 	if (ret != 0) {
 		fprintf(stderr, "error: failed to get current time\n");
 		return 1;
@@ -69,10 +34,52 @@ int main()
 	// Seed random number generator with current time in microseconds
 	srandom(tv.tv_usec + tv.tv_sec * 1000000);
 
+	//
+	// Test tree balancing
+	//
+	uint8_t temp_u8;
+	enum { BALANCE_CYCLES = TEST_MEM_SIZE / MEM_PAGE_SIZE };
+	// Generate an array of sorted page indices
+	int *spi = (int*)malloc(sizeof(int) * BALANCE_CYCLES);
+	for (int i = 0; i < BALANCE_CYCLES; i++) {
+		spi[i] = i;
+	}
+	// Generate an array of unsorted page indices
+	int *upi = (int*)malloc(sizeof(int) * BALANCE_CYCLES);
+	for (int i = 0; i < BALANCE_CYCLES; i++) {
+		// Pick a random index from the sorted array
+		int j = random() % (BALANCE_CYCLES - i);
+		upi[i] = spi[j];
+		for (; j < BALANCE_CYCLES - i - 1; j++) {
+			spi[j] = spi[j + 1];
+		}
+	}
+	free(spi);
+	for (int i = 0; i < BALANCE_CYCLES; i++) {
+		temp_u8 = 1;
+		ret = mem_read8(&mem, upi[i] * MEM_PAGE_SIZE, &temp_u8);
+		assert(mem.root != NULL && temp_u8 == 0);
+		int maxd = -1, prevd = -1, nextd = -1;
+		if (mem.root->prev) {
+			prevd = mem.root->prev->depth;
+			if (prevd > maxd) maxd = prevd;
+		}
+		if (mem.root->next) {
+			nextd = mem.root->next->depth;
+			if (nextd > maxd) maxd = nextd;
+		}
+		int diffd = prevd - nextd;
+		assert(mem.root->depth == maxd + 1 && diffd <= 1 && diffd >= -1);
+	}
+	free(upi);
+
+	mem_destroy(&mem);
+	mem_init(&mem, TEST_MEM_SIZE);
+
 	// Test writing and reading random values
+	uint64_t addr;
 	enum { NUM_CYCLES = 1000 };
 	for (int i = 0; i < NUM_CYCLES; i++) {
-		uint64_t addr;
 		// Generate random values to read and write
 		uint8_t valread8, valwrite8 = random();
 		uint16_t valread16, valwrite16 = random();
@@ -122,6 +129,8 @@ int main()
 		ret = mem_read32(&mem, addr + 4, &valread32);
 		assert(ret == 0 && valread32 == (valread64 >> 32));
 	}
+
+	mem_destroy(&mem);
 
 	return 0;
 }
