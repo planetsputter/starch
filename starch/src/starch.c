@@ -3,7 +3,6 @@
 #include <string.h>
 
 #include "starch.h"
-#include "stub.h" // Only for error codes
 
 static const char *names[256] = {
 	[op_invalid] = "invalid",
@@ -327,9 +326,9 @@ static const char *names[256] = {
 	[op_nop] = "nop",
 };
 
-const char *name_for_opcode(int opcode)
+const char *name_for_opcode(uint8_t opcode)
 {
-	return ((size_t)opcode < sizeof(names) / sizeof(*names)) ? names[opcode] : NULL;
+	return names[opcode];
 }
 
 int opcode_for_name(const char *name)
@@ -341,7 +340,7 @@ int opcode_for_name(const char *name)
 	return -1;
 }
 
-int imm_count_for_opcode(int opcode)
+int imm_count_for_opcode(uint8_t opcode)
 {
 	int ret = 0;
 
@@ -786,7 +785,7 @@ int size_for_dt(int dt)
 	return 0;
 }
 
-int imm_types_for_opcode(int opcode, int *dts)
+int imm_types_for_opcode(uint8_t opcode, int *dts)
 {
 	int ret = 0;
 
@@ -1163,21 +1162,6 @@ const char *name_for_sterr(int sterr)
 		return "STERR_BAD_ADDR";
 	case STERR_HALT:
 		return "STERR_HALT";
-	// Stub errors
-	case STUB_ERROR_PREMATURE_EOF:
-		return "STUB_ERROR_PREMATURE_EOF";
-	case STUB_ERROR_INVALID_HEADER:
-		return "STUB_ERROR_INVALID_HEADER";
-	case STUB_ERROR_INVALID_SECTION_COUNT:
-		return "STUB_ERROR_INVALID_SECTION_COUNT";
-	case STUB_ERROR_INVALID_FILE_OFFSET:
-		return "STUB_ERROR_INVALID_FILE_OFFSET";
-	case STUB_ERROR_SEEK_ERROR:
-		return "STUB_ERROR_SEEK_ERROR";
-	case STUB_ERROR_INVALID_SECTION_INDEX:
-		return "STUB_ERROR_INVALID_SECTION_INDEX";
-	case STUB_ERROR_WRITE_FAILURE:
-		return "STUB_ERROR_WRITE_FAILURE";
 	}
 	return "STERR_UNKNOWN";
 }

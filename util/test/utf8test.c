@@ -1,4 +1,4 @@
-// test.c
+// utf8test.c
 
 #include <assert.h>
 #include <stdio.h>

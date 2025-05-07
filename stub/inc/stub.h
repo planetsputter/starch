@@ -7,8 +7,6 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include "starch.h"
-
 enum {
 	STUB_FLAG_TEXT = 0,
 	STUB_FLAG_DATA = 1,
@@ -24,7 +22,8 @@ struct stub_sec {
 
 enum {
 	// Begin stub errors after starch errors
-	STUB_ERROR_PREMATURE_EOF = STERR_NUM_ERRORS,
+	STUB_ERROR_NONE = 0,
+	STUB_ERROR_PREMATURE_EOF,
 	STUB_ERROR_INVALID_HEADER,
 	STUB_ERROR_INVALID_SECTION_COUNT,
 	STUB_ERROR_INVALID_FILE_OFFSET,

@@ -109,6 +109,10 @@ void parser_destroy(struct parser *parser)
 		bstr_free(parser->token);
 		parser->token = NULL;
 	}
+	if (parser->defkey) {
+		bstr_free(parser->defkey);
+		parser->defkey = NULL;
+	}
 	smap_destroy(&parser->defs);
 }
 
@@ -136,6 +140,8 @@ enum { // Parser token states
 	PTS_EOL = PTS_IMM + num_dt,
 	PTS_DEF_KEY,
 	PTS_DEF_VAL,
+	PTS_SEC_ADDR,
+	PTS_SEC_FLAGS,
 };
 
 static int parser_finish_token(struct parser *parser)
@@ -143,14 +149,20 @@ static int parser_finish_token(struct parser *parser)
 	if (!parser->token) return 0;
 
 	int ret = 0;
-	const char *symbol = NULL;
+	char *symbol = NULL;
 	if (parser->token[0] == '$') {
-		// Look up an existing symbol definition
-		symbol = smap_get(&parser->defs, parser->token + 1);
-		if (!symbol) {
-			fprintf(stderr, "error: undefined symbol \"%s\" line %d char %d\n",
-				parser->token + 1, parser->tline, parser->tch);
+		if (parser->token[1] == '\0') { // Check for empty symbol name
+			fprintf(stderr, "error: empty symbol name line %d char %d\n",
+				parser->tline, parser->tch);
 			ret = 1;
+		}
+		else { // Look up an existing symbol definition
+			symbol = smap_get(&parser->defs, parser->token + 1);
+			if (!symbol) {
+				fprintf(stderr, "error: undefined symbol \"%s\" line %d char %d\n",
+					parser->token + 1, parser->tline, parser->tch);
+				ret = 1;
+			}
 		}
 	}
 	else {
@@ -158,10 +170,16 @@ static int parser_finish_token(struct parser *parser)
 	}
 
 	if (ret == 0) switch (parser->ts) {
+	//
+	// Default state
+	//
 	case PTS_DEFAULT: {
 		if (parser->token[0] == '.') { // '.' introduces an assembler command
 			if (strcmp(parser->token + 1, "define") == 0) {
 				parser->ts = PTS_DEF_KEY;
+			}
+			else if (strcmp(parser->token + 1, "section") == 0) {
+				parser->ts = PTS_SEC_ADDR;
 			}
 			// @todo: allow to ".include" a file
 			else {
@@ -216,6 +234,9 @@ static int parser_finish_token(struct parser *parser)
 		}
 	}	break;
 
+	//
+	// Parse immediate value
+	//
 	case PTS_IMM + dt_a8:
 	case PTS_IMM + dt_u8:
 	case PTS_IMM + dt_i8:
@@ -264,23 +285,45 @@ static int parser_finish_token(struct parser *parser)
 		parser->ts = PTS_EOL; // Expect end of line
 	}	break;
 
+	//
+	// Expect end of line
+	//
 	case PTS_EOL:
 		fprintf(stderr, "error: expected eol at line %d char %d\n", parser->tline, parser->tch);
 		ret = 1;
 		break;
 
+	//
+	// Symbol definition
+	//
 	case PTS_DEF_KEY: // Symbol definition key
-		parser->defkey = parser->token;
-		parser->token = NULL;
+		if (symbol == parser->token) { // No lookup was performed
+			parser->defkey = parser->token;
+			parser->token = NULL;
+		}
+		else { // Lookup was performed
+			parser->defkey = bstr_dup(symbol);
+		}
 		parser->ts = PTS_DEF_VAL;
 		break;
-
 	case PTS_DEF_VAL: // Symbol definition value
+		if (symbol == parser->token) { // No lookup was performed
+			parser->token = NULL;
+		}
+		else { // Lookup was performed
+			symbol = bstr_dup(symbol);
+		}
 		// smap takes ownership of the strings
-		smap_insert(&parser->defs, parser->defkey, parser->token);
-		parser->token = NULL;
+		smap_insert(&parser->defs, parser->defkey, symbol);
+		parser->defkey = NULL;
 		parser->ts = PTS_EOL;
 		break;
+
+	//
+	// Section
+	//
+	case PTS_SEC_ADDR:
+		// @todo
 
 	default:
 		fprintf(stderr, "error: bad token state\n");
@@ -395,13 +438,6 @@ int parser_can_terminate(struct parser *parser)
 		parser->token == NULL &&
 		(parser->ts == PTS_DEFAULT || parser->ts == PTS_EOL);
 }
-
-// Assembler commands
-enum {
-	AC_NONE = 0,
-	AC_DEFINE_KEY,
-	AC_DEFINE_VAL,
-};
 
 int parser_terminate(struct parser *parser)
 {

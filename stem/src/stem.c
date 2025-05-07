@@ -6,7 +6,7 @@
 #include "core.h"
 #include "mem.h"
 #include "starch.h"
-#include "starg.h"
+#include "carg.h"
 #include "stub.h"
 
 // Variables set by command-line arguments
@@ -15,9 +15,9 @@ const char *arg_dump = NULL;
 const char *arg_help = NULL;
 const char *arg_image = NULL;
 
-struct arg_desc arg_descs[] = {
+struct carg_desc arg_descs[] = {
 	{
-		ARG_TYPE_UNARY,
+		CARG_TYPE_UNARY,
 		'h',
 		"--help",
 		&arg_help,
@@ -26,7 +26,7 @@ struct arg_desc arg_descs[] = {
 		NULL
 	},
 	{
-		ARG_TYPE_NAMED,
+		CARG_TYPE_NAMED,
 		'c',
 		"--cycles",
 		&arg_cycles,
@@ -35,7 +35,7 @@ struct arg_desc arg_descs[] = {
 		"cycles"
 	},
 	{
-		ARG_TYPE_NAMED,
+		CARG_TYPE_NAMED,
 		'd',
 		"--dump",
 		&arg_dump,
@@ -44,7 +44,7 @@ struct arg_desc arg_descs[] = {
 		"dump"
 	},
 	{
-		ARG_TYPE_POSITIONAL,
+		CARG_TYPE_POSITIONAL,
 		'\0',
 		NULL,
 		&arg_image,
@@ -52,11 +52,11 @@ struct arg_desc arg_descs[] = {
 		"starch image",
 		"image"
 	},
-	{ ARG_TYPE_NONE }
+	{ CARG_TYPE_NONE }
 };
 
 bool non_help_arg = false;
-void detect_non_help_arg(struct arg_desc *desc, const char*)
+void detect_non_help_arg(struct carg_desc *desc, const char*)
 {
 	if (desc->value != &arg_help) {
 		non_help_arg = true;
@@ -66,7 +66,7 @@ void detect_non_help_arg(struct arg_desc *desc, const char*)
 int main(int argc, const char *argv[])
 {
 	// Parse command-line arguments
-	enum arg_error parse_error = parse_args(
+	enum carg_error parse_error = carg_parse_args(
 		arg_descs,
 		detect_non_help_arg,
 		NULL,
@@ -78,15 +78,15 @@ int main(int argc, const char *argv[])
 		if (non_help_arg) {// Other arguments present
 			fprintf(stderr, "warning: Only printing usage. Other arguments present\n");
 		}
-		print_usage(argv[0], arg_descs);
-		return parse_error != ARG_ERROR_NONE;
+		carg_print_usage(argv[0], arg_descs);
+		return parse_error != CARG_ERROR_NONE;
 	}
-	if (parse_error != ARG_ERROR_NONE) {
+	if (parse_error != CARG_ERROR_NONE) {
 		// Parse arguments again, printing errors
-		parse_error = parse_args(
+		parse_error = carg_parse_args(
 			arg_descs,
 			NULL,
-			print_arg_error,
+			carg_print_error,
 			argc,
 			argv
 		);

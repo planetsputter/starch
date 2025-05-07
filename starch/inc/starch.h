@@ -320,26 +320,26 @@ enum {
 	//
 	// Special Operations
 	//
-	op_setsbp, // Set SBP to top 8 byte address
-	op_setsfp, // Set SFP to top 8 byte address
-	op_setsp,  // Set SP to top 8 byte address
-	op_setslp, // Set SLP to top 8 byte address
+	op_setsbp, // Set SBP 8 byte imm
+	op_setsfp, // Set SFP to 8 byte imm
+	op_setsp,  // Set SP to 8 byte imm
+	op_setslp, // Set SLP to 8 byte imm
 	op_halt,   // Halts the processor
 	op_ext,    // Introduces an extended operation
 	op_nop,    // No op
 };
 
-// Returns the name of the given opcode, or NULL on error
-const char *name_for_opcode(int);
+// Returns the name of the given opcode, or NULL for an invalid opcode
+const char *name_for_opcode(uint8_t);
 
 // Returns the opcode for the given name, or -1 on error
 int opcode_for_name(const char*);
 
 // Returns the number of immediate arguments required by the given opcode, or -1 on error
-int imm_count_for_opcode(int);
+int imm_count_for_opcode(uint8_t);
 
 //
-// Data types
+// Starch data types
 //
 enum {
 	dt_a8,  // Any 1 byte quantity
@@ -366,7 +366,7 @@ int size_for_dt(int dt);
 // Get the data types of the immediate arguments for the given opcode.
 // Use imm_count_for_opcode() to determine the minimum length of dts.
 // Returns 0 on success.
-int imm_types_for_opcode(int opcode, int *dts);
+int imm_types_for_opcode(uint8_t opcode, int *dts);
 
 //
 // Constants

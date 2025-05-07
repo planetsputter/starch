@@ -14,11 +14,11 @@ struct Token;
 // Parses a starch assembly file
 struct parser {
 	struct utf8_decoder decoder;
-	uint8_t ss, ts;
+	uint8_t ss, ts; // Syntax state, token state
 	int line, ch, tline, tch; // Current and token line and char
-	char *token;
+	char *token; // Current token
 	char *defkey;
-	struct smap defs;
+	struct smap defs; // Symbol definitions
 	FILE *outfile;
 };
 
@@ -31,7 +31,7 @@ void parser_destroy(struct parser*);
 // Parses the given byte
 int parser_parse_byte(struct parser*, byte b);
 
-// Returns whether the parser can terminate, which is whether the UTF8 decoder can terminate
+// Returns whether the parser input can terminate now
 int parser_can_terminate(struct parser*);
 
 // Finishes parsing the input data and writing to the output file.

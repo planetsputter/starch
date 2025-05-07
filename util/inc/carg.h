@@ -1,4 +1,4 @@
-// starg.h
+// carg.h
 // Command-line argument parsing
 
 #pragma once
@@ -7,39 +7,39 @@
 #include <stdio.h>
 
 // Enumerates the errors which may occur while parsing arguments
-enum arg_error
+enum carg_error
 {
-	ARG_ERROR_NONE = 0,
-	ARG_ERROR_MISSING_REQUIRED_ARGUMENT,
-	ARG_ERROR_MISSING_NAMED_VALUE,
-	ARG_ERROR_UNEXPECTED_ARGUMENT,
-	ARG_ERROR_UNRECOGNIZED_FLAG,
-	ARG_ERROR_UNEXPECTED_NAMED_ARGUMENT_FLAG,
+	CARG_ERROR_NONE = 0,
+	CARG_ERROR_MISSING_REQUIRED_ARGUMENT,
+	CARG_ERROR_MISSING_NAMED_VALUE,
+	CARG_ERROR_UNEXPECTED_ARGUMENT,
+	CARG_ERROR_UNRECOGNIZED_FLAG,
+	CARG_ERROR_UNEXPECTED_NAMED_ARGUMENT_FLAG,
 };
 
 // Handler for errors that may occur when parsing command-line arguments.
 // Called with the type of error and the argument which caused it.
 // Returns whether the application should continue to parse arguments.
-typedef bool (*arg_error_handler)(enum arg_error, const char *arg);
+typedef bool (*carg_error_handler)(enum carg_error, const char *arg);
 
 // Prints a description of the given argument error to stderr.
 // Useful as a typical argument error handler.
-bool print_arg_error(enum arg_error, const char *arg);
+bool carg_print_error(enum carg_error, const char *arg);
 
 // Enumerates the types of arguments which the program may accept
-enum arg_type
+enum carg_type
 {
-	ARG_TYPE_NONE,
-	ARG_TYPE_UNARY,
-	ARG_TYPE_NAMED,
-	ARG_TYPE_POSITIONAL,
+	CARG_TYPE_NONE,
+	CARG_TYPE_UNARY,
+	CARG_TYPE_NAMED,
+	CARG_TYPE_POSITIONAL,
 };
 
 // Structure which describes an argument the program may accept
-struct arg_desc
+struct carg_desc
 {
 	// The type of this argument
-	enum arg_type type;
+	enum carg_type type;
 	// A single character flag for this argument or '\0' if there is none
 	char flag;
 	// The name of the argument. For instance, "--foo" or "--bar".
@@ -61,19 +61,19 @@ struct arg_desc
 
 // Handler for arguments encountered when parsing command-line arguments.
 // Called with the description of the argument and the argument value.
-typedef void (*arg_handler)(struct arg_desc *desc, const char *arg);
+typedef void (*carg_handler)(struct carg_desc *desc, const char *arg);
 
 // Parses command-line arguments as they are received by the program based on the given array
 // of argument descriptions.
 // Returns an error code.
-enum arg_error parse_args(
+enum carg_error carg_parse_args(
 	// Array of descriptions of arguments accepted by the program terminated by
 	// an entry with type ARG_TYPE_NONE
-	struct arg_desc *descs,
+	struct carg_desc *descs,
 	// Handler to be invoked for arguments encountered during parsing or NULL
-	arg_handler handler,
+	carg_handler handler,
 	// Handler to be invoked for errors that occur during parsing or NULL
-	arg_error_handler error_handler,
+	carg_error_handler error_handler,
 	// Number of command-line arguments as received by the program
 	int argc,
 	// Array of command-line argument values as received by the program
@@ -82,4 +82,4 @@ enum arg_error parse_args(
 
 // Prints a usage statement to stdout based on the given list of possible arguments.
 // Returns zero on success, non-zero on error.
-int print_usage(const char *pgm, const struct arg_desc *descs);
+int carg_print_usage(const char *pgm, const struct carg_desc *descs);

@@ -1,9 +1,12 @@
 #!/usr/bin/bash
 
+# Run trap on error, even within functions.
+# Expansion of undefined variables is an error.
 set -Eeu
 
 trap 'echo test failed on line $LINENO' ERR
 
+# Make test directory
 mkdir -p test
 cd test
 
@@ -13,11 +16,11 @@ STEM=../stem/bin/stem
 
 # Run unit test executables
 echo testing smap
-../starch/test/smaptest
+../util/test/smaptest
 echo testing emulated memory
 ../stem/test/memtest
 echo testing utf8 library
-../utf8/test/test
+../util/test/utf8test
 
 # Check for symmetric dis/assembly of opcodes with zero immediates
 check_op0() {
