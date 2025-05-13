@@ -13,7 +13,8 @@ struct smap {
 	void (*dealloc)(char*);
 };
 
-// Initializes the given smap with the given deallocation function
+// Initializes the given smap with the given deallocation function, or NULL
+// if no deallocation is to be performed.
 void smap_init(struct smap*, void (*dealloc)(char*));
 
 // Destroys the given smap
