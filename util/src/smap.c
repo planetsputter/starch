@@ -31,6 +31,7 @@ static void smap_node_delete(struct smap *smap, struct smap_node *node)
 	free(node);
 }
 
+// Updates the depth of the given node based on the depths of its children
 static void smap_node_update_depth(struct smap_node *node)
 {
 	if (node->prev) {
@@ -53,10 +54,34 @@ static void smap_node_update_depth(struct smap_node *node)
 	}
 }
 
+// Performs a binary tree left rotation. *node must have a non-NULL next member.
+static struct smap_node *smap_node_left_rotate(struct smap_node *node)
+{
+	struct smap_node *newroot = node->next;
+	struct smap_node *mid = newroot->prev;
+	newroot->prev = node;
+	node->next = mid;
+	smap_node_update_depth(node);
+	smap_node_update_depth(newroot);
+	return newroot;
+}
+
+// Performs a binary tree right rotation. *node must have a non-NULL prev member.
+static struct smap_node *smap_node_right_rotate(struct smap_node *node)
+{
+	struct smap_node *newroot = node->prev;
+	struct smap_node *mid = newroot->next;
+	newroot->next = node;
+	node->prev = mid;
+	smap_node_update_depth(node);
+	smap_node_update_depth(newroot);
+	return newroot;
+}
+
 // Rebalance the tree beginning at the given node, returning the new root
 static struct smap_node *smap_node_rebalance(struct smap_node *node)
 {
-	struct smap_node *newroot, *mid;
+	struct smap_node *newroot;
 	if ((!node->prev && node->depth > 1) ||
 		(node->prev && node->depth > node->prev->depth + 2)) {
 		// node->next has too much depth
@@ -64,20 +89,10 @@ static struct smap_node *smap_node_rebalance(struct smap_node *node)
 		// node->next->next is going to move closer to root
 		if (!node->next->next || node->next->next->depth < node->next->depth - 1) {
 			// Greater depth comes from node->next->prev. Double-rotation is needed.
-			newroot = node->next->prev;
-			mid = newroot->next;
-			newroot->next = node->next;
-			node->next->prev = mid;
-			node->next = newroot;
-			smap_node_update_depth(newroot->next);
-			smap_node_update_depth(newroot);
+			node->next = smap_node_right_rotate(node->next);
 		}
-		newroot = node->next;
-		mid = newroot->prev;
-		newroot->prev = node;
-		node->next = mid;
-		smap_node_update_depth(node);
-		smap_node_update_depth(newroot);
+		// Left-rotate
+		newroot = smap_node_left_rotate(node);
 	}
 	else if ((!node->next && node->depth > 1) ||
 		(node->next && node->depth > node->next->depth + 2)) {
@@ -86,20 +101,10 @@ static struct smap_node *smap_node_rebalance(struct smap_node *node)
 		// node->prev->prev is going to move closer to root
 		if (!node->prev->prev || node->prev->prev->depth < node->prev->depth - 1) {
 			// Greater depth comes from node->prev->next. Double-rotation is needed.
-			newroot = node->prev->next;
-			mid = newroot->prev;
-			newroot->prev = node->prev;
-			node->prev->next = mid;
-			node->prev = newroot;
-			smap_node_update_depth(newroot->prev);
-			smap_node_update_depth(newroot);
+			node->prev = smap_node_left_rotate(node->prev);
 		}
-		newroot = node->prev;
-		mid = newroot->next;
-		newroot->next = node;
-		node->prev = mid;
-		smap_node_update_depth(node);
-		smap_node_update_depth(newroot);
+		// Right-rotate
+		newroot = smap_node_right_rotate(node);
 	}
 	else {
 		// No rotation necessary
@@ -128,13 +133,13 @@ static char *smap_node_get(struct smap *smap, struct smap_node *node, const char
 
 static struct smap_node *smap_node_insert(struct smap *smap, struct smap_node *node, char *key, char *val)
 {
-	// @todo: rebalance
 	if (!node) { // No match found, allocate a new node
 		struct smap_node *node = (struct smap_node*)malloc(sizeof(struct smap_node));
 		smap_node_init(node, key, val);
 		return node;
 	}
 
+	// Search for a matching node
 	struct smap_node *retnode;
 	int comp = strcmp(key, node->key);
 	if (comp > 0) {

@@ -42,6 +42,7 @@ static void mem_node_destroy(struct mem_node *node)
 	free(node);
 }
 
+// Updates the depth of the given node based on the depths of its children
 static void mem_node_update_depth(struct mem_node *node)
 {
 	if (node->prev) {
@@ -64,10 +65,34 @@ static void mem_node_update_depth(struct mem_node *node)
 	}
 }
 
+// Performs a binary tree left rotation. *node must have a non-NULL next member.
+static struct mem_node *mem_node_left_rotate(struct mem_node *node)
+{
+	struct mem_node *newroot = node->next;
+	struct mem_node *mid = newroot->prev;
+	newroot->prev = node;
+	node->next = mid;
+	mem_node_update_depth(node);
+	mem_node_update_depth(newroot);
+	return newroot;
+}
+
+// Performs a binary tree right rotation. *node must have a non-NULL prev member.
+static struct mem_node *mem_node_right_rotate(struct mem_node *node)
+{
+	struct mem_node *newroot = node->prev;
+	struct mem_node *mid = newroot->next;
+	newroot->next = node;
+	node->prev = mid;
+	mem_node_update_depth(node);
+	mem_node_update_depth(newroot);
+	return newroot;
+}
+
 // Rebalance the tree beginning at the given node, returning the new root
 static struct mem_node *mem_node_rebalance(struct mem_node *node)
 {
-	struct mem_node *newroot, *mid;
+	struct mem_node *newroot;
 	if ((!node->prev && node->depth > 1) ||
 		(node->prev && node->depth > node->prev->depth + 2)) {
 		// node->next has too much depth
@@ -75,20 +100,10 @@ static struct mem_node *mem_node_rebalance(struct mem_node *node)
 		// node->next->next is going to move closer to root
 		if (!node->next->next || node->next->next->depth < node->next->depth - 1) {
 			// Greater depth comes from node->next->prev. Double-rotation is needed.
-			newroot = node->next->prev;
-			mid = newroot->next;
-			newroot->next = node->next;
-			node->next->prev = mid;
-			node->next = newroot;
-			mem_node_update_depth(newroot->next);
-			mem_node_update_depth(newroot);
+			node->next = mem_node_right_rotate(node->next);
 		}
-		newroot = node->next;
-		mid = newroot->prev;
-		newroot->prev = node;
-		node->next = mid;
-		mem_node_update_depth(node);
-		mem_node_update_depth(newroot);
+		// Left-rotate
+		newroot = mem_node_left_rotate(node);
 	}
 	else if ((!node->next && node->depth > 1) ||
 		(node->next && node->depth > node->next->depth + 2)) {
@@ -97,20 +112,10 @@ static struct mem_node *mem_node_rebalance(struct mem_node *node)
 		// node->prev->prev is going to move closer to root
 		if (!node->prev->prev || node->prev->prev->depth < node->prev->depth - 1) {
 			// Greater depth comes from node->prev->next. Double-rotation is needed.
-			newroot = node->prev->next;
-			mid = newroot->prev;
-			newroot->prev = node->prev;
-			node->prev->next = mid;
-			node->prev = newroot;
-			mem_node_update_depth(newroot->prev);
-			mem_node_update_depth(newroot);
+			node->prev = mem_node_left_rotate(node->prev);
 		}
-		newroot = node->prev;
-		mid = newroot->next;
-		newroot->next = node;
-		node->prev = mid;
-		mem_node_update_depth(node);
-		mem_node_update_depth(newroot);
+		// Right-rotate
+		newroot = mem_node_right_rotate(node);
 	}
 	else {
 		// No rotation necessary
