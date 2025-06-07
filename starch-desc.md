@@ -38,6 +38,8 @@ To call a function that takes arguments, arguments are pushed onto the stack beg
 |         | RETV                  |
 |         | Called function data  |
 
+Note that while function arguments are pushed to the stack from last to first, the last argument pushed being thought of as the "leftmost", individual instructions which perform a non-commutative operation such as subtraction typically consider the last argument pushed to be the "rightmost". This is to be more similar to postfix notation. These instructions also typically have an order-reversed variant.
+
 Functions are prohibited by the memory management unit from accessing (reading or writing) stack frame control data, that is, data at addresses from SFP to SFP + 15, inclusively. This helps prevent certain classes of attacks which seek to overwrite the return pointer of a function and transfer control to insecure code.
 
 Instruction Set
@@ -298,15 +300,15 @@ These instructions result in a Boolean value, either a zero or a one, replacing 
 | cltei32   | PC + 1   | ai32, bi32   | ai32 <= bi32 |
 | cltei64   | PC + 1   | ai64, bi64   | ai64 <= bi64 |
 
-### Call and Return Instructions
+### Function Call and Return Instructions
 
 These instructions call functions and return from them. Variants with an "s" use an address on the stack.
 
-| Op Code   | PC After   | Stack Before                  | Stack After | SFP After   |
-|:--------- |:---------- |:----------------------------- |:----------- |:----------- |
-| call      | (PC + 1)64 |                               | SFP64, PC64 | SP - 16     |
-| calls     | a64        | a64                           | SFP64, PC64 | SP - 8      |
-| ret       | (SFP)64    | PSFP64, RETA64 @ SFP64, [...] |             | (SFP + 8)64 |
+| Op Code   | PC After   | Stack Before                  | Stack After     | SFP After   |
+|:--------- |:---------- |:----------------------------- |:--------------- |:----------- |
+| call      | (PC + 1)64 |                               | SFP64, PC64 + 9 | SP - 16     |
+| calls     | a64        | a64                           | SFP64, PC64 + 1 | SP - 8      |
+| ret       | (SFP)64    | PSFP64, RETA64 @ SFP64, [...] |                 | (SFP + 8)64 |
 
 ### Branching Instructions
 
@@ -319,22 +321,29 @@ These instructions can transfer control flow to a non-sequential instruction.
 |  rjmpi8   | PC +  (PC + 1)i8 |              |             |
 | rjmpi16   | PC + (PC + 1)i16 |              |             |
 | rjmpi32   | PC + (PC + 1)i32 |              |             |
-| rjmpi64   | PC + (PC + 1)i64 |              |             |
 
 ### Conditional Branching Instructions
 
-These instructions will transfer control flow to an immediate address if their argument is non-zero.
+These instructions will transfer control flow to a non-sequential instruction if their argument is non-zero.
 
-| Op Code   | PC After                                | Stack Before | Stack After |
-|:--------- |:--------------------------------------- |:------------ |:----------- |
-|  brnz8    | if  a8 then (PC + 1)64 else PC + 9      |  a8          |             |
-| brnz16    | if a16 then (PC + 1)64 else PC + 9      | a16          |             |
-| brnz32    | if a32 then (PC + 1)64 else PC + 9      | a32          |             |
-| brnz64    | if a64 then (PC + 1)64 else PC + 9      | a64          |             |
-|  rbrnz8   | if  a8 then PC + (PC + 1)64 else PC + 9 |  a8          |             |
-| rbrnz16   | if a16 then PC + (PC + 1)64 else PC + 9 | a16          |             |
-| rbrnz32   | if a32 then PC + (PC + 1)64 else PC + 9 | a32          |             |
-| rbrnz64   | if a64 then PC + (PC + 1)64 else PC + 9 | a64          |             |
+| Op Code    | PC After                                 | Stack Before | Stack After |
+|:---------- |:---------------------------------------- |:------------ |:----------- |
+|  brnz8     | if  a8 then (PC + 1)64 else PC + 9       |  a8          |             |
+| brnz16     | if a16 then (PC + 1)64 else PC + 9       | a16          |             |
+| brnz32     | if a32 then (PC + 1)64 else PC + 9       | a32          |             |
+| brnz64     | if a64 then (PC + 1)64 else PC + 9       | a64          |             |
+|  rbrnz8i8  | if  a8 then PC + (PC + 1)i8  else PC + 2 |  a8          |             |
+|  rbrnz8i16 | if  a8 then PC + (PC + 1)i16 else PC + 3 |  a8          |             |
+|  rbrnz8i32 | if  a8 then PC + (PC + 1)i32 else PC + 5 |  a8          |             |
+| rbrnz16i8  | if a16 then PC + (PC + 1)i8  else PC + 2 | a16          |             |
+| rbrnz16i16 | if a16 then PC + (PC + 1)i16 else PC + 3 | a16          |             |
+| rbrnz16i32 | if a16 then PC + (PC + 1)i32 else PC + 5 | a16          |             |
+| rbrnz32i8  | if a32 then PC + (PC + 1)i8  else PC + 2 | a32          |             |
+| rbrnz32i16 | if a32 then PC + (PC + 1)i16 else PC + 3 | a32          |             |
+| rbrnz32i32 | if a32 then PC + (PC + 1)i32 else PC + 5 | a32          |             |
+| rbrnz64i8  | if a64 then PC + (PC + 1)i8  else PC + 2 | a64          |             |
+| rbrnz64i16 | if a64 then PC + (PC + 1)i16 else PC + 3 | a64          |             |
+| rbrnz64i32 | if a64 then PC + (PC + 1)i32 else PC + 5 | a64          |             |
 
 ### Memory Operations
 
