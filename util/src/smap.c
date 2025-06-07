@@ -8,7 +8,7 @@
 struct smap_node {
 	char *key, *val;
 	struct smap_node *prev, *next;
-	int depth;
+	unsigned char depth;
 };
 
 static void smap_node_init(struct smap_node *node, char *key, char *val)
@@ -16,7 +16,6 @@ static void smap_node_init(struct smap_node *node, char *key, char *val)
 	memset(node, 0, sizeof(struct smap_node));
 	node->key = key;
 	node->val = val;
-	node->depth = 0;
 }
 
 static void smap_node_delete(struct smap *smap, struct smap_node *node)
@@ -35,9 +34,9 @@ static void smap_node_delete(struct smap *smap, struct smap_node *node)
 static void smap_node_update_depth(struct smap_node *node)
 {
 	if (node->prev) {
-		int prevdepth = node->prev->depth;
+		unsigned char prevdepth = node->prev->depth;
 		if (node->next) {
-			int nextdepth = node->next->depth;
+			unsigned char nextdepth = node->next->depth;
 			node->depth = prevdepth > nextdepth ? prevdepth + 1 : nextdepth + 1;
 		}
 		else {

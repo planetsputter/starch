@@ -12,16 +12,41 @@
 enum {
 	TEST_SIZE = 16
 };
-const char *testkeys = "kkkkkkkkkkkkkkkk";
-const char *testvals = "vvvvvvvvvvvvvvvv";
+static char testkeys[TEST_SIZE + 1];
+static char testvals[TEST_SIZE + 1];
 
-void str_free(char *str)
+static void str_free(char *str)
 {
 	free(str);
 }
 
+static void test_depth(const struct smap_node *node)
+{
+	int maxd = -1, prevd = -1, nextd = -1;
+	if (node->prev) {
+		test_depth(node->prev);
+		prevd = node->prev->depth;
+		if (prevd > maxd) maxd = prevd;
+	}
+	if (node->next) {
+		test_depth(node->next);
+		nextd = node->next->depth;
+		if (nextd > maxd) maxd = nextd;
+	}
+	int diffd = prevd - nextd;
+	assert(node->depth == maxd + 1 && diffd <= 1 && diffd >= -1);
+}
+
 int main()
 {
+	// Initialize test keys and values arrays
+	for (int i = 0; i < TEST_SIZE; i++) {
+		testkeys[i] = 'k';
+		testvals[i] = 'v';
+	}
+	testkeys[TEST_SIZE] = '\0';
+	testvals[TEST_SIZE] = '\0';
+
 	// Initialize with no deallocation function so we can use string literals
 	struct smap smap;
 	smap_init(&smap, NULL);
@@ -45,23 +70,15 @@ int main()
 	//
 	// Test tree balancing
 	//
-	for (int i = 0; i < TEST_SIZE; i++) {
+	for (int i = 0; i < TEST_SIZE * 2; i++) {
 		// Insert random key and value
 		int j = random() % TEST_SIZE;
 		smap_insert(&smap, (char*)testkeys + j, (char*)testvals + j);
 		assert(smap.root != NULL);
-		// Check depth
-		int maxd = -1, prevd = -1, nextd = -1;
-		if (smap.root->prev) {
-			prevd = smap.root->prev->depth;
-			if (prevd > maxd) maxd = prevd;
-		}
-		if (smap.root->next) {
-			nextd = smap.root->next->depth;
-			if (nextd > maxd) maxd = nextd;
-		}
-		int diffd = prevd - nextd;
-		assert(smap.root->depth == maxd + 1 && diffd <= 1 && diffd >= -1);
+		// Check depth of all nodes
+		test_depth(smap.root);
+		// Check that value was associated with key
+		assert(strcmp(smap_get(&smap, (char*)testkeys + j), (char*)testvals + j) == 0);
 	}
 
 	// Re-init for C-strings
@@ -72,15 +89,18 @@ int main()
 	// Test with C-string
 	assert(smap_get(&smap, "testkey") == NULL);
 	smap_insert(&smap, strdup("testkey"), strdup("testval"));
-	assert(smap_get(&smap, "testkey") != NULL);
+	assert(strcmp(smap_get(&smap, "testkey"), "testval") == 0);
+
+	// Re-init for B-strings
 	smap_destroy(&smap);
+	assert(smap.root == NULL);
 	assert(smap_get(&smap, "testkey") == NULL);
+	smap_init(&smap, bstr_free);
 
 	// Test with B-string
-	smap_init(&smap, bstr_free);
 	assert(smap_get(&smap, "testkey") == NULL);
 	smap_insert(&smap, bstr_dup("testkey"), bstr_dup("testval"));
-	assert(smap_get(&smap, "testkey") != NULL);
+	assert(strcmp(smap_get(&smap, "testkey"), "testval") == 0);
 	smap_destroy(&smap);
 	assert(smap_get(&smap, "testkey") == NULL);
 
