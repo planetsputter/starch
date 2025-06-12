@@ -134,6 +134,8 @@ if __name__ == '__main__':
 		args.targets.remove('clean')
 		if pathlib.Path('.build').exists():
 			shutil.rmtree('.build')
+	if len(args.targets) == 0:
+		exit(0)
 
 	# Process the config file, generating dependencies
 	cfg_targets = None
@@ -141,7 +143,7 @@ if __name__ == '__main__':
 		cfg_targets = process_cfg(args.file)
 	except Exception as e:
 		print('an error occurred processing %s: %s' % (args.file, e))
-		sys.exit(1)
+		exit(1)
 
 	# Build each specified target
 	try:
