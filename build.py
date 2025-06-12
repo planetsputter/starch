@@ -85,6 +85,7 @@ def process_cfg(filename):
 		if target_type == 'bin':
 			mf.write('\t%s -o $@ %s %s\n' % (compiler, obj_esc, flags))
 		elif target_type == 'lib':
+			mf.write('\trm $@\n')
 			mf.write('\tar -crs $@ %s\n' % obj_esc)
 		elif target_type == 'so':
 			raise Exception('unimplemented')
