@@ -9,6 +9,13 @@
 
 #include "stub.h"
 
+void stub_sec_init(struct stub_sec *sec, uint64_t addr, uint8_t flags, uint64_t size)
+{
+	sec->addr = addr;
+	sec->flags = flags;
+	sec->size = size;
+}
+
 enum {
 	STUB_HEADER_SIZE = 4,
 	STUB_SECTION_HEADER_SIZE = 25,
@@ -297,6 +304,9 @@ int stub_save_section(FILE *file, int index, struct stub_sec *sec)
 	int maxnsec = 0, nsec = 0;
 	int ret = stub_get_section_counts(file, &maxnsec, &nsec);
 	if (ret) return ret;
+	if (index > nsec || index >= maxnsec) {
+		return STUB_ERROR_INVALID_SECTION_INDEX;
+	}
 
 	// Determine the efo of the previous section.
 	// For section 0, this is calculated from the maximum number of sections.
@@ -340,6 +350,17 @@ int stub_save_section(FILE *file, int index, struct stub_sec *sec)
 
 	// Set the actual section size
 	sec->size = (uint64_t)fpos - prev_efo;
+
+	if (index == nsec) { // Saving this section increased the number of sections by one
+		if (fseek(file, STUB_HEADER_SIZE + 4, SEEK_SET)) {
+			return STUB_ERROR_SEEK_ERROR;
+		}
+		u32_to_little4(index + 1, temp_array);
+		bc = fwrite(temp_array, 1, 4, file);
+		if (bc != 4) {
+			return STUB_ERROR_PREMATURE_EOF;
+		}
+	}
 
 	// Seek to the original position
 	if (fseek(file, fpos, SEEK_SET)) {

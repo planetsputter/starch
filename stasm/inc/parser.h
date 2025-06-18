@@ -1,4 +1,6 @@
 // parser.h
+//
+// Parser for a Starch assembly file.
 
 #pragma once
 
@@ -8,32 +10,66 @@
 #include "smap.h"
 #include "utf8.h"
 
-// A token is a structure used internally by the parser
-struct Token;
+// Parser event types
+enum parser_event_type {
+	PET_NONE = 0,
+	PET_INST, // Instruction emitted
+	PET_SECTION, // Begin new section
+};
 
-// Parses a starch assembly file
+// Structure representing an event emitted by the parser
+struct parser_event {
+	enum parser_event_type type;
+	union {
+		struct { // For PET_INST
+			uint8_t opcode; // Starch opcode, or negative for empty
+			uint8_t immlen; // Length of immediate data
+			uint8_t imm[8]; // Immediate data
+		} inst;
+		struct { // For PET_SECTION
+			uint64_t addr;
+			uint8_t flags;
+		} sec;
+	};
+};
+
+// Initializes the parser event
+void parser_event_init(struct parser_event*);
+
+// Prints the parser event to the given file
+int parser_event_print(const struct parser_event*, FILE*);
+
+// Structure for parsing a starch assembly file
 struct parser {
 	struct utf8_decoder decoder;
 	uint8_t ss, ts; // Syntax state, token state
 	int line, ch, tline, tch; // Current and token line and char
 	char *token; // Current token
+	struct parser_event event; // Current parser event
 	char *defkey;
 	struct smap defs; // Symbol definitions
-	FILE *outfile;
 };
 
-// Initializes the parser and the given output stub file
-int parser_init(struct parser*, FILE *outfile);
+// Initializes the parser
+void parser_init(struct parser*);
 
 // Destroys the parser
 void parser_destroy(struct parser*);
 
-// Parses the given byte
-int parser_parse_byte(struct parser*, byte b);
+// @todo: Function to parse each byte in a given FILE
+
+// Parses the given byte, possibly generating an event.
+// Returns 0 on success.
+int parser_parse_byte(struct parser*, byte b, struct parser_event*);
+
+// Parses all characters in the given string.
+// Returns 0 on success.
+// @todo: How to handle multiple events?
+int parser_parse_string(struct parser*, const char *s);
 
 // Returns whether the parser input can terminate now
 int parser_can_terminate(struct parser*);
 
-// Finishes parsing the input data and writing to the output file.
+// Finishes parsing the input data.
 // Returns 0 on success.
-int parser_terminate(struct parser*);
+int parser_terminate(struct parser*, struct parser_event*);

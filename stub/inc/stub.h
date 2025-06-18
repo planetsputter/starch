@@ -18,6 +18,9 @@ struct stub_sec {
 	uint64_t size;
 };
 
+// Initialize the given section
+void stub_sec_init(struct stub_sec*, uint64_t addr, uint8_t flags, uint64_t size);
+
 // Stub errors
 enum {
 	STUB_ERROR_NONE = 0,
@@ -53,5 +56,6 @@ int stub_init(FILE *file, int maxnsec);
 
 // Sets the address and flags for the given section in the given stub file,
 // using the current file position as the section end to determine the section size.
+// Updates the size member of the given section structure.
 // Returns 0 on success.
 int stub_save_section(FILE *file, int index, struct stub_sec *sec);

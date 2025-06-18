@@ -8,7 +8,6 @@
 #include "bstr.h"
 #include "parser.h"
 #include "starch.h"
-#include "stub.h"
 
 // Parse an integer literal. Returns whether the conversion was successful.
 static bool parse_int(const char *s, long long *val)
@@ -92,15 +91,62 @@ static bool parse_int(const char *s, long long *val)
 	return true;
 }
 
-int parser_init(struct parser *parser, FILE *outfile)
+// Write the 64-bit unsigned value to eight bytes in little-endian order
+static void u64_to_little8(uint64_t val, uint8_t *data)
+{
+	data[0] = val;
+	data[1] = val >> 8;
+	data[2] = val >> 16;
+	data[3] = val >> 24;
+	data[4] = val >> 32;
+	data[5] = val >> 40;
+	data[6] = val >> 48;
+	data[7] = val >> 56;
+}
+
+static uint64_t little8_to_u64(const uint8_t *data)
+{
+	return (uint64_t)data[0] | ((uint64_t)data[1] << 8) |
+		((uint64_t)data[2] << 16) | ((uint64_t)data[3] << 24) |
+		((uint64_t)data[4] << 32) | ((uint64_t)data[5] << 40) |
+		((uint64_t)data[6] << 48) | ((uint64_t)data[7] << 56);
+}
+
+void parser_event_init(struct parser_event *pe)
+{
+	memset(pe, 0, sizeof(*pe));
+}
+
+int parser_event_print(const struct parser_event *pe, FILE *outfile)
+{
+	switch (pe->type) {
+	case PET_NONE: break;
+	case PET_INST: {
+		const char *name = name_for_opcode(pe->inst.opcode);
+		fprintf(outfile, "%s", name ? name : "unknown_opcode");
+		int immCount = imm_count_for_opcode(pe->inst.opcode);
+		if (immCount) { // @todo: Handle more than one immediate value
+			fprintf(outfile, " 0x%lx", little8_to_u64(pe->inst.imm));
+		}
+		fprintf(outfile, "\n");
+	}	break;
+	case PET_SECTION:
+		fprintf(outfile, ".section 0x%lx\n", pe->sec.addr);
+		break;
+	default:
+		fprintf(outfile, "unknown_parser_event\n");
+	}
+	return ferror(outfile);
+}
+
+void parser_init(struct parser *parser)
 {
 	memset(parser, 0, sizeof(struct parser));
 	utf8_decoder_init(&parser->decoder);
 	parser->line = 1;
 	parser->ch = 1;
+	parser_event_init(&parser->event);
 	smap_init(&parser->defs, bstr_free);
-	parser->outfile = outfile;
-	return stub_init(parser->outfile, 1);
 }
 
 void parser_destroy(struct parser *parser)
@@ -114,19 +160,6 @@ void parser_destroy(struct parser *parser)
 		parser->defkey = NULL;
 	}
 	smap_destroy(&parser->defs);
-}
-
-// Write the 64-bit unsigned value to eight bytes in little-endian order
-static void u64_to_little8(uint64_t val, uint8_t *data)
-{
-	data[0] = val;
-	data[1] = val >> 8;
-	data[2] = val >> 16;
-	data[3] = val >> 24;
-	data[4] = val >> 32;
-	data[5] = val >> 40;
-	data[6] = val >> 48;
-	data[7] = val >> 56;
 }
 
 enum { // Parser syntax states
@@ -146,8 +179,9 @@ enum { // Parser token states
 
 static int parser_finish_token(struct parser *parser)
 {
-	if (!parser->token) return 0;
+	if (!parser->token) return 0; // Nothing to finish
 
+	// Perform symbolic substitution
 	int ret = 0;
 	char *symbol = NULL;
 	if (parser->token[0] == '$') {
@@ -218,20 +252,16 @@ static int parser_finish_token(struct parser *parser)
 			parser->ts = PTS_EOL;
 		}
 		else {
+			// Currently there are no instructions with more than one immediate value
 			fprintf(stderr, "error: invalid immediate count %d for opcode %s line %d char %d\n",
 				imm_count, symbol, parser->tline, parser->tch);
 			ret = 1;
 			break;
 		}
 
-		// Write opcode to file
-		uint8_t op = opcode;
-		size_t written = fwrite(&op, 1, 1, parser->outfile);
-		if (written != 1) {
-			fprintf(stderr, "error: failed to write to output file\n");
-			ret = 1;
-			break;
-		}
+		// Begin the instruction event
+		parser->event.type = PET_INST;
+		parser->event.inst.opcode = opcode;
 	}	break;
 
 	//
@@ -270,17 +300,9 @@ static int parser_finish_token(struct parser *parser)
 			break;
 		}
 
-		// Transform to byte array
-		uint8_t bytes[8];
-		u64_to_little8((uint64_t)litval, bytes);
-
-		// Write to file
-		size_t written = fwrite(bytes, 1, dt_size, parser->outfile);
-		if (written != (size_t)dt_size) {
-			fprintf(stderr, "error: failed to write to output file\n");
-			ret = 1;
-			break;
-		}
+		// Transform literal value to byte array
+		parser->event.inst.immlen = dt_size;
+		u64_to_little8((uint64_t)litval, parser->event.inst.imm);
 
 		parser->ts = PTS_EOL; // Expect end of line
 	}	break;
@@ -322,8 +344,23 @@ static int parser_finish_token(struct parser *parser)
 	//
 	// Section
 	//
-	case PTS_SEC_ADDR:
-		// @todo
+	case PTS_SEC_ADDR: {
+		// Parse immediate literal
+		long long litval;
+		bool success = parse_int(symbol, &litval);
+		if (!success) {
+			fprintf(stderr, "error: failed to parse literal \"%s\" line %d char %d\n",
+				symbol, parser->tline, parser->tch);
+			ret = 1;
+			break;
+		}
+
+		// Begin section event
+		parser->event.type = PET_SECTION;
+		parser->event.sec.addr = litval;
+
+		parser->ts = PTS_EOL; // Expect end of line
+	}	break;
 
 	default:
 		fprintf(stderr, "error: bad token state\n");
@@ -338,7 +375,7 @@ static int parser_finish_token(struct parser *parser)
 	return ret;
 }
 
-static int parser_finish_line(struct parser *parser)
+static int parser_finish_line(struct parser *parser, struct parser_event *pe)
 {
 	if (parser->ts == PTS_EOL) { // Expected EOL
 		parser->ts = PTS_DEFAULT;
@@ -348,10 +385,15 @@ static int parser_finish_line(struct parser *parser)
 			parser->line, parser->ch);
 		return 1;
 	}
+	if (parser->event.type != PET_NONE) {
+		// Emit parser event
+		memcpy(pe, &parser->event, sizeof(*pe));
+		parser_event_init(&parser->event);
+	}
 	return 0;
 }
 
-int parser_parse_byte(struct parser *parser, byte b)
+int parser_parse_byte(struct parser *parser, byte b, struct parser_event *pe)
 {
 	int ret = 0;
 
@@ -393,10 +435,10 @@ int parser_parse_byte(struct parser *parser, byte b)
 			if (ret) break;
 			if (c == ';') { // Comments are introduced by ';'
 				parser->ss = PSS_COMMENT;
-				ret = parser_finish_line(parser);
+				ret = parser_finish_line(parser, pe);
 			}
 			else if (c == '\n') { // Line end
-				ret = parser_finish_line(parser);
+				ret = parser_finish_line(parser, pe);
 			}
 			else if (!isspace(c)) { // Everything else gets its own single-character token
 				parser->token = bstr_alloc();
@@ -409,7 +451,7 @@ int parser_parse_byte(struct parser *parser, byte b)
 		break;
 
 	case PSS_COMMENT:
-		if (c == '\n') { // Comments are ended by netline
+		if (c == '\n') { // Comments are ended by newline
 			parser->ss = PSS_DEFAULT;
 		}
 		break;
@@ -439,12 +481,7 @@ int parser_can_terminate(struct parser *parser)
 		(parser->ts == PTS_DEFAULT || parser->ts == PTS_EOL);
 }
 
-int parser_terminate(struct parser *parser)
+int parser_terminate(struct parser *parser, struct parser_event *pe)
 {
-	// Save the first section
-	struct stub_sec sec;
-	// @todo: make configurable
-	sec.addr = 0x1000;
-	sec.flags = STUB_FLAG_TEXT;
-	return stub_save_section(parser->outfile, 0, &sec);
+	return parser_finish_line(parser, pe);
 }
