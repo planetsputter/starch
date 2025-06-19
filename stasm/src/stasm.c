@@ -125,8 +125,10 @@ int main(int argc, const char *argv[])
 	struct parser parser;
 	parser_init(&parser);
 	struct parser_event pe;
-	parser_event_init(&pe);
 	for (; error == 0; ) {
+		parser_event_init(&pe);
+
+		// Get a byte from the input file
 		int c = fgetc(infile);
 		if (c == EOF) { // Finish file
 			if (ferror(infile)) {
@@ -134,7 +136,7 @@ int main(int argc, const char *argv[])
 				error = 1;
 			}
 			else if (!parser_can_terminate(&parser)) {
-				fprintf(stderr, "error: unexpected end of file in %s\n", arg_src ? arg_src : "stdin");
+				fprintf(stderr, "error: unexpected EOF in %s\n", arg_src ? arg_src : "stdin");
 				error = 1;
 			}
 			else {
@@ -209,9 +211,12 @@ int main(int argc, const char *argv[])
 			error = 1;
 			break;
 		}
-		parser_event_init(&pe);
 
 		if (c == EOF) break;
+	}
+
+	if (!error && sec_count) {
+		error = stub_save_section(outfile, sec_count - 1, &curr_sec);
 	}
 
 	// Destroy parser

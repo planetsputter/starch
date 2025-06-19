@@ -29,9 +29,10 @@ check_op0() {
 	while [ "$#" -ne 0 ]; do
 		if [ $(($I % 8)) -eq 0 ]; then echo; fi
 		echo -n " $1"
-		echo "$1" | $STASM
-		local RESULT=$($DISTASM a.stb)
-		[ "$RESULT" = "$1" ]
+		printf ".section 0x1000\n$1\n" > test.st
+		$STASM test.st
+		$DISTASM a.stb -o dis.st
+		cmp test.st dis.st
 		I=$(($I + 1))
 		shift
 	done

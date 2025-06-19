@@ -317,7 +317,7 @@ int stub_save_section(FILE *file, int index, struct stub_sec *sec)
 	}
 	else {
 		// Seek to eight bytes before the header for the given section
-		if (fseek(file, STUB_HEADER_SIZE + STUB_SECTION_HEADER_SIZE * nsec, SEEK_SET)) {
+		if (fseek(file, STUB_HEADER_SIZE + STUB_SECTION_HEADER_SIZE * index, SEEK_SET)) {
 			return STUB_ERROR_SEEK_ERROR;
 		}
 

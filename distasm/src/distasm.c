@@ -85,6 +85,7 @@ int main(int argc, const char *argv[])
 		fprintf(stderr, "error: failed to open \"%s\"\n", arg_bin);
 		return 1;
 	}
+
 	// Verify the input file is a valid stub file
 	int ret = stub_verify(infile);
 	if (ret) {
@@ -92,12 +93,12 @@ int main(int argc, const char *argv[])
 		fprintf(stderr, "error: \"%s\" is not a valid stub file\n", arg_bin);
 		return ret;
 	}
-	// Load the first section, seeking to the beginning of the section data
-	struct stub_sec sec;
-	ret = stub_load_section(infile, 0, &sec);
+
+	// Get number of sections
+	int maxnsec = 0, nsec = 0;
+	ret = stub_get_section_counts(infile, &maxnsec, &nsec);
 	if (ret) {
-		fclose(infile);
-		fprintf(stderr, "error: failed to load section 0 from \"%s\"\n", arg_bin);
+		fprintf(stderr, "error: failed to get section counts from \"%s\"\n", arg_bin);
 		return ret;
 	}
 
@@ -107,7 +108,7 @@ int main(int argc, const char *argv[])
 		outfile = fopen(arg_output, "w");
 		if (!outfile) {
 			fclose(infile);
-			fprintf(stderr, "error: failed to open %s\n", arg_output);
+			fprintf(stderr, "error: failed to open \"%s\"\n", arg_output);
 			return 1;
 		}
 	}
@@ -115,101 +116,121 @@ int main(int argc, const char *argv[])
 		outfile = stdout;
 	}
 
-	// Read in input binary
-	// @todo: limit reads to section 0 size
-	int opcode, num_imm;
-	ret = 0;
-	while ((opcode = fgetc(infile)) != EOF) {
-		// Print opcode name
-		ret = fprintf(outfile, "%s", name_for_opcode(opcode));
+	// Iterate through each section of the input file
+	struct stub_sec sec;
+	for (int si = 0; ret == 0 && si < nsec; si++) {
+		// Load each section, seeking to the beginning of the section data
+		ret = stub_load_section(infile, si, &sec);
+		if (ret) {
+			fclose(infile);
+			fprintf(stderr, "error: failed to load section %d from \"%s\"\n", si, arg_bin);
+			break;
+		}
+
+		// Print section description
+		ret = fprintf(outfile, ".section 0x%lx\n", sec.addr);
 		if (ret < 0) {
-			fprintf(stderr, "error: failed to write to %s\n", arg_output ? arg_output : "stdout");
-			ret = 1;
-			break;
-		}
-		ret = 0;
-
-		// Determine number of opcode arguments
-		num_imm = imm_count_for_opcode(opcode);
-		if (num_imm < 0 || num_imm > 1) { // @todo: handle more than one immediate
-			fprintf(stderr, "error: invalid number (%d) of immediates for opcode 0x%02x\n",
-				num_imm, opcode);
+			fprintf(stderr, "error: failed to write to \"%s\"\n", arg_output ? arg_output : "stdout");
 			ret = 1;
 			break;
 		}
 
-		// Print opcode arguments
-		for (int i = 0; i < num_imm; i++) {
-			int dt;
-			ret = imm_types_for_opcode(opcode, &dt);
+		// Disassemble all bytes in section
+		for (uint64_t di = 0; di < sec.size; ) {
+			int opcode = fgetc(infile);
+			if (opcode == EOF) {
+				fprintf(stderr, "error: unexpected EOF in \"%s\"\n", arg_bin);
+				ret = 1;
+				break;
+			}
+			di++;
+
+			// Print opcode name
+			ret = fprintf(outfile, "%s", name_for_opcode(opcode));
 			if (ret < 0) {
-				fprintf(stderr, "error: unable to determine immediate type for opcode 0x%02x\n",
-					opcode);
+				fprintf(stderr, "error: failed to write to \"%s\"\n", arg_output ? arg_output : "stdout");
 				ret = 1;
 				break;
 			}
 			ret = 0;
 
-			int imm_len = size_for_dt(dt);
+			// Determine number of opcode arguments
+			int num_imm = imm_count_for_opcode(opcode);
+			if (num_imm < 0 || num_imm > 1) { // @todo: handle more than one immediate
+				fprintf(stderr, "error: invalid number (%d) of immediates for opcode 0x%02x\n",
+					num_imm, opcode);
+				ret = 1;
+				break;
+			}
 
-			// Read little-endian immediate value
-			int64_t val = 0;
-			int b;
-			for (int j = 0; j < imm_len; j++) {
-				b = fgetc(infile);
-				if (b == EOF) {
-					fprintf(stderr, "error: failed to read from %s\n", arg_bin);
+			// Print opcode arguments
+			for (int ii = 0; ii < num_imm; ii++) {
+				int dt;
+				ret = imm_types_for_opcode(opcode, &dt);
+				if (ret) {
+					fprintf(stderr, "error: unable to determine immediate type for opcode 0x%02x\n",
+						opcode);
+					break;
+				}
+
+				int imm_len = size_for_dt(dt);
+
+				// Read little-endian immediate value
+				int64_t val = 0;
+				int b;
+				for (int j = 0; j < imm_len; j++) {
+					b = fgetc(infile);
+					if (b == EOF) {
+						fprintf(stderr, "error: unexpected EOF in \"%s\"\n", arg_bin);
+						ret = 1;
+						break;
+					}
+					di++;
+					val |= b << (j * 8);
+				}
+				if (ret) break;
+
+				// Print value
+				switch (dt) {
+				case dt_a8:
+				case dt_u8:
+					ret = fprintf(outfile, " %u", (uint8_t)val);
+					break;
+				case dt_a16:
+				case dt_u16:
+					ret = fprintf(outfile, " %u", (uint16_t)val);
+					break;
+				case dt_a32:
+				case dt_u32:
+					ret = fprintf(outfile, " %u", (uint32_t)val);
+					break;
+				case dt_a64:
+				case dt_u64:
+					ret = fprintf(outfile, " %lu", (uint64_t)val);
+					break;
+				case dt_i8:
+					ret = fprintf(outfile, " %d", (int8_t)val);
+					break;
+				case dt_i16:
+					ret = fprintf(outfile, " %d", (int16_t)val);
+					break;
+				case dt_i32:
+					ret = fprintf(outfile, " %d", (int32_t)val);
+					break;
+				case dt_i64:
+					ret = fprintf(outfile, " %ld", val);
+					break;
+				}
+				if (ret < 0) {
+					fprintf(stderr, "error: failed to write to \"%s\"\n", arg_output ? arg_output : "stdout");
 					ret = 1;
 					break;
 				}
-				val |= b << (j * 8);
+				ret = 0;
 			}
-			if (ret) break;
-
-			// Print value
-			switch (dt) {
-			case dt_a8:
-			case dt_u8:
-				ret = fprintf(outfile, " %hhu", (uint8_t)val);
-				break;
-			case dt_a16:
-			case dt_u16:
-				ret = fprintf(outfile, " %hu", (uint16_t)val);
-				break;
-			case dt_a32:
-			case dt_u32:
-				ret = fprintf(outfile, " %u", (uint32_t)val);
-				break;
-			case dt_a64:
-			case dt_u64:
-				ret = fprintf(outfile, " %lu", (uint64_t)val);
-				break;
-			case dt_i8:
-				ret = fprintf(outfile, " %d", (int8_t)val);
-				break;
-			case dt_i16:
-				ret = fprintf(outfile, " %d", (int16_t)val);
-				break;
-			case dt_i32:
-				ret = fprintf(outfile, " %d", (int32_t)val);
-				break;
-			case dt_i64:
-				ret = fprintf(outfile, " %ld", val);
-				break;
-			}
-			if (ret < 0) {
-				fprintf(stderr, "error: failed to write to %s\n", arg_output ? arg_output : "stdout");
-				ret = 1;
-				break;
-			}
-			ret = 0;
+			if (ret) break; // An error occurred
+			fprintf(outfile, "\n");
 		}
-		if (ret) break;
-		fprintf(outfile, "\n");
-	}
-	// Check for error
-	if (ferror(outfile) || ferror(infile)) {
-		ret = 1;
 	}
 
 	// Close file handles
