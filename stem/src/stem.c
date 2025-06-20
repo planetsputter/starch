@@ -119,7 +119,7 @@ int main(int argc, const char *argv[])
 		return ret;
 	}
 
-	// Initialize emulated memory. Give ourselves 1 GiB.
+	// Initialize emulated memory. Give ourselves 1 GiB emulated physical memory.
 	struct mem memory;
 	mem_init(&memory, 0x40000000);
 
@@ -127,22 +127,34 @@ int main(int argc, const char *argv[])
 	struct core core;
 	core_init(&core);
 
-	// Load first stub section information
-	struct stub_sec sec;
-	ret = stub_load_section(infile, 0, &sec);
+	// Get number of sections
+	int maxnsec = 0, nsec = 0;
+	ret = stub_get_section_counts(infile, &maxnsec, &nsec);
 	if (ret) {
-		core_destroy(&core);
-		fclose(infile);
-		fprintf(stderr, "error: failed to load section 0 from \"%s\"\n", arg_image);
+		fprintf(stderr, "error: failed to get section counts from \"%s\"\n", arg_image);
 		return ret;
 	}
 
-	// Load input file into memory
-	ret = mem_load_image(&memory, sec.addr, sec.size, infile);
-	if (ret) {
-		fprintf(stderr, "error: failed to load memory from \"%s\" to address 0\n", arg_image);
+	// Load all sections in input file into memory
+	struct stub_sec sec;
+	for (int si = 0; si < nsec; si++) {
+		// Load section information
+		ret = stub_load_section(infile, si, &sec);
+		if (ret) {
+			fprintf(stderr, "error: failed to load section %d from \"%s\"\n", si, arg_image);
+			break;
+		}
+
+		// Load section into memory
+		ret = mem_load_image(&memory, sec.addr, sec.size, infile);
+		if (ret) {
+			fprintf(stderr, "error: failed to load memory from \"%s\" to address 0\n", arg_image);
+			break;
+		}
 	}
-	else {
+
+	if (ret == 0) {
+		// Sections loaded. Emulate.
 		for (int cycles = 0; (max_cycles < 0 || cycles < max_cycles) && ret == 0; cycles++) {
 			ret = core_step(&core, &memory);
 		}
@@ -150,18 +162,21 @@ int main(int argc, const char *argv[])
 		if (ret != STERR_HALT && ret != STERR_NONE) {
 			fprintf(stderr, "error: an error occurred during emulation: %s (%d)\n", name_for_sterr(ret), ret);
 		}
-	}
-
-	// Create a hex dump if requested
-	if (arg_dump) {
-		FILE *dumpfile = fopen(arg_dump, "wb");
-		if (!dumpfile) {
-			fprintf(stderr, "error: unable to open hex dump file \"%s\"\n", arg_dump);
-			ret = 1;
-		}
 		else {
-			ret = mem_dump_hex(&memory, 0, 0, dumpfile);
-			fclose(dumpfile);
+			ret = STERR_NONE;
+		}
+
+		// Create a hex dump if requested
+		if (arg_dump) {
+			FILE *dumpfile = fopen(arg_dump, "wb");
+			if (!dumpfile) {
+				fprintf(stderr, "error: unable to open hex dump file \"%s\"\n", arg_dump);
+				ret = 1;
+			}
+			else {
+				ret = mem_dump_hex(&memory, 0, 0, dumpfile);
+				fclose(dumpfile);
+			}
 		}
 	}
 
@@ -169,5 +184,5 @@ int main(int argc, const char *argv[])
 	mem_destroy(&memory);
 	core_destroy(&core);
 	fclose(infile);
-	return ret == STERR_HALT || ret == STERR_NONE ? 0 : ret;
+	return ret;
 }
