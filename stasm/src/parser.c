@@ -9,6 +9,86 @@
 #include "parser.h"
 #include "starch.h"
 
+// Returns the nibble value of the given hexzdecimal character
+static char nibble_for_hex(char hex)
+{
+	if (hex >= 'a') return hex - 'a' + 10;
+	if (hex >= 'A') return hex - 'A' + 10;
+	return hex - '0';
+}
+
+// Parse a potentially escaped character literal from the given string, setting *val.
+// Returns a pointer to the next character, or NULL if the escape sequence is invalid.
+// The goal is for the format of the escape sequences to be identical to those in the C language.
+static const char *parse_char_lit(const char *str, char *val)
+{
+	char tc = 0; // Temporary character
+	if (*str == '\\') {
+		switch (*++str) {
+		case 'a': tc = '\a'; break;
+		case 'b': tc = '\b'; break;
+		case 'f': tc = '\f'; break;
+		case 'n': tc = '\n'; break;
+		case 'r': tc = '\r'; break;
+		case 't': tc = '\t'; break;
+		case 'v': tc = '\v'; break;
+		case '\\': tc = '\\'; break;
+		case '\'': tc = '\''; break;
+		case '\"': tc = '\"'; break;
+		case '?': tc = '\?'; break;
+		case 'x': // Allow hexadecimal notation as in '\x00'
+			if (!isxdigit(*++str)) return NULL;
+			do { // Hexadecimal escape sequences are of arbitrary length
+				tc = (tc << 4) | nibble_for_hex(*str);
+			} while (isxdigit(*++str));
+			break;
+		default:
+			if (*str < '0' || *str > '7') return NULL; // Invalid escape sequence
+			// Octal escape sequences have a maximum of three characters
+			tc = *str - '0';
+			str++;
+			if (*str < '0' || *str > '7') {
+				str--;
+				break;
+			}
+			tc = (tc << 3) + *str - '0';
+			str++;
+			if (*str < '0' || *str > '7') {
+				str--;
+				break;
+			}
+			tc = (tc << 3) + *str - '0';
+		}
+		str++;
+	}
+	else if (*str == '\0' || *str == '\n') { // Disallowed characters
+		return NULL;
+	}
+	else {
+		tc = *str++;
+	}
+	*val = tc;
+	return str;
+}
+
+// Parse an entire string of potentially escaped characters, appending unescaped values to the given B-string destination.
+// Destination string will have characters appended until end of string or first invalid escape sequence.
+// Returns whether the string literal is valid.
+static bool parse_string_lit(const char *str, char **bdest)
+{
+	char cval;
+	for (; *str; ) {
+		str = parse_char_lit(str, &cval);
+		if (str) { // Valid unescape
+			*bdest = bstr_append(*bdest, cval);
+		}
+		else {
+			break;
+		}
+	}
+	return str != NULL;
+}
+
 // Parse an integer literal. Returns whether the conversion was successful.
 static bool parse_int(const char *s, long long *val)
 {
@@ -18,43 +98,12 @@ static bool parse_int(const char *s, long long *val)
 	long long temp_val = 0;
 	if (*s == '\'') {
 		s++;
-		if (*s == '\0' || *s == '\n' || *s == '\'') {
-			// Empty character literal
+		char cval;
+		const char *end = parse_char_lit(s, &cval);
+		if (end == NULL || *end != '\'' || *(end + 1) != '\0') {
 			return false;
 		}
-		if (*s == '\\') { // Escaped character
-			s++;
-			switch (*s) {
-			case 'a': temp_val = '\a'; break;
-			case 'b': temp_val = '\b'; break;
-			case 'f': temp_val = '\f'; break;
-			case 'n': temp_val = '\n'; break;
-			case 'r': temp_val = '\r'; break;
-			case 't': temp_val = '\t'; break;
-			case 'v': temp_val = '\v'; break;
-			case '\\': temp_val = '\\'; break;
-			case '\'': temp_val = '\''; break;
-			case '\"': temp_val = '\"'; break;
-			case '?': temp_val = '\?'; break;
-			default:
-				// @todo: allow hexadecimal notation as in '\x00'
-				return false;
-			}
-		}
-		else { // Unescaped character
-			temp_val = *s;
-		}
-		s++;
-		// Expect end quotation mark
-		if (*s != '\'') {
-			return false;
-		}
-		s++;
-		// Expect end of string
-		if (*s != '\0') {
-			return false;
-		}
-		*val = temp_val;
+		*val = cval;
 		return true;
 	}
 
@@ -164,6 +213,8 @@ void parser_destroy(struct parser *parser)
 
 enum { // Parser syntax states
 	PSS_DEFAULT,
+	PSS_QUOTED,
+	PSS_ESCAPED,
 	PSS_COMMENT,
 };
 
@@ -181,10 +232,10 @@ static int parser_finish_token(struct parser *parser)
 {
 	if (!parser->token) return 0; // Nothing to finish
 
-	// Perform symbolic substitution
+	// Perform symbolic substitution on non-quoted tokens
 	int ret = 0;
 	char *symbol = NULL;
-	if (parser->token[0] == '$') {
+	if (parser->ss != PSS_QUOTED && parser->token[0] == '$') {
 		if (parser->token[1] == '\0') { // Check for empty symbol name
 			fprintf(stderr, "error: empty symbol name line %d char %d\n",
 				parser->tline, parser->tch);
@@ -201,6 +252,13 @@ static int parser_finish_token(struct parser *parser)
 	}
 	else {
 		symbol = parser->token;
+	}
+
+	if (parser->ss == PSS_QUOTED) {
+		// Currently quoted tokens are not used
+		fprintf(stderr, "error: unexpected quoted string line %d char %d\n",
+			parser->tline, parser->tch);
+		ret = 1;
 	}
 
 	if (ret == 0) switch (parser->ts) {
@@ -421,7 +479,16 @@ int parser_parse_byte(struct parser *parser, byte b, struct parser_event *pe)
 	// Process the decoded character
 	switch (parser->ss) {
 	case PSS_DEFAULT:
-		if (isalnum(c) || c == '$' || c == '.' || c == '-' || c == '_' || c == '\'' ||
+		if (c == '"') { // Begin quoted token
+			ret = parser_finish_token(parser); // First finish any adjacent token
+			if (ret) break;
+			// Start new token
+			parser->token = bstr_alloc();
+			parser->tline = parser->line;
+			parser->tch = parser->ch;
+			parser->ss = PSS_QUOTED;
+		}
+		else if (isalnum(c) || c == '$' || c == '.' || c == '-' || c == '_' || c == '\'' ||
 			c == '\\' || c >= 0x80) { // These continue or start a token
 			if (parser->token == NULL) { // Start a new token
 				parser->token = bstr_alloc();
@@ -448,6 +515,36 @@ int parser_parse_byte(struct parser *parser, byte b, struct parser_event *pe)
 				ret = parser_finish_token(parser);
 			}
 		}
+		break;
+
+	case PSS_QUOTED: // Character in quoted string
+		if (c == '"') { // Unescaped '"' ends quoted token
+			// Parse any escape sequences in parser->token
+			char *unesc_token = bstr_alloc();
+			bool result = parse_string_lit(parser->token, &unesc_token);
+			if (!result) {
+				fprintf(stderr, "error: invalid string literal line %d char %d\n",
+					parser->tline, parser->tch);
+				ret = 1;
+				break;
+			}
+			bstr_free(parser->token);
+			parser->token = unesc_token;
+			ret = parser_finish_token(parser); // Finish token
+			parser->ss = PSS_DEFAULT;
+		}
+		else { // All else gets added to token
+			parser->token = bstr_cat(parser->token, (const char*)enc);
+			if (c == '\\') { // Backslash begins escape sequence
+				parser->ss = PSS_ESCAPED;
+			}
+		}
+		break;
+
+	case PSS_ESCAPED: // Escaped character in quoted string
+		// Add character to current token
+		parser->token = bstr_cat(parser->token, (const char*)enc);
+		parser->ss = PSS_QUOTED;
 		break;
 
 	case PSS_COMMENT:
