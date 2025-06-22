@@ -19,8 +19,6 @@ static const char *desc_for_arg_error(enum carg_error error)
 		return "unexpected argument";
 	case CARG_ERROR_UNRECOGNIZED_FLAG:
 		return "unrecognized flag";
-	case CARG_ERROR_UNEXPECTED_NAMED_ARGUMENT_FLAG:
-		return "unexpected named argument flag";
 	}
 	return "UNKNOWN";
 }
@@ -134,7 +132,7 @@ enum carg_error carg_parse_args(
 				continue;
 			}
 
-			if (arg[0] == '-' && arg[1] != '\0' && arg[1] != '-') {
+			if (arg[0] == '-' && arg[1] != '-') {
 				// This argument starts with '-' and will be processed as a sequence
 				// of single-character flags
 				for (const char *flag = arg + 1; *flag != '\0'; flag++) {
@@ -161,16 +159,22 @@ enum carg_error carg_parse_args(
 						}
 					}
 					else if (desc->type == CARG_TYPE_NAMED) {
-						// Argument is named argument. Expect a value next.
-						if (named_expected != NULL) {
-							// More than one named argument flag appears in this list of flags.
-							// Only one named argument flag may appear in a list of flags.
-							last_error = CARG_ERROR_UNEXPECTED_NAMED_ARGUMENT_FLAG;
-							if (error_handler == NULL || !error_handler(last_error, arg)) {
-								return last_error;
+						// Argument is named argument. Expect a value either after the flag
+						// or as the next argument.
+						if (*++flag == '\0') { // Expect a value as the next argument
+							named_expected = desc;
+						}
+						else { // Value is the rest of this argument
+							if (desc->value != NULL) {
+								// Store argument value
+								*desc->value = flag;
+							}
+							if (handler != NULL) {
+								// Invoke handler
+								handler(desc, flag);
 							}
 						}
-						named_expected = desc;
+						break;
 					}
 				}
 

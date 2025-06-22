@@ -14,7 +14,6 @@ enum carg_error
 	CARG_ERROR_MISSING_NAMED_VALUE,
 	CARG_ERROR_UNEXPECTED_ARGUMENT,
 	CARG_ERROR_UNRECOGNIZED_FLAG,
-	CARG_ERROR_UNEXPECTED_NAMED_ARGUMENT_FLAG,
 };
 
 // Handler for errors that may occur when parsing command-line arguments.
