@@ -17,6 +17,10 @@ struct smap {
 // if no deallocation is to be performed.
 void smap_init(struct smap*, void (*dealloc)(char*));
 
+// Moves the given smap from *from to *to.
+// After the move, *from can be destroyed without affecting *to.
+void smap_move(struct smap *from, struct smap *to);
+
 // Destroys the given smap
 void smap_destroy(struct smap*);
 

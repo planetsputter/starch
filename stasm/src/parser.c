@@ -166,6 +166,14 @@ void parser_event_init(struct parser_event *pe)
 	memset(pe, 0, sizeof(*pe));
 }
 
+void parser_event_destroy(struct parser_event *pe)
+{
+	if (pe->type == PET_INCLUDE) {
+		bstr_free(pe->inc.filename);
+		pe->inc.filename = NULL;
+	}
+}
+
 int parser_event_print(const struct parser_event *pe, FILE *outfile)
 {
 	switch (pe->type) {
@@ -188,9 +196,15 @@ int parser_event_print(const struct parser_event *pe, FILE *outfile)
 	return ferror(outfile);
 }
 
-void parser_init(struct parser *parser)
+void parser_init(struct parser *parser, char *filename)
 {
 	memset(parser, 0, sizeof(struct parser));
+	if (filename) {
+		parser->filename = filename;
+	}
+	else {
+		parser->filename = bstr_dup("stdin");
+	}
 	utf8_decoder_init(&parser->decoder);
 	parser->line = 1;
 	parser->ch = 1;
@@ -200,6 +214,10 @@ void parser_init(struct parser *parser)
 
 void parser_destroy(struct parser *parser)
 {
+	if (parser->filename) {
+		bstr_free(parser->filename);
+		parser->filename = NULL;
+	}
 	if (parser->token) {
 		bstr_free(parser->token);
 		parser->token = NULL;
@@ -226,6 +244,7 @@ enum { // Parser token states
 	PTS_DEF_VAL,
 	PTS_SEC_ADDR,
 	PTS_SEC_FLAGS,
+	PTS_INCLUDE,
 };
 
 static int parser_finish_token(struct parser *parser)
@@ -237,15 +256,15 @@ static int parser_finish_token(struct parser *parser)
 	char *symbol = NULL;
 	if (parser->ss != PSS_QUOTED && parser->token[0] == '$') {
 		if (parser->token[1] == '\0') { // Check for empty symbol name
-			fprintf(stderr, "error: empty symbol name line %d char %d\n",
-				parser->tline, parser->tch);
+			fprintf(stderr, "error: empty symbol name in \"%s\" line %d char %d\n",
+				parser->filename, parser->tline, parser->tch);
 			ret = 1;
 		}
 		else { // Look up an existing symbol definition
 			symbol = smap_get(&parser->defs, parser->token + 1);
 			if (!symbol) {
-				fprintf(stderr, "error: undefined symbol \"%s\" line %d char %d\n",
-					parser->token + 1, parser->tline, parser->tch);
+				fprintf(stderr, "error: undefined symbol \"%s\" in \"%s\" line %d char %d\n",
+					parser->token + 1, parser->filename, parser->tline, parser->tch);
 				ret = 1;
 			}
 		}
@@ -254,10 +273,10 @@ static int parser_finish_token(struct parser *parser)
 		symbol = parser->token;
 	}
 
-	if (parser->ss == PSS_QUOTED) {
-		// Currently quoted tokens are not used
-		fprintf(stderr, "error: unexpected quoted string line %d char %d\n",
-			parser->tline, parser->tch);
+	if (parser->ss == PSS_QUOTED && (parser->ts != PTS_DEF_VAL && parser->ts != PTS_INCLUDE)) {
+		// Currently quoted tokens are used only for symbol values and include files
+		fprintf(stderr, "error: unexpected quoted string in \"%s\" line %d char %d\n",
+			parser->filename, parser->tline, parser->tch);
 		ret = 1;
 	}
 
@@ -273,10 +292,12 @@ static int parser_finish_token(struct parser *parser)
 			else if (strcmp(parser->token + 1, "section") == 0) {
 				parser->ts = PTS_SEC_ADDR;
 			}
-			// @todo: allow to ".include" a file
+			else if (strcmp(parser->token + 1, "include") == 0) {
+				parser->ts = PTS_INCLUDE;
+			}
 			else {
-				fprintf(stderr, "error: unrecognized assembler command \"%s\" line %d char %d\n",
-					parser->token, parser->tline, parser->tch);
+				fprintf(stderr, "error: unrecognized assembler command \"%s\" in \"%s\" line %d char %d\n",
+					parser->token, parser->filename, parser->tline, parser->tch);
 				ret = 1;
 			}
 			break;
@@ -285,8 +306,8 @@ static int parser_finish_token(struct parser *parser)
 		// Look up opcode
 		int opcode = opcode_for_name(symbol);
 		if (opcode < 0) {
-			fprintf(stderr, "error: unrecognized opcode \"%s\" line %d char %d\n",
-				symbol, parser->tline, parser->tch);
+			fprintf(stderr, "error: unrecognized opcode \"%s\" in \"%s\" line %d char %d\n",
+				symbol, parser->filename, parser->tline, parser->tch);
 			ret = 1;
 			break;
 		}
@@ -298,8 +319,8 @@ static int parser_finish_token(struct parser *parser)
 			int imm_type;
 			int ret = imm_types_for_opcode(opcode, &imm_type);
 			if (ret != 0) {
-				fprintf(stderr, "error: failed to look up immediate type for opcode %s line %d char %d\n",
-					symbol, parser->tline, parser->tch);
+				fprintf(stderr, "error: failed to look up immediate type for opcode %s in \"%s\" line %d char %d\n",
+					symbol, parser->filename, parser->tline, parser->tch);
 				ret = 1;
 				break;
 			}
@@ -311,8 +332,8 @@ static int parser_finish_token(struct parser *parser)
 		}
 		else {
 			// Currently there are no instructions with more than one immediate value
-			fprintf(stderr, "error: invalid immediate count %d for opcode %s line %d char %d\n",
-				imm_count, symbol, parser->tline, parser->tch);
+			fprintf(stderr, "error: invalid immediate count %d for opcode %s in \"%s\" line %d char %d\n",
+				imm_count, symbol, parser->filename, parser->tline, parser->tch);
 			ret = 1;
 			break;
 		}
@@ -341,8 +362,8 @@ static int parser_finish_token(struct parser *parser)
 		long long litval;
 		bool success = parse_int(symbol, &litval);
 		if (!success) {
-			fprintf(stderr, "error: failed to parse literal \"%s\" line %d char %d\n",
-				symbol, parser->tline, parser->tch);
+			fprintf(stderr, "error: failed to parse integer literal \"%s\" in \"%s\" line %d char %d\n",
+				symbol, parser->filename, parser->tline, parser->tch);
 			ret = 1;
 			break;
 		}
@@ -353,7 +374,8 @@ static int parser_finish_token(struct parser *parser)
 		long long minval, maxval;
 		min_max_for_dt(dt, &minval, &maxval);
 		if (dt_size < 8 && (litval < minval || litval > maxval)) {
-			fprintf(stderr, "error: literal \"%s\" is out of bounds for type\n", symbol);
+			fprintf(stderr, "error: literal \"%s\" is out of bounds for type in \"%s\" line %d char %d\n",
+					symbol, parser->filename, parser->tline, parser->tch);
 			ret = 1;
 			break;
 		}
@@ -369,7 +391,8 @@ static int parser_finish_token(struct parser *parser)
 	// Expect end of line
 	//
 	case PTS_EOL:
-		fprintf(stderr, "error: expected eol at line %d char %d\n", parser->tline, parser->tch);
+		fprintf(stderr, "error: expected eol in \"%s\" line %d char %d\n",
+				parser->filename, parser->tline, parser->tch);
 		ret = 1;
 		break;
 
@@ -407,8 +430,8 @@ static int parser_finish_token(struct parser *parser)
 		long long litval;
 		bool success = parse_int(symbol, &litval);
 		if (!success) {
-			fprintf(stderr, "error: failed to parse literal \"%s\" line %d char %d\n",
-				symbol, parser->tline, parser->tch);
+			fprintf(stderr, "error: failed to parse integer literal \"%s\" in \"%s\" line %d char %d\n",
+				symbol, parser->filename, parser->tline, parser->tch);
 			ret = 1;
 			break;
 		}
@@ -420,8 +443,27 @@ static int parser_finish_token(struct parser *parser)
 		parser->ts = PTS_EOL; // Expect end of line
 	}	break;
 
+	//
+	// Include file
+	//
+	case PTS_INCLUDE:
+		// Require include file name to be quoted
+		if (parser->ss != PSS_QUOTED) {
+			fprintf(stderr, "error: expected quoted filename in \"%s\" line %d char %d\n",
+				parser->filename, parser->tline, parser->tch);
+			ret = 1;
+		}
+		else { // Emit an include event
+			parser->event.type = PET_INCLUDE;
+			parser->event.inc.filename = parser->token;
+			parser->token = NULL;
+		}
+		parser->ts = PTS_EOL;
+		break;
+
 	default:
-		fprintf(stderr, "error: bad token state\n");
+		fprintf(stderr, "error: bad token state while parsing \"%s\" line %d char %d\n",
+			parser->filename, parser->tline, parser->tch);
 		ret = 1;
 		break;
 	}
@@ -439,8 +481,8 @@ static int parser_finish_line(struct parser *parser, struct parser_event *pe)
 		parser->ts = PTS_DEFAULT;
 	}
 	if (parser->ts != PTS_DEFAULT) {
-		fprintf(stderr, "error: unexpected EOL line %d char %d\n",
-			parser->line, parser->ch);
+		fprintf(stderr, "error: unexpected EOL in \"%s\" line %d char %d\n",
+			parser->filename, parser->line, parser->ch);
 		return 1;
 	}
 	if (parser->event.type != PET_NONE) {
@@ -459,8 +501,8 @@ int parser_parse_byte(struct parser *parser, byte b, struct parser_event *pe)
 	ucp c;
 	ucp *next = utf8_decoder_decode(&parser->decoder, b, &c, &ret);
 	if (ret) {
-		fprintf(stderr, "error: UTF-8 decoding error line %d char %d\n",
-			parser->line, parser->ch);
+		fprintf(stderr, "error: UTF-8 decoding error in \"%s\" line %d char %d\n",
+			parser->filename, parser->line, parser->ch);
 		return ret;
 	}
 	if (next == &c) { // No character generated
@@ -471,8 +513,8 @@ int parser_parse_byte(struct parser *parser, byte b, struct parser_event *pe)
 	byte enc[5];
 	*utf8_encode_char(c, enc, sizeof(enc) - 1, &ret) = '\0';
 	if (ret) {
-		fprintf(stderr, "error: UTF-8 encoding error line %d char %d\n",
-			parser->line, parser->ch);
+		fprintf(stderr, "error: UTF-8 encoding error in \"%s\" line %d char %d\n",
+			parser->filename, parser->line, parser->ch);
 		return ret;
 	}
 
@@ -523,8 +565,8 @@ int parser_parse_byte(struct parser *parser, byte b, struct parser_event *pe)
 			char *unesc_token = bstr_alloc();
 			bool result = parse_string_lit(parser->token, &unesc_token);
 			if (!result) {
-				fprintf(stderr, "error: invalid string literal line %d char %d\n",
-					parser->tline, parser->tch);
+				fprintf(stderr, "error: invalid string literal in \"%s\" line %d char %d\n",
+					parser->filename, parser->tline, parser->tch);
 				ret = 1;
 				break;
 			}
@@ -554,7 +596,8 @@ int parser_parse_byte(struct parser *parser, byte b, struct parser_event *pe)
 		break;
 
 	default: // Bad parser syntax state
-		fprintf(stderr, "error: bad syntax state\n");
+		fprintf(stderr, "error: bad syntax state while parsing \"%s\" line %d char %d\n",
+			parser->filename, parser->tline, parser->tch);
 		ret = 1;
 		break;
 	}

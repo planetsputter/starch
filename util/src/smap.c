@@ -182,6 +182,14 @@ void smap_init(struct smap *smap, void (*dealloc)(char*))
 	smap->dealloc = dealloc;
 }
 
+void smap_move(struct smap *from, struct smap *to)
+{
+	to->root = from->root;
+	to->dealloc = from->dealloc;
+	from->root = NULL;
+	from->dealloc = NULL;
+}
+
 void smap_destroy(struct smap *smap)
 {
 	smap_node_delete(smap, smap->root);

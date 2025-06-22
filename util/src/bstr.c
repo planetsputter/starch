@@ -27,7 +27,9 @@ char *bstr_dup(const char *cstr)
 
 void bstr_free(char *s)
 {
-	free(s - sizeof(struct bstr_hdr));
+	if (s) {
+		free(s - sizeof(struct bstr_hdr));
+	}
 }
 
 int bstr_len(char *s)

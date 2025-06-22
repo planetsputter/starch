@@ -1,9 +1,11 @@
 // stasm.c
 
 #include <errno.h>
+#include <stdlib.h>
 
-#include "parser.h"
+#include "bstr.h"
 #include "carg.h"
+#include "parser.h"
 #include "stub.h"
 
 // Variables set by command-line arguments
@@ -48,6 +50,29 @@ void detect_non_help_arg(struct carg_desc *desc, const char*)
 	if (desc->value != &arg_help) {
 		non_help_arg = true;
 	}
+}
+
+// Include file link
+struct inc_link {
+	FILE *file;
+	struct parser parser;
+	struct inc_link *prev;
+};
+
+// Initializes the given link, taking ownership of the given filename B-string.
+// Also takes ownership of the given file, closing it when the object is destroyed.
+void inc_link_init(struct inc_link *link, char *filename, FILE *file)
+{
+	link->file = file;
+	parser_init(&link->parser, filename);
+	link->prev = NULL;
+}
+
+// Destroys the given include link
+void inc_link_destroy(struct inc_link *link)
+{
+	parser_destroy(&link->parser);
+	fclose(link->file);
 }
 
 int main(int argc, const char *argv[])
@@ -116,35 +141,48 @@ int main(int argc, const char *argv[])
 		return 1;
 	}
 
+	// Create include chain
+	struct inc_link *inc_chain = (struct inc_link*)malloc(sizeof(struct inc_link));
+	inc_link_init(inc_chain, arg_src ? bstr_dup(arg_src) : NULL, infile);
+
 	// Set up assembler state
 	int sec_count = 0; // Count of sections encountered
 	struct stub_sec curr_sec; // The current section
 	stub_sec_init(&curr_sec, 0, 0, 0);
 
-	// Parse all bytes of input file until end of file reached or an error occurs
-	struct parser parser;
-	parser_init(&parser);
+	// Parse all bytes of input files until end of files is reached or an error occurs
 	struct parser_event pe;
-	for (; error == 0; ) {
+	for (; error == 0 && inc_chain; ) {
 		parser_event_init(&pe);
 
 		// Get a byte from the input file
-		int c = fgetc(infile);
+		int c = fgetc(inc_chain->file);
 		if (c == EOF) { // Finish file
-			if (ferror(infile)) {
-				fprintf(stderr, "error: failed to read from %s, errno %d\n", arg_src ? arg_src : "stdin", errno);
+			if (ferror(inc_chain->file)) {
+				fprintf(stderr, "error: failed to read from \"%s\", errno %d\n",
+					inc_chain->parser.filename, errno);
 				error = 1;
 			}
-			else if (!parser_can_terminate(&parser)) {
-				fprintf(stderr, "error: unexpected EOF in %s\n", arg_src ? arg_src : "stdin");
+			else if (!parser_can_terminate(&inc_chain->parser)) {
+				fprintf(stderr, "error: unexpected EOF in \"%s\"\n",
+					inc_chain->parser.filename);
 				error = 1;
 			}
 			else {
-				error = parser_terminate(&parser, &pe);
+				error = parser_terminate(&inc_chain->parser, &pe);
+
+				// Remove the front link
+				if (inc_chain->prev) {
+					// Transfer symbol definitions
+					smap_move(&inc_chain->parser.defs, &inc_chain->prev->parser.defs);
+				}
+				struct inc_link *prev = inc_chain->prev;
+				inc_link_destroy(inc_chain);
+				inc_chain = prev;
 			}
 		}
 		else { // Parse byte
-			error = parser_parse_byte(&parser, c, &pe);
+			error = parser_parse_byte(&inc_chain->parser, c, &pe);
 		}
 		if (error) break;
 
@@ -206,29 +244,53 @@ int main(int argc, const char *argv[])
 			}
 			break;
 
+		//
+		// Include file
+		//
+		case PET_INCLUDE:
+			// @todo: include paths
+			// Attempt to open the included file
+			infile = fopen(pe.inc.filename, "r");
+			if (!infile) { // Failed to open included file
+				fprintf(stderr, "error: failed to open \"%s\" included from \"%s\" line %d\n",
+					pe.inc.filename, inc_chain->parser.filename,
+					inc_chain->parser.tline);
+				error = 1;
+			}
+			else { // File opened successfully
+				// Add link to front of chain
+				struct inc_link *next = (struct inc_link*)malloc(sizeof(struct inc_link));
+				inc_link_init(next, pe.inc.filename, infile);
+				pe.inc.filename = NULL; // To prevent destruction of B-string
+				// Transfer symbol definitions
+				smap_move(&inc_chain->parser.defs, &next->parser.defs);
+				next->prev = inc_chain;
+				inc_chain = next;
+			}
+			break;
+
 		default: // Invalid event type
 			fprintf(stderr, "error: invalid parser event type %d\n", pe.type);
 			error = 1;
 			break;
 		}
 
-		if (c == EOF) break;
+		parser_event_destroy(&pe); // Destroy the parser event
 	}
 
 	if (!error && sec_count) {
 		error = stub_save_section(outfile, sec_count - 1, &curr_sec);
 	}
 
-	// Destroy parser
-	parser_destroy(&parser);
+	// Destroy include chain
+	for (; inc_chain; ) {
+		struct inc_link *prev = inc_chain->prev;
+		inc_link_destroy(inc_chain);
+		inc_chain = prev;
+	}
 
 	// Close output file
 	fclose(outfile);
-
-	// Close input file
-	if (infile != stdin) {
-		fclose(infile);
-	}
 
 	return error;
 }
