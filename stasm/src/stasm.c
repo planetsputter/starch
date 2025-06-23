@@ -12,6 +12,8 @@
 const char *arg_help = NULL;
 const char *arg_src = NULL;
 const char *arg_output = "a.stb";
+const char *arg_maxnsec = NULL;
+int maxnsec = 4;
 
 struct carg_desc arg_descs[] = {
 	{
@@ -24,13 +26,22 @@ struct carg_desc arg_descs[] = {
 		NULL            // Value hint
 	},
 	{
-		CARG_TYPE_NAMED,  // Type
+		CARG_TYPE_NAMED, // Type
 		'o',             // Flag
 		"--output",      // Name
 		&arg_output,     // Value
 		false,           // Required
 		"binary output", // Usage text
 		"output"         // Value hint
+	},
+	{
+		CARG_TYPE_NAMED, // Type
+		'\0',             // Flag
+		"--maxnsec",     // Name
+		&arg_maxnsec,    // Value
+		false,           // Required
+		"maximum number of sections", // Usage text
+		"maxnsec"        // Value hint
 	},
 	{
 		CARG_TYPE_POSITIONAL, // Type
@@ -104,6 +115,15 @@ int main(int argc, const char *argv[])
 		);
 		return 1;
 	}
+	if (arg_maxnsec) {
+		// If a maxnsec argument is given, attempt to parse as an integer
+		char *end = NULL;
+		maxnsec = strtol(arg_maxnsec, &end, 0);
+		if (!end || *end != '\0' || *arg_maxnsec == '\0') {
+			fprintf(stderr, "error: failed to parse --maxnsec argument \"%s\"\n", arg_maxnsec);
+			return 1;
+		}
+	}
 	// Arguments parsed, no errors
 
 	// Open input file
@@ -130,8 +150,7 @@ int main(int argc, const char *argv[])
 	}
 
 	// Initialize output file
-	// @todo: Allow to override default maximum number of sections with command-line argument.
-	int error = stub_init(outfile, 4);
+	int error = stub_init(outfile, maxnsec);
 	if (error) {
 		fclose(outfile);
 		if (infile != stdin) {
