@@ -1,6 +1,9 @@
 // core.c
 
+#include <errno.h>
+#include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "core.h"
 #include "starch.h"
@@ -9,20 +12,72 @@
 // Memory constants
 //
 enum {
-	IO_STDOUT_ADDR = 0x400,
-	IO_STDIN_ADDR  = 0x401,
+	// Special addresses
+	IO_STDIN_ADDR  = 0x400,
+	IO_STDOUT_ADDR = 0x401,
+	IO_FLUSH_ADDR  = 0x402,
 	END_IO_ADDR    = 0x1000, // Initial PC
+
+	STDINOUT_BUFF_SIZE = 0x400,
 };
 
 void core_init(struct core *core)
 {
 	memset(core, 0, sizeof(struct core));
-	// @todo: Incorporate stack size into a linkable binary format.
 	core->pc = END_IO_ADDR;
+	core->stdin_buff = (uint8_t*)malloc(STDINOUT_BUFF_SIZE);
+	core->stdout_buff = (uint8_t*)malloc(STDINOUT_BUFF_SIZE);
 }
 
-void core_destroy(struct core*)
+void core_destroy(struct core *core)
 {
+	free(core->stdout_buff);
+	core->stdout_buff = NULL;
+	free(core->stdin_buff);
+	core->stdin_buff = NULL;
+}
+
+static int core_read_stdin(struct core *core, uint8_t *b)
+{
+	int ret = 0;
+	if (core->stdin_head != core->stdin_tail) {
+		// There is already buffered data available
+		*b = core->stdin_buff[core->stdin_head++];
+	}
+	else {
+		// Read available up to buffer size
+		core->stdin_head = 0;
+		ssize_t bc = read(0, core->stdin_buff, STDINOUT_BUFF_SIZE);
+		if (bc > 0) {
+			core->stdin_tail = bc;
+		}
+		else {
+			core->stdin_tail = 0;
+			ret = errno ? errno : 1;
+		}
+	}
+	return ret;
+}
+
+static int core_flush_stdout(struct core *core)
+{
+	// Flush to stdout
+	int ret = 0;
+	ssize_t bc = write(1, core->stdout_buff, core->stdout_count);
+	if (bc != core->stdout_count) ret = errno;
+	core->stdout_count = 0;
+	return ret;
+}
+
+static int core_write_stdout(struct core *core, uint8_t b)
+{
+	int ret = 0;
+	core->stdout_buff[core->stdout_count++] = b;
+	if (core->stdout_count >= STDINOUT_BUFF_SIZE || b == '\n') {
+		// Flush when buffer fills or newline is written
+		ret = core_flush_stdout(core);
+	}
+	return ret;
 }
 
 static int core_mem_write8(struct core *core, struct mem *mem, uint64_t addr, uint8_t data)
@@ -35,8 +90,10 @@ static int core_mem_write8(struct core *core, struct mem *mem, uint64_t addr, ui
 	// Check IO memory
 	if (addr < END_IO_ADDR) {
 		if (addr == IO_STDOUT_ADDR) {
-			printf("%c", data);
-			return STERR_NONE;
+			return core_write_stdout(core, data);
+		}
+		else if (addr == IO_FLUSH_ADDR) {
+			return core_flush_stdout(core);
 		}
 		return STERR_BAD_IO_ACCESS;
 	}
@@ -138,6 +195,9 @@ static int core_mem_read8(struct core *core, struct mem *mem, uint64_t addr, uin
 
 	// Check IO memory
 	if (addr < END_IO_ADDR) {
+		if (addr == IO_STDIN_ADDR) {
+			return core_read_stdin(core, data);
+		}
 		return STERR_BAD_IO_ACCESS; // No 8-bit IO read operations currently
 	}
 
@@ -188,9 +248,6 @@ static int core_mem_read32(struct core *core, struct mem *mem, uint64_t addr, ui
 
 	// Check IO memory
 	if (addr < END_IO_ADDR) {
-		if (addr == IO_STDIN_ADDR) {
-			return getchar();
-		}
 		return STERR_BAD_IO_ACCESS;
 	}
 
@@ -2683,6 +2740,7 @@ int core_step(struct core *core, struct mem *mem)
 		core->pc += 9;
 		break;
 	case op_halt:
+		core_flush_stdout(core);
 		return STERR_HALT;
 	case op_ext:
 	case op_nop:

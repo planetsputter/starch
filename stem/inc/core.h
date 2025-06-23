@@ -8,7 +8,12 @@
 #include "mem.h"
 
 struct core {
+	// The core Starch registers
 	uint64_t pc, sbp, sfp, sp, slp;
+
+	// Buffers for stdin and stdout
+	uint8_t *stdin_buff, *stdout_buff;
+	int stdin_head, stdin_tail, stdout_count;
 };
 
 void core_init(struct core*);
