@@ -16,6 +16,7 @@ enum parser_event_type {
 	PET_INST, // Instruction emitted
 	PET_SECTION, // Begin new section
 	PET_INCLUDE, // Include a file
+	PET_LABEL, // A label
 };
 
 // Structure representing an event emitted by the parser
@@ -26,14 +27,14 @@ struct parser_event {
 			uint8_t opcode; // Starch opcode, or negative for empty
 			uint8_t immlen; // Length of immediate data
 			uint8_t imm[8]; // Immediate data
+			char *imm_label; // B-string, immediate label or NULL
 		} inst;
 		struct { // For PET_SECTION
 			uint64_t addr;
 			uint8_t flags;
 		} sec;
-		struct { // For PET_INCLUDE
-			char *filename; // A B-string
-		} inc;
+		char *filename; // B-string, for PET_INCLUDE
+		char *label; // B-string, for PET_LABEL
 	};
 };
 
@@ -63,8 +64,6 @@ void parser_init(struct parser*, char *filename);
 
 // Destroys the parser
 void parser_destroy(struct parser*);
-
-// @todo: Function to parse each byte in a given FILE
 
 // Parses the given byte, possibly generating an event.
 // Returns 0 on success.

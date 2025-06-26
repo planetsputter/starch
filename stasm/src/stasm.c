@@ -86,6 +86,39 @@ void inc_link_destroy(struct inc_link *link)
 	fclose(link->file);
 }
 
+// Label definition
+struct label_def {
+	char *label; // B-string
+	uint64_t addr;
+	struct label_def *prev;
+};
+
+// Initializes the given label definition, taking ownership of the given label B-string
+static void label_def_init(struct label_def *ld, uint64_t addr, char *label)
+{
+	ld->label = label;
+	ld->addr = addr;
+	ld->prev = NULL;
+}
+
+// Destroys the given label definition
+static void label_def_destroy(struct label_def *ld)
+{
+	bstr_free(ld->label);
+	ld->label = NULL;
+}
+
+// Look up the label definition for the given label name
+static struct label_def *get_def_for_label(struct label_def *defs, const char *label)
+{
+	for (; defs; defs = defs->prev) {
+		if (strcmp(defs->label, label) == 0) {
+			return defs;
+		}
+	}
+	return NULL;
+}
+
 int main(int argc, const char *argv[])
 {
 	// Parse command-line arguments
@@ -164,8 +197,12 @@ int main(int argc, const char *argv[])
 	struct inc_link *inc_chain = (struct inc_link*)malloc(sizeof(struct inc_link));
 	inc_link_init(inc_chain, arg_src ? bstr_dup(arg_src) : NULL, infile);
 
+	// Initialize label definition list. @todo: Make a binary search tree for efficient lookup.
+	struct label_def *label_defs = NULL;
+
 	// Set up assembler state
 	int sec_count = 0; // Count of sections encountered
+	long curr_sec_fo = 0; // File offset of current section data
 	struct stub_sec curr_sec; // The current section
 	stub_sec_init(&curr_sec, 0, 0, 0);
 
@@ -224,15 +261,20 @@ int main(int argc, const char *argv[])
 			}
 			if (error) {
 				fprintf(stderr, "error: failed to save stub section %d with error %d\n", sec_count, error);
+				break;
+			}
+			error = stub_load_section(outfile, sec_count, &curr_sec);
+			if (error) {
+				fprintf(stderr, "error: failed to load stub section %d with error %d\n", sec_count, error);
+				break;
+			}
+			curr_sec_fo = ftell(outfile);
+			if (curr_sec_fo < 0) {
+				fprintf(stderr, "error: failed to get offset of section %d with error %d\n", sec_count, error);
+				error = 1;
 			}
 			else {
-				error = stub_load_section(outfile, sec_count, &curr_sec);
-				if (error) {
-					fprintf(stderr, "error: failed to load stub section %d with error %d\n", sec_count, error);
-				}
-				else {
-					sec_count++;
-				}
+				sec_count++;
 			}
 			break;
 
@@ -240,26 +282,31 @@ int main(int argc, const char *argv[])
 		// Instruction
 		//
 		case PET_INST:
-			if (sec_count) {
-				// Write instruction to output file
-				uint8_t buff[9]; // Maximum instruction length is 9
-				if (pe.inst.immlen > sizeof(buff)) {
-					fprintf(stderr, "error: immediate length too long at %d bytes\n", pe.inst.immlen);
-					error = 1;
-				}
-				else {
-					buff[0] = pe.inst.opcode;
-					memcpy(buff + 1, pe.inst.imm, pe.inst.immlen);
-					size_t written = fwrite(buff, 1, pe.inst.immlen + 1, outfile);
-					if (written != (size_t)pe.inst.immlen + 1) {
-						fprintf(stderr, "error: failed to write to output file %s, errno %d\n", arg_output, errno);
-						error = 1;
-					}
-				}
-			}
-			else {
+			if (sec_count == 0) {
 				fprintf(stderr, "error: expected section definition before first instruction\n");
 				error = 1;
+				break;
+			}
+
+			// Write instruction to output file
+			uint8_t buff[9]; // Maximum instruction length is 9
+			if (pe.inst.immlen > sizeof(buff)) {
+				fprintf(stderr, "error: immediate length too long at %d bytes\n", pe.inst.immlen);
+				error = 1;
+			}
+			else if (pe.inst.imm_label != NULL) {
+				// @todo: handle instructions with label immediates
+				fprintf(stderr, "error: instructions with label immediates not yet supported\n");
+				error = 1;
+			}
+			else {
+				buff[0] = pe.inst.opcode;
+				memcpy(buff + 1, pe.inst.imm, pe.inst.immlen);
+				size_t written = fwrite(buff, 1, pe.inst.immlen + 1, outfile);
+				if (written != (size_t)pe.inst.immlen + 1) {
+					fprintf(stderr, "error: failed to write to output file %s, errno %d\n", arg_output, errno);
+					error = 1;
+				}
 			}
 			break;
 
@@ -269,24 +316,56 @@ int main(int argc, const char *argv[])
 		case PET_INCLUDE:
 			// @todo: include paths
 			// Attempt to open the included file
-			infile = fopen(pe.inc.filename, "r");
+			infile = fopen(pe.filename, "r");
 			if (!infile) { // Failed to open included file
 				fprintf(stderr, "error: failed to open \"%s\" included from \"%s\" line %d\n",
-					pe.inc.filename, inc_chain->parser.filename,
+					pe.filename, inc_chain->parser.filename,
 					inc_chain->parser.tline);
 				error = 1;
 			}
 			else { // File opened successfully
 				// Add link to front of chain
 				struct inc_link *next = (struct inc_link*)malloc(sizeof(struct inc_link));
-				inc_link_init(next, pe.inc.filename, infile);
-				pe.inc.filename = NULL; // To prevent destruction of B-string
+				inc_link_init(next, pe.filename, infile);
+				pe.filename = NULL; // To prevent destruction of B-string
 				// Transfer symbol definitions
 				smap_move(&inc_chain->parser.defs, &next->parser.defs);
 				next->prev = inc_chain;
 				inc_chain = next;
 			}
 			break;
+
+		//
+		// Label
+		//
+		case PET_LABEL: {
+			if (sec_count == 0) {
+				fprintf(stderr, "error: expected section definition before label\n");
+				error = 1;
+				break;
+			}
+
+			// Compute current position within section
+			long fpos = ftell(outfile);
+			if (fpos < 0) {
+				fprintf(stderr, "error: failed to get offset of label %s with error %d\n", pe.label, error);
+				error = 1;
+			}
+			else if (get_def_for_label(label_defs, pe.label)) {
+				// A definition already exists for that label
+				fprintf(stderr, "error: definition already exists for label %s\n", pe.label);
+				error = 1;
+			}
+			else {
+				// Add new label definition to list
+				uint64_t addr = fpos - curr_sec_fo + curr_sec.addr;
+				struct label_def *next = (struct label_def*)malloc(sizeof(struct label_def));
+				label_def_init(next, addr, pe.label);
+				pe.label = NULL;
+				next->prev = label_defs;
+				label_defs = next;
+			}
+		}	break;
 
 		default: // Invalid event type
 			fprintf(stderr, "error: invalid parser event type %d\n", pe.type);
@@ -299,6 +378,13 @@ int main(int argc, const char *argv[])
 
 	if (!error && sec_count) {
 		error = stub_save_section(outfile, sec_count - 1, &curr_sec);
+	}
+
+	// Destroy label definition list
+	for (; label_defs;) {
+		struct label_def *prev = label_defs->prev;
+		label_def_destroy(label_defs);
+		label_defs = prev;
 	}
 
 	// Destroy include chain

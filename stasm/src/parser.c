@@ -168,9 +168,26 @@ void parser_event_init(struct parser_event *pe)
 
 void parser_event_destroy(struct parser_event *pe)
 {
-	if (pe->type == PET_INCLUDE) {
-		bstr_free(pe->inc.filename);
-		pe->inc.filename = NULL;
+	switch (pe->type) {
+	case PET_INST:
+		if (pe->inst.imm_label) {
+			bstr_free(pe->inst.imm_label);
+			pe->inst.imm_label = NULL;
+		}
+		break;
+
+	case PET_INCLUDE:
+		bstr_free(pe->filename);
+		pe->filename = NULL;
+		break;
+	
+	case PET_LABEL:
+		bstr_free(pe->label);
+		pe->label = NULL;
+		break;
+
+	default:
+		break;
 	}
 }
 
@@ -302,6 +319,21 @@ static int parser_finish_token(struct parser *parser)
 			}
 			break;
 		}
+		if (parser->token[0] == ':') { // ':' introduces a label
+			if (parser->token[1] == '\0') {
+				fprintf(stderr, "error: empty label in \"%s\" line %d char %d\n",
+					parser->filename, parser->tline, parser->tch);
+				ret = 1;
+			}
+			else {
+				// Emit label event
+				parser->event.type = PET_LABEL;
+				parser->event.label = parser->token;
+				parser->token = NULL;
+			}
+			parser->ts = PTS_EOL; // Expect end of line
+			break;
+		}
 
 		// Look up opcode
 		int opcode = opcode_for_name(symbol);
@@ -358,6 +390,26 @@ static int parser_finish_token(struct parser *parser)
 	case PTS_IMM + dt_a64:
 	case PTS_IMM + dt_u64:
 	case PTS_IMM + dt_i64: {
+		// Look up immediate size
+		int dt = parser->ts - PTS_IMM;
+		int dt_size = size_for_dt(dt);
+		parser->event.inst.immlen = dt_size;
+
+		if (symbol[0] == ':') { // Immediate is label
+			if (symbol[1] == '\0') { // Empty label
+				fprintf(stderr, "error: empty label in \"%s\" line %d char %d\n",
+					parser->filename, parser->tline, parser->tch);
+				ret = 1;
+			}
+			else {
+				// Emit instruction event with label
+				parser->event.inst.imm_label = parser->token;
+				parser->token = NULL;
+			}
+			parser->ts = PTS_EOL; // Expect EOL
+			break;
+		}
+
 		// Parse immediate literal
 		long long litval;
 		bool success = parse_int(symbol, &litval);
@@ -369,8 +421,6 @@ static int parser_finish_token(struct parser *parser)
 		}
 
 		// Check bounds
-		int dt = parser->ts - PTS_IMM;
-		int dt_size = size_for_dt(dt);
 		long long minval, maxval;
 		min_max_for_dt(dt, &minval, &maxval);
 		if (dt_size < 8 && (litval < minval || litval > maxval)) {
@@ -381,7 +431,6 @@ static int parser_finish_token(struct parser *parser)
 		}
 
 		// Transform literal value to byte array
-		parser->event.inst.immlen = dt_size;
 		u64_to_little8((uint64_t)litval, parser->event.inst.imm);
 
 		parser->ts = PTS_EOL; // Expect end of line
@@ -455,7 +504,7 @@ static int parser_finish_token(struct parser *parser)
 		}
 		else { // Emit an include event
 			parser->event.type = PET_INCLUDE;
-			parser->event.inc.filename = parser->token;
+			parser->event.filename = parser->token;
 			parser->token = NULL;
 		}
 		parser->ts = PTS_EOL;
@@ -531,7 +580,7 @@ int parser_parse_byte(struct parser *parser, byte b, struct parser_event *pe)
 			parser->ss = PSS_QUOTED;
 		}
 		else if (isalnum(c) || c == '$' || c == '.' || c == '-' || c == '_' || c == '\'' ||
-			c == '\\' || c >= 0x80) { // These continue or start a token
+			c == '\\' || c == ':' || c >= 0x80) { // These continue or start a token
 			if (parser->token == NULL) { // Start a new token
 				parser->token = bstr_alloc();
 				parser->tline = parser->line;
