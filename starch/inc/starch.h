@@ -237,7 +237,7 @@ enum {
 	op_ret,   // Return from current function
 
 	//
-	// Branching operations
+	// Jump operations
 	//
 	op_jmp,     // Jump to 8 byte imm addr
 	op_jmps,    // Jump to top 8 byte popped addr
@@ -246,24 +246,24 @@ enum {
 	op_rjmpi32, // Relative jump by signed 4 byte imm integer
 
 	//
-	// Conditional branching operations
+	// Branching operations
 	//
-	op_brnz8,      // Jump to 8 byte imm addr if top 1 byte popped non-zero
-	op_brnz16,     // Jump to 8 byte imm addr if top 2 byte popped non-zero
-	op_brnz32,     // Jump to 8 byte imm addr if top 4 byte popped non-zero
-	op_brnz64,     // Jump to 8 byte imm addr if top 8 byte popped non-zero
-	op_rbrnz8i8,   // Relative jump by signed 1 byte imm addr if top 1 byte popped non-zero
-	op_rbrnz8i16,  // Relative jump by signed 2 byte imm addr if top 1 byte popped non-zero
-	op_rbrnz8i32,  // Relative jump by signed 4 byte imm addr if top 1 byte popped non-zero
-	op_rbrnz16i8,  // Relative jump by signed 1 byte imm addr if top 2 byte popped non-zero
-	op_rbrnz16i16, // Relative jump by signed 2 byte imm addr if top 2 byte popped non-zero
-	op_rbrnz16i32, // Relative jump by signed 4 byte imm addr if top 2 byte popped non-zero
-	op_rbrnz32i8,  // Relative jump by signed 1 byte imm addr if top 4 byte popped non-zero
-	op_rbrnz32i16, // Relative jump by signed 2 byte imm addr if top 4 byte popped non-zero
-	op_rbrnz32i32, // Relative jump by signed 4 byte imm addr if top 4 byte popped non-zero
-	op_rbrnz64i8,  // Relative jump by signed 1 byte imm addr if top 8 byte popped non-zero
-	op_rbrnz64i16, // Relative jump by signed 2 byte imm addr if top 8 byte popped non-zero
-	op_rbrnz64i32, // Relative jump by signed 4 byte imm addr if top 8 byte popped non-zero
+	op_brz8,      // Jump to 8 byte imm addr if top 1 byte popped is zero
+	op_brz16,     // Jump to 8 byte imm addr if top 2 byte popped is zero
+	op_brz32,     // Jump to 8 byte imm addr if top 4 byte popped is zero
+	op_brz64,     // Jump to 8 byte imm addr if top 8 byte popped is zero
+	op_rbrz8i8,   // Relative jump by signed 1 byte imm addr if top 1 byte popped is zero
+	op_rbrz8i16,  // Relative jump by signed 2 byte imm addr if top 1 byte popped is zero
+	op_rbrz8i32,  // Relative jump by signed 4 byte imm addr if top 1 byte popped is zero
+	op_rbrz16i8,  // Relative jump by signed 1 byte imm addr if top 2 byte popped is zero
+	op_rbrz16i16, // Relative jump by signed 2 byte imm addr if top 2 byte popped is zero
+	op_rbrz16i32, // Relative jump by signed 4 byte imm addr if top 2 byte popped is zero
+	op_rbrz32i8,  // Relative jump by signed 1 byte imm addr if top 4 byte popped is zero
+	op_rbrz32i16, // Relative jump by signed 2 byte imm addr if top 4 byte popped is zero
+	op_rbrz32i32, // Relative jump by signed 4 byte imm addr if top 4 byte popped is zero
+	op_rbrz64i8,  // Relative jump by signed 1 byte imm addr if top 8 byte popped is zero
+	op_rbrz64i16, // Relative jump by signed 2 byte imm addr if top 8 byte popped is zero
+	op_rbrz64i32, // Relative jump by signed 4 byte imm addr if top 8 byte popped is zero
 
 	//
 	// Memory operations

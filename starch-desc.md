@@ -255,7 +255,7 @@ Boolean logical operations result in a Boolean value, either a zero or a one, re
 
 ### Comparison Operations
 
-These instructions result in a Boolean value, either a zero or a one, replacing the two operands. They can be used to calculate the condition for conditional branching instructions. In some cases signedness of the operands is significant.
+These instructions result in a Boolean value, either a zero or a one, replacing the two operands. They can be used to calculate the condition for branching instructions. In some cases signedness of the operands is significant.
 
 | Op Code   | PC After | Stack Before | Stack After  |
 |:--------- |:-------- |:------------ |:------------ |
@@ -310,7 +310,7 @@ These instructions call functions and return from them. Variants with an "s" use
 | calls     | a64        | a64                           | SFP64, PC64 + 1 | SP - 8      |
 | ret       | (SFP)64    | PSFP64, RETA64 @ SFP64, [...] |                 | (SFP + 8)64 |
 
-### Branching Instructions
+### Jump Instructions
 
 These instructions can transfer control flow to a non-sequential instruction.
 
@@ -322,28 +322,28 @@ These instructions can transfer control flow to a non-sequential instruction.
 | rjmpi16   | PC + (PC + 1)i16 |              |             |
 | rjmpi32   | PC + (PC + 1)i32 |              |             |
 
-### Conditional Branching Instructions
+### Branching Instructions
 
-These instructions will transfer control flow to a non-sequential instruction if their argument is non-zero.
+These instructions will transfer control flow to a non-sequential instruction if their argument is zero.
 
-| Op Code    | PC After                                 | Stack Before | Stack After |
-|:---------- |:---------------------------------------- |:------------ |:----------- |
-|  brnz8     | if  a8 then (PC + 1)64 else PC + 9       |  a8          |             |
-| brnz16     | if a16 then (PC + 1)64 else PC + 9       | a16          |             |
-| brnz32     | if a32 then (PC + 1)64 else PC + 9       | a32          |             |
-| brnz64     | if a64 then (PC + 1)64 else PC + 9       | a64          |             |
-|  rbrnz8i8  | if  a8 then PC + (PC + 1)i8  else PC + 2 |  a8          |             |
-|  rbrnz8i16 | if  a8 then PC + (PC + 1)i16 else PC + 3 |  a8          |             |
-|  rbrnz8i32 | if  a8 then PC + (PC + 1)i32 else PC + 5 |  a8          |             |
-| rbrnz16i8  | if a16 then PC + (PC + 1)i8  else PC + 2 | a16          |             |
-| rbrnz16i16 | if a16 then PC + (PC + 1)i16 else PC + 3 | a16          |             |
-| rbrnz16i32 | if a16 then PC + (PC + 1)i32 else PC + 5 | a16          |             |
-| rbrnz32i8  | if a32 then PC + (PC + 1)i8  else PC + 2 | a32          |             |
-| rbrnz32i16 | if a32 then PC + (PC + 1)i16 else PC + 3 | a32          |             |
-| rbrnz32i32 | if a32 then PC + (PC + 1)i32 else PC + 5 | a32          |             |
-| rbrnz64i8  | if a64 then PC + (PC + 1)i8  else PC + 2 | a64          |             |
-| rbrnz64i16 | if a64 then PC + (PC + 1)i16 else PC + 3 | a64          |             |
-| rbrnz64i32 | if a64 then PC + (PC + 1)i32 else PC + 5 | a64          |             |
+| Op Code   | PC After                                  | Stack Before | Stack After |
+|:--------- |:----------------------------------------- |:------------ |:----------- |
+|  brz8     | if  !a8 then (PC + 1)64 else PC + 9       |  a8          |             |
+| brz16     | if !a16 then (PC + 1)64 else PC + 9       | a16          |             |
+| brz32     | if !a32 then (PC + 1)64 else PC + 9       | a32          |             |
+| brz64     | if !a64 then (PC + 1)64 else PC + 9       | a64          |             |
+|  rbrz8i8  | if  !a8 then PC + (PC + 1)i8  else PC + 2 |  a8          |             |
+|  rbrz8i16 | if  !a8 then PC + (PC + 1)i16 else PC + 3 |  a8          |             |
+|  rbrz8i32 | if  !a8 then PC + (PC + 1)i32 else PC + 5 |  a8          |             |
+| rbrz16i8  | if !a16 then PC + (PC + 1)i8  else PC + 2 | a16          |             |
+| rbrz16i16 | if !a16 then PC + (PC + 1)i16 else PC + 3 | a16          |             |
+| rbrz16i32 | if !a16 then PC + (PC + 1)i32 else PC + 5 | a16          |             |
+| rbrz32i8  | if !a32 then PC + (PC + 1)i8  else PC + 2 | a32          |             |
+| rbrz32i16 | if !a32 then PC + (PC + 1)i16 else PC + 3 | a32          |             |
+| rbrz32i32 | if !a32 then PC + (PC + 1)i32 else PC + 5 | a32          |             |
+| rbrz64i8  | if !a64 then PC + (PC + 1)i8  else PC + 2 | a64          |             |
+| rbrz64i16 | if !a64 then PC + (PC + 1)i16 else PC + 3 | a64          |             |
+| rbrz64i32 | if !a64 then PC + (PC + 1)i32 else PC + 5 | a64          |             |
 
 ### Memory Operations
 

@@ -209,22 +209,22 @@ jmps
 rjmpi8 0
 rjmpi16 0
 rjmpi32 0
-brnz8 0
-brnz16 0
-brnz32 0
-brnz64 0
-rbrnz8i8 0
-rbrnz8i16 0
-rbrnz8i32 0
-rbrnz16i8 0
-rbrnz16i16 0
-rbrnz16i32 0
-rbrnz32i8 0
-rbrnz32i16 0
-rbrnz32i32 0
-rbrnz64i8 0
-rbrnz64i16 0
-rbrnz64i32 0
+brz8 0
+brz16 0
+brz32 0
+brz64 0
+rbrz8i8 0
+rbrz8i16 0
+rbrz8i32 0
+rbrz16i8 0
+rbrz16i16 0
+rbrz16i32 0
+rbrz32i8 0
+rbrz32i16 0
+rbrz32i32 0
+rbrz64i8 0
+rbrz64i16 0
+rbrz64i32 0
 load8
 load16
 load32
