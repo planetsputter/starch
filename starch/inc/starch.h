@@ -338,6 +338,11 @@ int opcode_for_name(const char*);
 // Returns the number of immediate arguments required by the given opcode, or -1 on error
 int imm_count_for_opcode(uint8_t);
 
+// Sets *jmp_br if the given opcode is a jump or branch opcode, that is,
+// one which may transfer control flow to a non-sequential instruction.
+// Sets *delta to whether the opcode accepts a relative immediate argument.
+void opcode_is_jmp_br(uint8_t opcode, int *jmp_br, int *delta);
+
 //
 // Starch data types
 //

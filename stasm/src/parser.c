@@ -393,7 +393,7 @@ static int parser_finish_token(struct parser *parser)
 		// Look up immediate size
 		int dt = parser->ts - PTS_IMM;
 		int dt_size = size_for_dt(dt);
-		parser->event.inst.immlen = dt_size;
+		parser->event.inst.imm_len = dt_size;
 
 		if (symbol[0] == ':') { // Immediate is label
 			if (symbol[1] == '\0') { // Empty label

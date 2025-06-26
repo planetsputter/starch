@@ -25,7 +25,7 @@ struct parser_event {
 	union {
 		struct { // For PET_INST
 			uint8_t opcode; // Starch opcode, or negative for empty
-			uint8_t immlen; // Length of immediate data
+			uint8_t imm_len; // Length of immediate data
 			uint8_t imm[8]; // Immediate data
 			char *imm_label; // B-string, immediate label or NULL
 		} inst;

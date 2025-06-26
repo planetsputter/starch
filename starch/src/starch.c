@@ -701,6 +701,41 @@ int imm_count_for_opcode(uint8_t opcode)
 	return ret;
 }
 
+void opcode_is_jmp_br(uint8_t opcode, int *jmp_br, int *delta)
+{
+	*jmp_br = 0;
+	*delta = 0;
+	switch (opcode) {
+	case op_jmp:
+	case op_brz8:
+	case op_brz16:
+	case op_brz32:
+	case op_brz64:
+		*jmp_br = 1;
+		break;
+	case op_rjmpi8:
+	case op_rjmpi16:
+	case op_rjmpi32:
+	case op_rbrz8i8:
+	case op_rbrz8i16:
+	case op_rbrz8i32:
+	case op_rbrz16i8:
+	case op_rbrz16i16:
+	case op_rbrz16i32:
+	case op_rbrz32i8:
+	case op_rbrz32i16:
+	case op_rbrz32i32:
+	case op_rbrz64i8:
+	case op_rbrz64i16:
+	case op_rbrz64i32:
+		*delta = 1;
+		*jmp_br = 1;
+		break;
+	default:
+		break;
+	}
+}
+
 void min_max_for_dt(int dt, long long *min, long long *max)
 {
 	// Set minimum

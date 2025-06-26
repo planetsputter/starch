@@ -6,6 +6,7 @@
 #include "bstr.h"
 #include "carg.h"
 #include "parser.h"
+#include "starch.h"
 #include "stub.h"
 
 // Variables set by command-line arguments
@@ -61,6 +62,20 @@ void detect_non_help_arg(struct carg_desc *desc, const char*)
 	if (desc->value != &arg_help) {
 		non_help_arg = true;
 	}
+}
+
+// Write the 64-bit unsigned value to eight bytes in little-endian order.
+// @todo: Move to utiity library.
+static void u64_to_little8(uint64_t val, uint8_t *data)
+{
+	data[0] = val;
+	data[1] = val >> 8;
+	data[2] = val >> 16;
+	data[3] = val >> 24;
+	data[4] = val >> 32;
+	data[5] = val >> 40;
+	data[6] = val >> 48;
+	data[7] = val >> 56;
 }
 
 // Include file link
@@ -270,7 +285,7 @@ int main(int argc, const char *argv[])
 			}
 			curr_sec_fo = ftell(outfile);
 			if (curr_sec_fo < 0) {
-				fprintf(stderr, "error: failed to get offset of section %d with error %d\n", sec_count, error);
+				fprintf(stderr, "error: failed to get offset of section %d with error %d\n", sec_count, errno);
 				error = 1;
 			}
 			else {
@@ -290,23 +305,94 @@ int main(int argc, const char *argv[])
 
 			// Write instruction to output file
 			uint8_t buff[9]; // Maximum instruction length is 9
-			if (pe.inst.immlen > sizeof(buff)) {
-				fprintf(stderr, "error: immediate length too long at %d bytes\n", pe.inst.immlen);
+			buff[0] = pe.inst.opcode;
+			if (pe.inst.imm_len > sizeof(buff)) {
+				fprintf(stderr, "error: immediate length too long at %d bytes\n", pe.inst.imm_len);
 				error = 1;
+				break;
 			}
-			else if (pe.inst.imm_label != NULL) {
-				// @todo: handle instructions with label immediates
-				fprintf(stderr, "error: instructions with label immediates not yet supported\n");
-				error = 1;
+			if (pe.inst.imm_label == NULL) { // Numeric immediate
+				memcpy(buff + 1, pe.inst.imm, pe.inst.imm_len);
 			}
-			else {
-				buff[0] = pe.inst.opcode;
-				memcpy(buff + 1, pe.inst.imm, pe.inst.immlen);
-				size_t written = fwrite(buff, 1, pe.inst.immlen + 1, outfile);
-				if (written != (size_t)pe.inst.immlen + 1) {
-					fprintf(stderr, "error: failed to write to output file %s, errno %d\n", arg_output, errno);
+			else { // Label immediate
+				struct label_def *ld = get_def_for_label(label_defs, pe.inst.imm_label);
+				if (ld == NULL) {
+					// Label is not yet defined
+					// @todo: Support use of labels before definition.
+					// This will require maintaining a list of offsets in the file that need
+					// to be updated and how once the label address is known.
+					fprintf(stderr, "error: label use before definition is not yet supported\n");
 					error = 1;
+					break;
 				}
+
+				// Check the immediate count for the opcode
+				int imm_count = imm_count_for_opcode(pe.inst.opcode);
+				if (imm_count != 1) {
+					fprintf(stderr, "error: instructions with %d immediates not yet supported\n", imm_count);
+					error = 1;
+					break;
+				}
+				// Get the immediate type
+				int dt = num_dt;
+				int ret = imm_types_for_opcode(pe.inst.opcode, &dt);
+				if (ret) {
+					fprintf(stderr, "error: failed to get immediate types for opcode 0x%02x, error %d\n",
+						pe.inst.opcode, ret);
+					error = 1;
+					break;
+				}
+				// Get the immediate size
+				int imm_bytes = size_for_dt(dt);
+				if (imm_bytes != pe.inst.imm_len) {
+					fprintf(stderr, "error: immediate length mismatch\n");
+					error = 1;
+					break;
+				}
+
+				// Get current file offset
+				long current_fo = ftell(outfile);
+				if (current_fo < 0) {
+					fprintf(stderr, "error: failed to get offset with error %d\n", errno);
+					error = 1;
+					break;
+				}
+				// Compute current address and delta to label
+				uint64_t curr_addr = curr_sec.addr + current_fo - curr_sec_fo;
+
+				// Check for jump/branch opcodes that explicitly accept and interpret a label immediate
+				int jmp_br = 0, use_delta = 0;
+				opcode_is_jmp_br(pe.inst.opcode, &jmp_br, &use_delta);
+				if (jmp_br) {
+					int64_t imm_val = use_delta ? ld->addr - curr_addr : ld->addr;
+					// Bounds-check
+					long long min_val = 0, max_val = 0;
+					min_max_for_dt(dt, &min_val, &max_val);
+					if (imm_bytes < 8 && (imm_val < min_val || imm_val > max_val)) {
+						fprintf(stderr, "error: immediate label value out of range for opcode\n");
+						error = 1;
+						break;
+					}
+					u64_to_little8(imm_val, buff + 1);
+				}
+
+				// This is not a jump or branch instruction.
+				// All other instructions expecting a 64-bit immediate value can take a label immediate.
+				else if (imm_bytes == 8) {
+					u64_to_little8(ld->addr, buff + 1);
+				}
+				else {
+					fprintf(stderr, "error: opcode does not accept an immediate label\n");
+					error = 1;
+					break;
+				}
+			}
+
+			// Write instruction to output file
+			size_t written = fwrite(buff, 1, pe.inst.imm_len + 1, outfile);
+			if (written != (size_t)pe.inst.imm_len + 1) {
+				fprintf(stderr, "error: failed to write to output file %s, errno %d\n", arg_output, errno);
+				error = 1;
 			}
 			break;
 
