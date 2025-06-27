@@ -101,34 +101,154 @@ void inc_link_destroy(struct inc_link *link)
 	fclose(link->file);
 }
 
-// Label definition
-struct label_def {
-	char *label; // B-string
-	uint64_t addr;
-	struct label_def *prev;
+// Records the use of an undefined label
+struct label_usage {
+	long foffset; // Offset of instruction in file
+	uint64_t addr; // Address of usage
+	struct label_usage *prev;
 };
 
-// Initializes the given label definition, taking ownership of the given label B-string
-static void label_def_init(struct label_def *ld, uint64_t addr, char *label)
+// Initializes the given label usage
+static void label_usage_init(struct label_usage *lu, long foffset, uint64_t addr)
 {
-	ld->label = label;
-	ld->addr = addr;
-	ld->prev = NULL;
+	lu->foffset = foffset;
+	lu->addr = addr;
+	lu->prev = NULL;
 }
 
-// Destroys the given label definition
-static void label_def_destroy(struct label_def *ld)
+// Applies the given label usage in the given file once the label address is known
+static int apply_label_usage(FILE *outfile, struct label_usage *lu, uint64_t label_addr)
 {
-	bstr_free(ld->label);
-	ld->label = NULL;
+	// Seek to the instruction
+	int ret = fseek(outfile, lu->foffset, SEEK_SET);
+	if (ret) {
+		fprintf(stderr, "error: failed to seek in output file \"%s\", errno %d\n", arg_output, errno);
+		return ret;
+	}
+
+	// Read the instruction opcode
+	uint8_t buff[9];
+	size_t bc = fread(buff, 1, 1, outfile);
+	if (bc != 1) {
+		fprintf(stderr, "error: failed to read from output file \"%s\", errno %d\n", arg_output, errno);
+		return ret;
+	}
+
+	// Check the immediate count for the opcode
+	int imm_count = imm_count_for_opcode(buff[0]);
+	if (imm_count != 1) {
+		fprintf(stderr, "error: instructions with %d immediates not yet supported\n", imm_count);
+		return 1;
+	}
+
+	// Get the immediate type
+	int dt = num_dt;
+	ret = imm_types_for_opcode(buff[0], &dt);
+	if (ret) {
+		fprintf(stderr, "error: failed to get immediate types for opcode 0x%02x, error %d\n",
+			buff[0], ret);
+		return 1;
+	}
+
+	// Get the immediate size
+	int imm_bytes = size_for_dt(dt);
+	if (imm_bytes < 1 || imm_bytes > 8) {
+		fprintf(stderr, "error: invalid immediate size %d for data type %d\n", imm_bytes, dt);
+		return 1;
+	}
+
+	// Check that the immediate bytes are all zero
+	bc = fread(buff + 1, 1, imm_bytes, outfile);
+	if (bc != (size_t)imm_bytes) {
+		fprintf(stderr, "error: failed to read from output file \"%s\", errno %d\n", arg_output, errno);
+		return ret;
+	}
+	for (int i = 0; i < imm_bytes; i++) {
+		if (buff[i + 1] != 0) {
+			fprintf(stderr, "error: immediate data not cleared prior to label application\n");
+			return ret;
+		}
+	}
+
+	// Check for jump/branch opcodes that explicitly accept and interpret a label immediate
+	int jmp_br = 0, use_delta = 0;
+	opcode_is_jmp_br(buff[0], &jmp_br, &use_delta);
+	if (jmp_br) {
+		int64_t imm_val = use_delta ? label_addr - lu->addr : label_addr;
+		// Bounds-check
+		long long min_val = 0, max_val = 0;
+		min_max_for_dt(dt, &min_val, &max_val);
+		if (imm_bytes < 8 && (imm_val < min_val || imm_val > max_val)) {
+			fprintf(stderr, "error: immediate label value out of range for opcode\n");
+			return 1;
+		}
+		u64_to_little8(imm_val, buff + 1);
+	}
+
+	// This is not a jump or branch instruction.
+	// All other instructions expecting a 64-bit immediate value can take a label immediate.
+	else if (imm_bytes == 8) {
+		u64_to_little8(label_addr, buff + 1);
+	}
+	else {
+		fprintf(stderr, "error: opcode does not accept an immediate label\n");
+		return 1;
+	}
+
+	// Seek back to beginning of instruction
+	ret = fseek(outfile, -imm_bytes - 1, SEEK_CUR);
+	if (ret) {
+		fprintf(stderr, "error: failed to seek in output file \"%s\", errno %d\n", arg_output, errno);
+		return 1;
+	}
+
+	// Write instruction to output file
+	bc = fwrite(buff, 1, imm_bytes + 1, outfile);
+	if (bc != (size_t)imm_bytes + 1) {
+		fprintf(stderr, "error: failed to write to output file %s, errno %d\n", arg_output, errno);
+		return 1;
+	}
+
+	return 0;
 }
 
-// Look up the label definition for the given label name
-static struct label_def *get_def_for_label(struct label_def *defs, const char *label)
+// Label record
+struct label_rec {
+	char *label; // B-string
+	uint64_t addr; // Only relevant if usages is NULL
+	// Track usages until label is defined. Label is defined if this is NULL.
+	struct label_usage *usages;
+	struct label_rec *prev;
+};
+
+// Initializes the given label record, taking ownership of the given label B-string
+static void label_rec_init(struct label_rec *rec, char *label, uint64_t addr, struct label_usage *usages)
 {
-	for (; defs; defs = defs->prev) {
-		if (strcmp(defs->label, label) == 0) {
-			return defs;
+	rec->label = label;
+	rec->addr = addr;
+	rec->usages = usages;
+	rec->prev = NULL;
+}
+
+// Destroys the given label record
+static void label_rec_destroy(struct label_rec *rec)
+{
+	bstr_free(rec->label);
+	rec->label = NULL;
+	for (struct label_usage *usage = rec->usages; usage; ) {
+		struct label_usage *prev = usage->prev;
+		free(usage);
+		usage = prev;
+	}
+	rec->usages = NULL;
+}
+
+// Look up the label record for the given label name
+static struct label_rec *get_rec_for_label(struct label_rec *rec, const char *label)
+{
+	for (; rec; rec = rec->prev) {
+		if (strcmp(rec->label, label) == 0) {
+			return rec;
 		}
 	}
 	return NULL;
@@ -213,7 +333,7 @@ int main(int argc, const char *argv[])
 	inc_link_init(inc_chain, arg_src ? bstr_dup(arg_src) : NULL, infile);
 
 	// Initialize label definition list. @todo: Make a binary search tree for efficient lookup.
-	struct label_def *label_defs = NULL;
+	struct label_rec *label_recs = NULL;
 
 	// Set up assembler state
 	int sec_count = 0; // Count of sections encountered
@@ -249,6 +369,7 @@ int main(int argc, const char *argv[])
 				}
 				struct inc_link *prev = inc_chain->prev;
 				inc_link_destroy(inc_chain);
+				free(inc_chain);
 				inc_chain = prev;
 			}
 		}
@@ -296,36 +417,30 @@ int main(int argc, const char *argv[])
 		//
 		// Instruction
 		//
-		case PET_INST:
+		case PET_INST: {
 			if (sec_count == 0) {
 				fprintf(stderr, "error: expected section definition before first instruction\n");
 				error = 1;
 				break;
 			}
 
-			// Write instruction to output file
+			// Prepare bytes to write to output file
 			uint8_t buff[9]; // Maximum instruction length is 9
-			buff[0] = pe.inst.opcode;
 			if (pe.inst.imm_len > sizeof(buff)) {
 				fprintf(stderr, "error: immediate length too long at %d bytes\n", pe.inst.imm_len);
 				error = 1;
 				break;
 			}
+			buff[0] = pe.inst.opcode;
+			memset(buff + 1, 0, sizeof(buff) - 1);
+
+			struct label_usage *lu = NULL;
+			struct label_rec *rec = NULL;
+
 			if (pe.inst.imm_label == NULL) { // Numeric immediate
 				memcpy(buff + 1, pe.inst.imm, pe.inst.imm_len);
 			}
 			else { // Label immediate
-				struct label_def *ld = get_def_for_label(label_defs, pe.inst.imm_label);
-				if (ld == NULL) {
-					// Label is not yet defined
-					// @todo: Support use of labels before definition.
-					// This will require maintaining a list of offsets in the file that need
-					// to be updated and how once the label address is known.
-					fprintf(stderr, "error: label use before definition is not yet supported\n");
-					error = 1;
-					break;
-				}
-
 				// Check the immediate count for the opcode
 				int imm_count = imm_count_for_opcode(pe.inst.opcode);
 				if (imm_count != 1) {
@@ -357,35 +472,31 @@ int main(int argc, const char *argv[])
 					error = 1;
 					break;
 				}
-				// Compute current address and delta to label
+				// Compute current address
 				uint64_t curr_addr = curr_sec.addr + current_fo - curr_sec_fo;
 
-				// Check for jump/branch opcodes that explicitly accept and interpret a label immediate
-				int jmp_br = 0, use_delta = 0;
-				opcode_is_jmp_br(pe.inst.opcode, &jmp_br, &use_delta);
-				if (jmp_br) {
-					int64_t imm_val = use_delta ? ld->addr - curr_addr : ld->addr;
-					// Bounds-check
-					long long min_val = 0, max_val = 0;
-					min_max_for_dt(dt, &min_val, &max_val);
-					if (imm_bytes < 8 && (imm_val < min_val || imm_val > max_val)) {
-						fprintf(stderr, "error: immediate label value out of range for opcode\n");
-						error = 1;
-						break;
-					}
-					u64_to_little8(imm_val, buff + 1);
-				}
+				// Create a usage record for this label
+				lu = (struct label_usage*)malloc(sizeof(struct label_usage));
+				label_usage_init(lu, current_fo, curr_addr);
 
-				// This is not a jump or branch instruction.
-				// All other instructions expecting a 64-bit immediate value can take a label immediate.
-				else if (imm_bytes == 8) {
-					u64_to_little8(ld->addr, buff + 1);
+				// Look up the label record
+				rec = get_rec_for_label(label_recs, pe.inst.imm_label);
+				if (rec == NULL) {
+					// Label has not yet been used. Add new label record to list.
+					struct label_rec *next = (struct label_rec*)malloc(sizeof(struct label_rec));
+					label_rec_init(next, pe.inst.imm_label, 0, lu);
+					lu = NULL;
+					pe.inst.imm_label = NULL;
+					next->prev = label_recs;
+					label_recs = next;
 				}
-				else {
-					fprintf(stderr, "error: opcode does not accept an immediate label\n");
-					error = 1;
-					break;
+				else if (rec->usages) {
+					// Label has been used before but is not defined. Add label usage to list.
+					lu->prev = rec->usages;
+					rec->usages = lu;
+					lu = NULL;
 				}
+				// Otherwise the label is already defined
 			}
 
 			// Write instruction to output file
@@ -393,8 +504,15 @@ int main(int argc, const char *argv[])
 			if (written != (size_t)pe.inst.imm_len + 1) {
 				fprintf(stderr, "error: failed to write to output file %s, errno %d\n", arg_output, errno);
 				error = 1;
+				break;
 			}
-			break;
+
+			if (lu) {
+				// Label already defined and can be applied right away
+				error = apply_label_usage(outfile, lu, rec->addr);
+				free(lu);
+			}
+		}	break;
 
 		//
 		// Include file
@@ -436,20 +554,49 @@ int main(int argc, const char *argv[])
 			if (fpos < 0) {
 				fprintf(stderr, "error: failed to get offset of label %s with error %d\n", pe.label, error);
 				error = 1;
+				break;
 			}
-			else if (get_def_for_label(label_defs, pe.label)) {
-				// A definition already exists for that label
+			// Compute label address
+			uint64_t addr = fpos - curr_sec_fo + curr_sec.addr;
+
+			// Look up any existing label record
+			struct label_rec *rec = get_rec_for_label(label_recs, pe.label);
+			if (!rec) {
+				// Label has not been used before. Add new label record to list.
+				struct label_rec *next = (struct label_rec*)malloc(sizeof(struct label_rec));
+				label_rec_init(next, pe.label, addr, NULL);
+				pe.label = NULL;
+				next->prev = label_recs;
+				label_recs = next;
+			}
+			else if (!rec->usages) {
+				// A definition already exists for this label
 				fprintf(stderr, "error: definition already exists for label %s\n", pe.label);
 				error = 1;
 			}
 			else {
-				// Add new label definition to list
-				uint64_t addr = fpos - curr_sec_fo + curr_sec.addr;
-				struct label_def *next = (struct label_def*)malloc(sizeof(struct label_def));
-				label_def_init(next, addr, pe.label);
-				pe.label = NULL;
-				next->prev = label_defs;
-				label_defs = next;
+				// Label has been used but not defined. This is the definition.
+				rec->addr = addr; // Address is now known
+				struct label_usage *lu;
+				for (lu = rec->usages; lu; ) {
+					// Apply each of the usages
+					error = apply_label_usage(outfile, lu, rec->addr);
+					if (error) {
+						break;
+					}
+
+					// Delete and move on to the next usage
+					struct label_usage *prev = lu->prev;
+					free(lu);
+					lu = prev;
+				}
+				rec->usages = lu;
+
+				// Seek back to the original position
+				error = fseek(outfile, fpos, SEEK_SET);
+				if (error) {
+					fprintf(stderr, "error: failed to seek in output file \"%s\", errno %d\n", arg_output, errno);
+				}
 			}
 		}	break;
 
@@ -462,21 +609,30 @@ int main(int argc, const char *argv[])
 		parser_event_destroy(&pe); // Destroy the parser event
 	}
 
-	if (!error && sec_count) {
+	if (sec_count) {
 		error = stub_save_section(outfile, sec_count - 1, &curr_sec);
+		if (error) {
+			fprintf(stderr, "error: failed to save section %d to \"%s\"\n", sec_count - 1, arg_output);
+		}
 	}
 
-	// Destroy label definition list
-	for (; label_defs;) {
-		struct label_def *prev = label_defs->prev;
-		label_def_destroy(label_defs);
-		label_defs = prev;
+	// Destroy label record list
+	for (; label_recs;) {
+		if (label_recs->usages) { // Check for undefined labels that have not been applied
+			fprintf(stderr, "error: use of undefined label \"%s\"\n", label_recs->label);
+			error = 1;
+		}
+		struct label_rec *prev = label_recs->prev;
+		label_rec_destroy(label_recs);
+		free(label_recs);
+		label_recs = prev;
 	}
 
 	// Destroy include chain
 	for (; inc_chain; ) {
 		struct inc_link *prev = inc_chain->prev;
 		inc_link_destroy(inc_chain);
+		free(inc_chain);
 		inc_chain = prev;
 	}
 
