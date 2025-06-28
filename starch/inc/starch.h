@@ -12,22 +12,22 @@ enum {
 	//
 	// Push immediate operations
 	//
-	op_push8,     // Push 1 byte imm
-	op_push8u16,  // Push 1 byte unsigned imm as 2 byte
-	op_push8u32,  // Push 1 byte unsigned imm as 4 byte
-	op_push8u64,  // Push 1 byte unsigned imm as 8 byte
-	op_push8i16,  // Push 1 byte signed imm as 2 byte
-	op_push8i32,  // Push 1 byte signed imm as 4 byte
-	op_push8i64,  // Push 1 byte signed imm as 8 byte
-	op_push16,    // Push 2 byte imm
-	op_push16u32, // Push 2 byte unsigned imm as 4 byte
-	op_push16u64, // Push 2 byte unsigned imm as 8 byte
-	op_push16i32, // Push 2 byte signed imm as 4 byte
-	op_push16i64, // Push 2 byte signed imm as 8 byte
-	op_push32,    // Push 4 byte imm
-	op_push32u64, // Push 4 byte unsigned imm as 8 byte
-	op_push32i64, // Push 4 byte unsigned imm as 8 byte
-	op_push64,    // Push 8 byte imm
+	op_push8as8,    // Push 1 byte imm
+	op_push8asu16,  // Push 1 byte unsigned imm as 2 byte
+	op_push8asu32,  // Push 1 byte unsigned imm as 4 byte
+	op_push8asu64,  // Push 1 byte unsigned imm as 8 byte
+	op_push8asi16,  // Push 1 byte signed imm as 2 byte
+	op_push8asi32,  // Push 1 byte signed imm as 4 byte
+	op_push8asi64,  // Push 1 byte signed imm as 8 byte
+	op_push16as16,  // Push 2 byte imm
+	op_push16asu32, // Push 2 byte unsigned imm as 4 byte
+	op_push16asu64, // Push 2 byte unsigned imm as 8 byte
+	op_push16asi32, // Push 2 byte signed imm as 4 byte
+	op_push16asi64, // Push 2 byte signed imm as 8 byte
+	op_push32as32,  // Push 4 byte imm
+	op_push32asu64, // Push 4 byte unsigned imm as 8 byte
+	op_push32asi64, // Push 4 byte unsigned imm as 8 byte
+	op_push64as64,  // Push 8 byte imm
 
 	//
 	// Pop operations

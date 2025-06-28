@@ -316,7 +316,7 @@ int core_step(struct core *core, struct mem *mem)
 	//
 	// Push immediate operations
 	//
-	case op_push8:
+	case op_push8as8:
 		ret = core_mem_read8(core, mem, core->pc + 1, &temp_u8); // Read imm
 		if (ret) break;
 		ret = core_stack_write8(core, mem, core->sp - 1, temp_u8); // Write to stack
@@ -324,7 +324,7 @@ int core_step(struct core *core, struct mem *mem)
 		core->sp -= 1;
 		core->pc += 2;
 		break;
-	case op_push8u16:
+	case op_push8asu16:
 		ret = core_mem_read8(core, mem, core->pc + 1, &temp_u8); // Read imm
 		if (ret) break;
 		ret = core_stack_write16(core, mem, core->sp - 2, temp_u8); // Write to stack
@@ -332,7 +332,7 @@ int core_step(struct core *core, struct mem *mem)
 		core->sp -= 2;
 		core->pc += 2;
 		break;
-	case op_push8u32:
+	case op_push8asu32:
 		ret = core_mem_read8(core, mem, core->pc + 1, &temp_u8); // Read imm
 		if (ret) break;
 		ret = core_stack_write32(core, mem, core->sp - 4, temp_u8); // Write to stack
@@ -340,7 +340,7 @@ int core_step(struct core *core, struct mem *mem)
 		core->sp -= 4;
 		core->pc += 2;
 		break;
-	case op_push8u64:
+	case op_push8asu64:
 		ret = core_mem_read8(core, mem, core->pc + 1, &temp_u8); // Read imm
 		if (ret) break;
 		ret = core_stack_write64(core, mem, core->sp - 8, temp_u8); // Write to stack
@@ -348,7 +348,7 @@ int core_step(struct core *core, struct mem *mem)
 		core->sp -= 8;
 		core->pc += 2;
 		break;
-	case op_push8i16:
+	case op_push8asi16:
 		ret = core_mem_read8(core, mem, core->pc + 1, &temp_u8); // Read imm
 		if (ret) break;
 		ret = core_stack_write16(core, mem, core->sp - 2, (int8_t)temp_u8); // Write to stack
@@ -356,7 +356,7 @@ int core_step(struct core *core, struct mem *mem)
 		core->sp -= 2;
 		core->pc += 2;
 		break;
-	case op_push8i32:
+	case op_push8asi32:
 		ret = core_mem_read8(core, mem, core->pc + 1, &temp_u8); // Read imm
 		if (ret) break;
 		ret = core_stack_write32(core, mem, core->sp - 4, (int8_t)temp_u8); // Write to stack
@@ -364,7 +364,7 @@ int core_step(struct core *core, struct mem *mem)
 		core->sp -= 4;
 		core->pc += 2;
 		break;
-	case op_push8i64:
+	case op_push8asi64:
 		ret = core_mem_read8(core, mem, core->pc + 1, &temp_u8); // Read imm
 		if (ret) break;
 		ret = core_stack_write64(core, mem, core->sp - 8, (int8_t)temp_u8); // Write to stack
@@ -372,7 +372,7 @@ int core_step(struct core *core, struct mem *mem)
 		core->sp -= 8;
 		core->pc += 2;
 		break;
-	case op_push16:
+	case op_push16as16:
 		ret = core_mem_read16(core, mem, core->pc + 1, &temp_u16); // Read imm
 		if (ret) break;
 		ret = core_stack_write16(core, mem, core->sp - 2, temp_u16); // Write to stack
@@ -380,7 +380,7 @@ int core_step(struct core *core, struct mem *mem)
 		core->sp -= 2;
 		core->pc += 3;
 		break;
-	case op_push16u32:
+	case op_push16asu32:
 		ret = core_mem_read16(core, mem, core->pc + 1, &temp_u16); // Read imm
 		if (ret) break;
 		ret = core_stack_write32(core, mem, core->sp - 4, temp_u16); // Write to stack
@@ -388,7 +388,7 @@ int core_step(struct core *core, struct mem *mem)
 		core->sp -= 4;
 		core->pc += 3;
 		break;
-	case op_push16u64:
+	case op_push16asu64:
 		ret = core_mem_read16(core, mem, core->pc + 1, &temp_u16); // Read imm
 		if (ret) break;
 		ret = core_stack_write64(core, mem, core->sp - 8, temp_u16); // Write to stack
@@ -396,7 +396,7 @@ int core_step(struct core *core, struct mem *mem)
 		core->sp -= 8;
 		core->pc += 3;
 		break;
-	case op_push16i32:
+	case op_push16asi32:
 		ret = core_mem_read16(core, mem, core->pc + 1, &temp_u16); // Read imm
 		if (ret) break;
 		ret = core_stack_write32(core, mem, core->sp - 4, (int16_t)temp_u16); // Write to stack
@@ -404,7 +404,7 @@ int core_step(struct core *core, struct mem *mem)
 		core->sp -= 4;
 		core->pc += 3;
 		break;
-	case op_push16i64:
+	case op_push16asi64:
 		ret = core_mem_read16(core, mem, core->pc + 1, &temp_u16); // Read imm
 		if (ret) break;
 		ret = core_stack_write64(core, mem, core->sp - 8, (int16_t)temp_u16); // Write to stack
@@ -412,7 +412,7 @@ int core_step(struct core *core, struct mem *mem)
 		core->sp -= 8;
 		core->pc += 3;
 		break;
-	case op_push32:
+	case op_push32as32:
 		ret = core_mem_read32(core, mem, core->pc + 1, &temp_u32); // Read imm
 		if (ret) break;
 		ret = core_stack_write32(core, mem, core->sp - 4, temp_u32); // Write to stack
@@ -420,7 +420,7 @@ int core_step(struct core *core, struct mem *mem)
 		core->sp -= 4;
 		core->pc += 5;
 		break;
-	case op_push32u64:
+	case op_push32asu64:
 		ret = core_mem_read32(core, mem, core->pc + 1, &temp_u32); // Read imm
 		if (ret) break;
 		ret = core_stack_write64(core, mem, core->sp - 8, temp_u32); // Write to stack
@@ -428,7 +428,7 @@ int core_step(struct core *core, struct mem *mem)
 		core->sp -= 8;
 		core->pc += 5;
 		break;
-	case op_push32i64:
+	case op_push32asi64:
 		ret = core_mem_read32(core, mem, core->pc + 1, &temp_u32); // Read imm
 		if (ret) break;
 		ret = core_stack_write64(core, mem, core->sp - 8, (int32_t)temp_u32); // Write to stack
@@ -436,7 +436,7 @@ int core_step(struct core *core, struct mem *mem)
 		core->sp -= 8;
 		core->pc += 5;
 		break;
-	case op_push64:
+	case op_push64as64:
 		ret = core_mem_read64(core, mem, core->pc + 1, &temp_u64); // Read imm
 		if (ret) break;
 		ret = core_stack_write64(core, mem, core->sp - 8, temp_u64); // Write to stack

@@ -10,22 +10,22 @@ static const char *names[256] = {
 	//
 	// Push immediate operations
 	//
-	[op_push8] = "push8",
-	[op_push8u16] = "push8u16",
-	[op_push8u32] = "push8u32",
-	[op_push8u64] = "push8u64",
-	[op_push8i16] = "push8i16",
-	[op_push8i32] = "push8i32",
-	[op_push8i64] = "push8i64",
-	[op_push16] = "push16",
-	[op_push16u32] = "push16u32",
-	[op_push16u64] = "push16u64",
-	[op_push16i32] = "push16i32",
-	[op_push16i64] = "push16i64",
-	[op_push32] = "push32",
-	[op_push32u64] = "push32u64",
-	[op_push32i64] = "push32i64",
-	[op_push64] = "push64",
+	[op_push8as8] = "op_push8as8",
+	[op_push8asu16] = "op_push8asu16",
+	[op_push8asu32] = "op_push8asu32",
+	[op_push8asu64] = "op_push8asu64",
+	[op_push8asi16] = "op_push8asi16",
+	[op_push8asi32] = "op_push8asi32",
+	[op_push8asi64] = "op_push8asi64",
+	[op_push16as16] = "op_push16as16",
+	[op_push16asu32] = "op_push16asu32",
+	[op_push16asu64] = "op_push16asu64",
+	[op_push16asi32] = "op_push16asi32",
+	[op_push16asi64] = "op_push16asi64",
+	[op_push32as32] = "op_push32as32",
+	[op_push32asu64] = "op_push32asu64",
+	[op_push32asi64] = "op_push32asi64",
+	[op_push64as64] = "op_push64as64",
 
 	//
 	// Pop operations
@@ -351,22 +351,22 @@ int imm_count_for_opcode(uint8_t opcode)
 	//
 	// Push immediate operations
 	//
-	case op_push8:
-	case op_push8u16:
-	case op_push8u32:
-	case op_push8u64:
-	case op_push8i16:
-	case op_push8i32:
-	case op_push8i64:
-	case op_push16:
-	case op_push16u32:
-	case op_push16u64:
-	case op_push16i32:
-	case op_push16i64:
-	case op_push32:
-	case op_push32u64:
-	case op_push32i64:
-	case op_push64:
+	case op_push8as8:
+	case op_push8asu16:
+	case op_push8asu32:
+	case op_push8asu64:
+	case op_push8asi16:
+	case op_push8asi32:
+	case op_push8asi64:
+	case op_push16as16:
+	case op_push16asu32:
+	case op_push16asu64:
+	case op_push16asi32:
+	case op_push16asi64:
+	case op_push32as32:
+	case op_push32asu64:
+	case op_push32asi64:
+	case op_push64as64:
 		ret = 1;
 		break;
 
@@ -828,22 +828,22 @@ int imm_types_for_opcode(uint8_t opcode, int *dts)
 	//
 	// Push immediate operations
 	//
-	case op_push8:     *dts = dt_a8; break;
-	case op_push8u16:  *dts = dt_u8; break;
-	case op_push8u32:  *dts = dt_u8; break;
-	case op_push8u64:  *dts = dt_u8; break;
-	case op_push8i16:  *dts = dt_i8; break;
-	case op_push8i32:  *dts = dt_i8; break;
-	case op_push8i64:  *dts = dt_i8; break;
-	case op_push16:    *dts = dt_a16; break;
-	case op_push16u32: *dts = dt_u16; break;
-	case op_push16u64: *dts = dt_u16; break;
-	case op_push16i32: *dts = dt_i16; break;
-	case op_push16i64: *dts = dt_i16; break;
-	case op_push32:    *dts = dt_a32; break;
-	case op_push32u64: *dts = dt_u32; break;
-	case op_push32i64: *dts = dt_i32; break;
-	case op_push64:    *dts = dt_a64; break;
+	case op_push8as8:    *dts = dt_a8; break;
+	case op_push8asu16:  *dts = dt_u8; break;
+	case op_push8asu32:  *dts = dt_u8; break;
+	case op_push8asu64:  *dts = dt_u8; break;
+	case op_push8asi16:  *dts = dt_i8; break;
+	case op_push8asi32:  *dts = dt_i8; break;
+	case op_push8asi64:  *dts = dt_i8; break;
+	case op_push16as16:  *dts = dt_a16; break;
+	case op_push16asu32: *dts = dt_u16; break;
+	case op_push16asu64: *dts = dt_u16; break;
+	case op_push16asi32: *dts = dt_i16; break;
+	case op_push16asi64: *dts = dt_i16; break;
+	case op_push32as32:  *dts = dt_a32; break;
+	case op_push32asu64: *dts = dt_u32; break;
+	case op_push32asi64: *dts = dt_i32; break;
+	case op_push64as64:  *dts = dt_a64; break;
 
 	//
 	// Pop operations
