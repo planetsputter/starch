@@ -330,48 +330,45 @@ enum {
 };
 
 // Returns the name of the given opcode, or NULL for an invalid opcode
-const char *name_for_opcode(uint8_t);
+const char *name_for_opcode(int opcode);
 
 // Returns the opcode for the given name, or -1 on error
 int opcode_for_name(const char*);
 
-// Returns the number of immediate arguments required by the given opcode, or -1 on error
-int imm_count_for_opcode(uint8_t);
-
-// Sets *jmp_br if the given opcode is a jump or branch opcode, that is,
+// Sets *jmp_br to whether the given opcode is a jump or branch opcode, that is,
 // one which may transfer control flow to a non-sequential instruction.
 // Sets *delta to whether the opcode accepts a relative immediate argument.
-void opcode_is_jmp_br(uint8_t opcode, int *jmp_br, int *delta);
+void opcode_is_jmp_br(int opcode, int *jmp_br, int *delta);
 
 //
 // Starch data types
 //
 enum {
-	dt_a8,  // Any 1 byte quantity
-	dt_u8,  // An unsigned 1 byte integer
-	dt_i8,  // A signed 1 byte integer
-	dt_a16, // Any 2 byte quantity
-	dt_u16, // An unsigned 2 byte integer
-	dt_i16, // A signed 2 byte integer
-	dt_a32, // Any 4 byte quantity
-	dt_u32, // An unsigned 4 byte integer
-	dt_i32, // A signed 4 byte integer
-	dt_a64, // Any 8 byte quantity
-	dt_u64, // An unsigned 8 byte integer
-	dt_i64, // A signed 8 byte integer
-	num_dt,
+	SDT_VOID,
+	SDT_A8,  // Any 1 byte quantity
+	SDT_U8,  // An unsigned 1 byte integer
+	SDT_I8,  // A signed 1 byte integer
+	SDT_A16, // Any 2 byte quantity
+	SDT_U16, // An unsigned 2 byte integer
+	SDT_I16, // A signed 2 byte integer
+	SDT_A32, // Any 4 byte quantity
+	SDT_U32, // An unsigned 4 byte integer
+	SDT_I32, // A signed 4 byte integer
+	SDT_A64, // Any 8 byte quantity
+	SDT_U64, // An unsigned 8 byte integer
+	SDT_I64, // A signed 8 byte integer
+	SDT_COUNT,
 };
 
 // Sets the minimum (inclusive) and maximum (inclusive) values for the given data type
-void min_max_for_dt(int dt, long long *min, long long *max);
+void sdt_min_max(int sdt, int64_t *min, int64_t *max);
 
-// Returns the byte size of the given data type
-int size_for_dt(int dt);
+// Returns the byte size of the given data type, or negative on error
+int sdt_size(int sdt);
 
-// Get the data types of the immediate arguments for the given opcode.
-// Use imm_count_for_opcode() to determine the minimum length of dts.
-// Returns 0 on success.
-int imm_types_for_opcode(uint8_t opcode, int *dts);
+// Returns the data type of the immediate argument for the given opcode.
+// Returns negative on failure.
+int imm_type_for_opcode(int opcode);
 
 //
 // Constants

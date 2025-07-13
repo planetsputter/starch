@@ -145,8 +145,16 @@ int main(int argc, const char *argv[])
 			}
 			di++;
 
+			// Look up opcode name
+			const char *name = name_for_opcode(opcode);
+			if (name == NULL) {
+				fprintf(stderr, "error: failed to look up name for opcode %02x\n", opcode);
+				ret = 1;
+				break;
+			}
+
 			// Print opcode name
-			ret = fprintf(outfile, "%s", name_for_opcode(opcode));
+			ret = fprintf(outfile, "%s", name);
 			if (ret < 0) {
 				fprintf(stderr, "error: failed to write to \"%s\"\n", arg_output ? arg_output : "stdout");
 				ret = 1;
@@ -154,82 +162,72 @@ int main(int argc, const char *argv[])
 			}
 			ret = 0;
 
-			// Determine number of opcode arguments
-			int num_imm = imm_count_for_opcode(opcode);
-			if (num_imm < 0 || num_imm > 1) { // @todo: handle more than one immediate
-				fprintf(stderr, "error: invalid number (%d) of immediates for opcode 0x%02x\n",
-					num_imm, opcode);
+			// Determine type of immediate value
+			int sdt = imm_type_for_opcode(opcode);
+			if (sdt < 0) {
+				fprintf(stderr, "error: unable to determine immediate type for opcode 0x%02x\n",
+					opcode);
 				ret = 1;
 				break;
 			}
 
-			// Print opcode arguments
-			for (int ii = 0; ii < num_imm; ii++) {
-				int dt;
-				ret = imm_types_for_opcode(opcode, &dt);
-				if (ret) {
-					fprintf(stderr, "error: unable to determine immediate type for opcode 0x%02x\n",
-						opcode);
-					break;
-				}
+			int imm_len = sdt_size(sdt);
 
-				int imm_len = size_for_dt(dt);
-
-				// Read little-endian immediate value
-				int64_t val = 0;
-				int b;
-				for (int j = 0; j < imm_len; j++) {
-					b = fgetc(infile);
-					if (b == EOF) {
-						fprintf(stderr, "error: unexpected EOF in \"%s\"\n", arg_bin);
-						ret = 1;
-						break;
-					}
-					di++;
-					val |= b << (j * 8);
-				}
-				if (ret) break;
-
-				// Print value
-				switch (dt) {
-				case dt_a8:
-				case dt_u8:
-					ret = fprintf(outfile, " %u", (uint8_t)val);
-					break;
-				case dt_a16:
-				case dt_u16:
-					ret = fprintf(outfile, " %u", (uint16_t)val);
-					break;
-				case dt_a32:
-				case dt_u32:
-					ret = fprintf(outfile, " %u", (uint32_t)val);
-					break;
-				case dt_a64:
-				case dt_u64:
-					ret = fprintf(outfile, " %lu", (uint64_t)val);
-					break;
-				case dt_i8:
-					ret = fprintf(outfile, " %d", (int8_t)val);
-					break;
-				case dt_i16:
-					ret = fprintf(outfile, " %d", (int16_t)val);
-					break;
-				case dt_i32:
-					ret = fprintf(outfile, " %d", (int32_t)val);
-					break;
-				case dt_i64:
-					ret = fprintf(outfile, " %ld", val);
-					break;
-				}
-				if (ret < 0) {
-					fprintf(stderr, "error: failed to write to \"%s\"\n", arg_output ? arg_output : "stdout");
+			// Read little-endian immediate value
+			int64_t val = 0;
+			int64_t b;
+			for (int j = 0; j < imm_len; j++) {
+				b = fgetc(infile);
+				if (b == EOF) {
+					fprintf(stderr, "error: unexpected EOF in \"%s\"\n", arg_bin);
 					ret = 1;
 					break;
 				}
-				ret = 0;
+				di++;
+				val |= b << (j * 8);
 			}
-			if (ret) break; // An error occurred
-			fprintf(outfile, "\n");
+			if (ret) break;
+
+			// Print value
+			if (val == 0) { // Print zero as "0"
+				ret = fprintf(outfile, " 0");
+			}
+			else switch (sdt) {
+			case SDT_A8:
+			case SDT_U8:
+			case SDT_A16:
+			case SDT_U16:
+			case SDT_A32:
+			case SDT_U32:
+			case SDT_A64:
+			case SDT_U64:
+				ret = fprintf(outfile, " 0x%lx", (uint64_t)val);
+				break;
+			case SDT_I8:
+				val = (int8_t)val;
+				ret = fprintf(outfile, " %s0x%lx", val < 0 ? "-" : "", val < 0 ? -val : val);
+				break;
+			case SDT_I16:
+				val = (int16_t)val;
+				ret = fprintf(outfile, " %s0x%lx", val < 0 ? "-" : "", val < 0 ? -val : val);
+				break;
+			case SDT_I32:
+				val = (int32_t)val;
+				ret = fprintf(outfile, " %s0x%lx", val < 0 ? "-" : "", val < 0 ? -val : val);
+				break;
+			case SDT_I64:
+				ret = fprintf(outfile, " %s0x%lx", val < 0 ? "-" : "", val < 0 ? -val : val);
+				break;
+			}
+			if (ret >= 0) {
+				ret = fprintf(outfile, "\n");
+			}
+			if (ret < 0) {
+				fprintf(stderr, "error: failed to write to \"%s\"\n", arg_output ? arg_output : "stdout");
+				ret = 1;
+				break;
+			}
+			ret = 0;
 		}
 	}
 

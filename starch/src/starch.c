@@ -10,22 +10,22 @@ static const char *names[256] = {
 	//
 	// Push immediate operations
 	//
-	[op_push8as8] = "op_push8as8",
-	[op_push8asu16] = "op_push8asu16",
-	[op_push8asu32] = "op_push8asu32",
-	[op_push8asu64] = "op_push8asu64",
-	[op_push8asi16] = "op_push8asi16",
-	[op_push8asi32] = "op_push8asi32",
-	[op_push8asi64] = "op_push8asi64",
-	[op_push16as16] = "op_push16as16",
-	[op_push16asu32] = "op_push16asu32",
-	[op_push16asu64] = "op_push16asu64",
-	[op_push16asi32] = "op_push16asi32",
-	[op_push16asi64] = "op_push16asi64",
-	[op_push32as32] = "op_push32as32",
-	[op_push32asu64] = "op_push32asu64",
-	[op_push32asi64] = "op_push32asi64",
-	[op_push64as64] = "op_push64as64",
+	[op_push8as8] = "push8as8",
+	[op_push8asu16] = "push8asu16",
+	[op_push8asu32] = "push8asu32",
+	[op_push8asu64] = "push8asu64",
+	[op_push8asi16] = "push8asi16",
+	[op_push8asi32] = "push8asi32",
+	[op_push8asi64] = "push8asi64",
+	[op_push16as16] = "push16as16",
+	[op_push16asu32] = "push16asu32",
+	[op_push16asu64] = "push16asu64",
+	[op_push16asi32] = "push16asi32",
+	[op_push16asi64] = "push16asi64",
+	[op_push32as32] = "push32as32",
+	[op_push32asu64] = "push32asu64",
+	[op_push32asi64] = "push32asi64",
+	[op_push64as64] = "push64as64",
 
 	//
 	// Pop operations
@@ -326,7 +326,7 @@ static const char *names[256] = {
 	[op_nop] = "nop",
 };
 
-const char *name_for_opcode(uint8_t opcode)
+const char *name_for_opcode(int opcode)
 {
 	return names[opcode];
 }
@@ -340,371 +340,11 @@ int opcode_for_name(const char *name)
 	return -1;
 }
 
-int imm_count_for_opcode(uint8_t opcode)
-{
-	int ret = 0;
-
-	switch (opcode) {
-	case op_invalid:
-		break;
-
-	//
-	// Push immediate operations
-	//
-	case op_push8as8:
-	case op_push8asu16:
-	case op_push8asu32:
-	case op_push8asu64:
-	case op_push8asi16:
-	case op_push8asi32:
-	case op_push8asi64:
-	case op_push16as16:
-	case op_push16asu32:
-	case op_push16asu64:
-	case op_push16asi32:
-	case op_push16asi64:
-	case op_push32as32:
-	case op_push32asu64:
-	case op_push32asi64:
-	case op_push64as64:
-		ret = 1;
-		break;
-
-	//
-	// Pop operations
-	//
-	case op_pop8:
-	case op_pop16:
-	case op_pop32:
-	case op_pop64:
-		break;
-
-	//
-	// Duplication operations
-	//
-	case op_dup8:
-	case op_dup16:
-	case op_dup32:
-	case op_dup64:
-		break;
-
-	//
-	// Setting operations
-	//
-	case op_set8:
-	case op_set16:
-	case op_set32:
-	case op_set64:
-		break;
-
-	//
-	// Promotion Operations
-	//
-	case op_prom8u16:
-	case op_prom8u32:
-	case op_prom8u64:
-	case op_prom8i16:
-	case op_prom8i32:
-	case op_prom8i64:
-	case op_prom16u32:
-	case op_prom16u64:
-	case op_prom16i32:
-	case op_prom16i64:
-	case op_prom32u64:
-	case op_prom32i64:
-		break;
-
-	//
-	// Demotion Operations
-	//
-	case op_dem64to16:
-	case op_dem64to8:
-	case op_dem32to8:
-		break;
-
-	//
-	// Integer Arithmetic Operations
-	//
-	case op_add8:
-	case op_add16:
-	case op_add32:
-	case op_add64:
-	case op_sub8:
-	case op_sub16:
-	case op_sub32:
-	case op_sub64:
-	case op_subr8:
-	case op_subr16:
-	case op_subr32:
-	case op_subr64:
-	case op_mulu8:
-	case op_mulu16:
-	case op_mulu32:
-	case op_mulu64:
-	case op_muli8:
-	case op_muli16:
-	case op_muli32:
-	case op_muli64:
-	case op_divu8:
-	case op_divu16:
-	case op_divu32:
-	case op_divu64:
-	case op_divru8:
-	case op_divru16:
-	case op_divru32:
-	case op_divru64:
-	case op_divi8:
-	case op_divi16:
-	case op_divi32:
-	case op_divi64:
-	case op_divri8:
-	case op_divri16:
-	case op_divri32:
-	case op_divri64:
-	case op_modu8:
-	case op_modu16:
-	case op_modu32:
-	case op_modu64:
-	case op_modru8:
-	case op_modru16:
-	case op_modru32:
-	case op_modru64:
-	case op_modi8:
-	case op_modi16:
-	case op_modi32:
-	case op_modi64:
-	case op_modri8:
-	case op_modri16:
-	case op_modri32:
-	case op_modri64:
-		break;
-
-	//
-	// Bitwise shift operations
-	//
-	case op_lshift8:
-	case op_lshift16:
-	case op_lshift32:
-	case op_lshift64:
-	case op_rshiftu8:
-	case op_rshiftu16:
-	case op_rshiftu32:
-	case op_rshiftu64:
-	case op_rshifti8:
-	case op_rshifti16:
-	case op_rshifti32:
-	case op_rshifti64:
-		break;
-
-	//
-	// Bitwise logical operations
-	//
-	case op_band8:
-	case op_band16:
-	case op_band32:
-	case op_band64:
-	case op_bor8:
-	case op_bor16:
-	case op_bor32:
-	case op_bor64:
-	case op_bxor8:
-	case op_bxor16:
-	case op_bxor32:
-	case op_bxor64:
-	case op_binv8:
-	case op_binv16:
-	case op_binv32:
-	case op_binv64:
-		break;
-
-	//
-	// Boolean logical operations
-	//
-	case op_land8:
-	case op_land16:
-	case op_land32:
-	case op_land64:
-	case op_lor8:
-	case op_lor16:
-	case op_lor32:
-	case op_lor64:
-	case op_linv8:
-	case op_linv16:
-	case op_linv32:
-	case op_linv64:
-		break;
-
-	//
-	// Comparison operations
-	//
-	case op_ceq8:
-	case op_ceq16:
-	case op_ceq32:
-	case op_ceq64:
-	case op_cne8:
-	case op_cne16:
-	case op_cne32:
-	case op_cne64:
-	case op_cgtu8:
-	case op_cgtu16:
-	case op_cgtu32:
-	case op_cgtu64:
-	case op_cgti8:
-	case op_cgti16:
-	case op_cgti32:
-	case op_cgti64:
-	case op_cltu8:
-	case op_cltu16:
-	case op_cltu32:
-	case op_cltu64:
-	case op_clti8:
-	case op_clti16:
-	case op_clti32:
-	case op_clti64:
-	case op_cgeu8:
-	case op_cgeu16:
-	case op_cgeu32:
-	case op_cgeu64:
-	case op_cgei8:
-	case op_cgei16:
-	case op_cgei32:
-	case op_cgei64:
-	case op_cleu8:
-	case op_cleu16:
-	case op_cleu32:
-	case op_cleu64:
-	case op_clei8:
-	case op_clei16:
-	case op_clei32:
-	case op_clei64:
-		break;
-
-	//
-	// Function operations
-	//
-	case op_call:
-		ret = 1;
-		break;
-	case op_calls:
-	case op_ret:
-		break;
-
-	//
-	// Jump operations
-	//
-	case op_jmp:
-		ret = 1;
-		break;
-	case op_jmps:
-		break;
-	case op_rjmpi8:
-	case op_rjmpi16:
-	case op_rjmpi32:
-		ret = 1;
-		break;
-
-	//
-	// Branching operations
-	//
-	case op_brz8:
-	case op_brz16:
-	case op_brz32:
-	case op_brz64:
-	case op_rbrz8i8:
-	case op_rbrz8i16:
-	case op_rbrz8i32:
-	case op_rbrz16i8:
-	case op_rbrz16i16:
-	case op_rbrz16i32:
-	case op_rbrz32i8:
-	case op_rbrz32i16:
-	case op_rbrz32i32:
-	case op_rbrz64i8:
-	case op_rbrz64i16:
-	case op_rbrz64i32:
-		ret = 1;
-		break;
-
-	//
-	// Memory operations
-	//
-	case op_load8:
-	case op_load16:
-	case op_load32:
-	case op_load64:
-	case op_loadpop8:
-	case op_loadpop16:
-	case op_loadpop32:
-	case op_loadpop64:
-	case op_loadsfp8:
-	case op_loadsfp16:
-	case op_loadsfp32:
-	case op_loadsfp64:
-	case op_loadpopsfp8:
-	case op_loadpopsfp16:
-	case op_loadpopsfp32:
-	case op_loadpopsfp64:
-	case op_store8:
-	case op_store16:
-	case op_store32:
-	case op_store64:
-	case op_storepop8:
-	case op_storepop16:
-	case op_storepop32:
-	case op_storepop64:
-	case op_storesfp8:
-	case op_storesfp16:
-	case op_storesfp32:
-	case op_storesfp64:
-	case op_storepopsfp8:
-	case op_storepopsfp16:
-	case op_storepopsfp32:
-	case op_storepopsfp64:
-	case op_storer8:
-	case op_storer16:
-	case op_storer32:
-	case op_storer64:
-	case op_storerpop8:
-	case op_storerpop16:
-	case op_storerpop32:
-	case op_storerpop64:
-	case op_storersfp8:
-	case op_storersfp16:
-	case op_storersfp32:
-	case op_storersfp64:
-	case op_storerpopsfp8:
-	case op_storerpopsfp16:
-	case op_storerpopsfp32:
-	case op_storerpopsfp64:
-		break;
-
-	//
-	// Special Operations
-	//
-	case op_setsbp:
-	case op_setsfp:
-	case op_setsp:
-	case op_setslp:
-		ret = 1;
-		break;
-	case op_halt:
-	case op_ext:
-		// @todo
-	case op_nop:
-		break;
-
-	default:
-		ret = -1;
-		break;
-	}
-
-	return ret;
-}
-
-void opcode_is_jmp_br(uint8_t opcode, int *jmp_br, int *delta)
+void opcode_is_jmp_br(int opcode, int *jmp_br, int *delta)
 {
 	*jmp_br = 0;
 	*delta = 0;
+
 	switch (opcode) {
 	case op_jmp:
 	case op_brz8:
@@ -713,6 +353,7 @@ void opcode_is_jmp_br(uint8_t opcode, int *jmp_br, int *delta)
 	case op_brz64:
 		*jmp_br = 1;
 		break;
+
 	case op_rjmpi8:
 	case op_rjmpi16:
 	case op_rjmpi32:
@@ -731,119 +372,133 @@ void opcode_is_jmp_br(uint8_t opcode, int *jmp_br, int *delta)
 		*delta = 1;
 		*jmp_br = 1;
 		break;
+
 	default:
 		break;
 	}
 }
 
-void min_max_for_dt(int dt, long long *min, long long *max)
+void sdt_min_max(int dt, int64_t *min, int64_t *max)
 {
 	// Set minimum
 	if (min) switch (dt) {
-	case dt_a8:
-	case dt_i8:
+	case SDT_A8:
+	case SDT_I8:
 		*min = -0x80;
 		break;
-	case dt_a16:
-	case dt_i16:
+	case SDT_A16:
+	case SDT_I16:
 		*min = -0x8000;
 		break;
-	case dt_a32:
-	case dt_i32:
+	case SDT_A32:
+	case SDT_I32:
 		*min = -0x80000000l;
 		break;
-	case dt_a64:
-	case dt_i64:
+	case SDT_A64:
+	case SDT_I64:
 		*min = -0x8000000000000000l;
 		break;
-	case dt_u8:
-	case dt_u16:
-	case dt_u32:
-	case dt_u64:
+	case SDT_U8:
+	case SDT_U16:
+	case SDT_U32:
+	case SDT_U64:
 		*min = 0;
 		break;
 	}
 
 	// Set maximum
 	if (max) switch (dt) {
-	case dt_a8:
-	case dt_u8:
+	case SDT_A8:
+	case SDT_U8:
 		*max = 0xff;
 		break;
-	case dt_i8:
+	case SDT_I8:
 		*max = 0x7f;
 		break;
-	case dt_a16:
-	case dt_u16:
+	case SDT_A16:
+	case SDT_U16:
 		*max = 0xffff;
 		break;
-	case dt_i16:
+	case SDT_I16:
 		*max = 0x7fff;
 		break;
-	case dt_a32:
-	case dt_u32:
+	case SDT_A32:
+	case SDT_U32:
 		*max = 0xffffffffl;
 		break;
-	case dt_i32:
+	case SDT_I32:
 		*max = 0x7fffffffl;
 		break;
-	case dt_a64:
-	case dt_u64:
+	case SDT_A64:
+	case SDT_U64:
 		*max = 0xfffffffffffffffflu;
 		break;
-	case dt_i64:
+	case SDT_I64:
 		*max = 0x7ffffffffffffffflu;
 		break;
 	}
 }
 
-int size_for_dt(int dt)
+int sdt_size(int dt)
 {
+	int ret;
 	switch (dt) {
-	case dt_a8:
-	case dt_u8:
-	case dt_i8:
-		return 1;
-	case dt_a16:
-	case dt_u16:
-	case dt_i16:
-		return 2;
-	case dt_a32:
-	case dt_u32:
-	case dt_i32:
-		return 4;
-	case dt_a64:
-	case dt_u64:
-	case dt_i64:
-		return 8;
+	case SDT_VOID:
+		ret = 0;
+		break;
+	case SDT_A8:
+	case SDT_U8:
+	case SDT_I8:
+		ret = 1;
+		break;
+	case SDT_A16:
+	case SDT_U16:
+	case SDT_I16:
+		ret = 2;
+		break;
+	case SDT_A32:
+	case SDT_U32:
+	case SDT_I32:
+		ret = 4;
+		break;
+	case SDT_A64:
+	case SDT_U64:
+	case SDT_I64:
+		ret = 8;
+		break;
+	default:
+		ret = -1;
 	}
-	return 0;
+	return ret;
 }
 
-int imm_types_for_opcode(uint8_t opcode, int *dts)
+int imm_type_for_opcode(int opcode)
 {
-	int ret = 0;
+	int ret;
 
 	switch (opcode) {
+	// Intentionally invalid instruction
+	case op_invalid: ret = SDT_VOID; break;
+
 	//
 	// Push immediate operations
 	//
-	case op_push8as8:    *dts = dt_a8; break;
-	case op_push8asu16:  *dts = dt_u8; break;
-	case op_push8asu32:  *dts = dt_u8; break;
-	case op_push8asu64:  *dts = dt_u8; break;
-	case op_push8asi16:  *dts = dt_i8; break;
-	case op_push8asi32:  *dts = dt_i8; break;
-	case op_push8asi64:  *dts = dt_i8; break;
-	case op_push16as16:  *dts = dt_a16; break;
-	case op_push16asu32: *dts = dt_u16; break;
-	case op_push16asu64: *dts = dt_u16; break;
-	case op_push16asi32: *dts = dt_i16; break;
-	case op_push16asi64: *dts = dt_i16; break;
-	case op_push32as32:  *dts = dt_a32; break;
-	case op_push32asu64: *dts = dt_u32; break;
-	case op_push32asi64: *dts = dt_i32; break;
-	case op_push64as64:  *dts = dt_a64; break;
+	case op_push8as8:    ret = SDT_A8; break;
+	case op_push8asu16:  ret = SDT_U8; break;
+	case op_push8asu32:  ret = SDT_U8; break;
+	case op_push8asu64:  ret = SDT_U8; break;
+	case op_push8asi16:  ret = SDT_I8; break;
+	case op_push8asi32:  ret = SDT_I8; break;
+	case op_push8asi64:  ret = SDT_I8; break;
+	case op_push16as16:  ret = SDT_A16; break;
+	case op_push16asu32: ret = SDT_U16; break;
+	case op_push16asu64: ret = SDT_U16; break;
+	case op_push16asi32: ret = SDT_I16; break;
+	case op_push16asi64: ret = SDT_I16; break;
+	case op_push32as32:  ret = SDT_A32; break;
+	case op_push32asu64: ret = SDT_U32; break;
+	case op_push32asi64: ret = SDT_I32; break;
+	case op_push64as64:  ret = SDT_A64; break;
 
 	//
 	// Pop operations
@@ -852,7 +507,6 @@ int imm_types_for_opcode(uint8_t opcode, int *dts)
 	case op_pop16:
 	case op_pop32:
 	case op_pop64:
-		break;
 
 	//
 	// Duplication operations
@@ -861,7 +515,6 @@ int imm_types_for_opcode(uint8_t opcode, int *dts)
 	case op_dup16:
 	case op_dup32:
 	case op_dup64:
-		break;
 
 	//
 	// Setting operations
@@ -870,7 +523,6 @@ int imm_types_for_opcode(uint8_t opcode, int *dts)
 	case op_set16:
 	case op_set32:
 	case op_set64:
-		break;
 
 	//
 	// Promotion Operations
@@ -887,7 +539,6 @@ int imm_types_for_opcode(uint8_t opcode, int *dts)
 	case op_prom16i64:
 	case op_prom32u64:
 	case op_prom32i64:
-		break;
 
 	//
 	// Demotion Operations
@@ -895,7 +546,6 @@ int imm_types_for_opcode(uint8_t opcode, int *dts)
 	case op_dem64to16:
 	case op_dem64to8:
 	case op_dem32to8:
-		break;
 
 	//
 	// Integer Arithmetic Operations
@@ -952,7 +602,6 @@ int imm_types_for_opcode(uint8_t opcode, int *dts)
 	case op_modri16:
 	case op_modri32:
 	case op_modri64:
-		break;
 
 	//
 	// Bitwise shift operations
@@ -969,7 +618,6 @@ int imm_types_for_opcode(uint8_t opcode, int *dts)
 	case op_rshifti16:
 	case op_rshifti32:
 	case op_rshifti64:
-		break;
 
 	//
 	// Bitwise logical operations
@@ -990,7 +638,6 @@ int imm_types_for_opcode(uint8_t opcode, int *dts)
 	case op_binv16:
 	case op_binv32:
 	case op_binv64:
-		break;
 
 	//
 	// Boolean logical operations
@@ -1007,7 +654,6 @@ int imm_types_for_opcode(uint8_t opcode, int *dts)
 	case op_linv16:
 	case op_linv32:
 	case op_linv64:
-		break;
 
 	//
 	// Comparison operations
@@ -1052,26 +698,28 @@ int imm_types_for_opcode(uint8_t opcode, int *dts)
 	case op_clei16:
 	case op_clei32:
 	case op_clei64:
+		ret = SDT_VOID;
 		break;
 
 	//
 	// Function operations
 	//
 	case op_call:
-		*dts = dt_u64;
+		ret = SDT_U64;
 		break;
 	case op_calls:
 	case op_ret:
+		ret = SDT_VOID;
 		break;
 
 	//
 	// Jump operations
 	//
-	case op_jmp: *dts = dt_u64; break;
-	case op_jmps: break;
-	case op_rjmpi8:  *dts = dt_i8; break;
-	case op_rjmpi16: *dts = dt_i16; break;
-	case op_rjmpi32: *dts = dt_i32; break;
+	case op_jmp:     ret = SDT_U64; break;
+	case op_jmps:    ret = SDT_VOID; break;
+	case op_rjmpi8:  ret = SDT_I8; break;
+	case op_rjmpi16: ret = SDT_I16; break;
+	case op_rjmpi32: ret = SDT_I32; break;
 
 	//
 	// Branching operations
@@ -1080,25 +728,25 @@ int imm_types_for_opcode(uint8_t opcode, int *dts)
 	case op_brz16:
 	case op_brz32:
 	case op_brz64:
-		*dts = dt_u64;
+		ret = SDT_U64;
 		break;
 	case op_rbrz8i8:
 	case op_rbrz16i8:
 	case op_rbrz32i8:
 	case op_rbrz64i8:
-		*dts = dt_i8;
+		ret = SDT_I8;
 		break;
 	case op_rbrz8i16:
 	case op_rbrz16i16:
 	case op_rbrz32i16:
 	case op_rbrz64i16:
-		*dts = dt_i16;
+		ret = SDT_I16;
 		break;
 	case op_rbrz8i32:
 	case op_rbrz16i32:
 	case op_rbrz32i32:
 	case op_rbrz64i32:
-		*dts = dt_i32;
+		ret = SDT_I32;
 		break;
 
 	//
@@ -1152,6 +800,7 @@ int imm_types_for_opcode(uint8_t opcode, int *dts)
 	case op_storerpopsfp16:
 	case op_storerpopsfp32:
 	case op_storerpopsfp64:
+		ret = SDT_VOID;
 		break;
 
 	//
@@ -1161,16 +810,17 @@ int imm_types_for_opcode(uint8_t opcode, int *dts)
 	case op_setsfp:
 	case op_setsp:
 	case op_setslp:
-		*dts = dt_u64;
+		ret = SDT_U64;
 		break;
 	case op_halt:
 	case op_ext:
 		// @todo
 	case op_nop:
+		ret = SDT_VOID;
 		break;
 
 	default:
-		ret = 1;
+		ret = -1;
 		break;
 	}
 

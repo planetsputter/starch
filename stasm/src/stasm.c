@@ -134,26 +134,18 @@ static int apply_label_usage(FILE *outfile, struct label_usage *lu, uint64_t lab
 		return ret;
 	}
 
-	// Check the immediate count for the opcode
-	int imm_count = imm_count_for_opcode(buff[0]);
-	if (imm_count != 1) {
-		fprintf(stderr, "error: instructions with %d immediates not yet supported\n", imm_count);
-		return 1;
-	}
-
 	// Get the immediate type
-	int dt = num_dt;
-	ret = imm_types_for_opcode(buff[0], &dt);
-	if (ret) {
-		fprintf(stderr, "error: failed to get immediate types for opcode 0x%02x, error %d\n",
-			buff[0], ret);
+	int sdt = imm_type_for_opcode(buff[0]);
+	if (sdt < 0) {
+		fprintf(stderr, "error: failed to get immediate type for opcode 0x%02x\n",
+			buff[0]);
 		return 1;
 	}
 
 	// Get the immediate size
-	int imm_bytes = size_for_dt(dt);
+	int imm_bytes = sdt_size(sdt);
 	if (imm_bytes < 1 || imm_bytes > 8) {
-		fprintf(stderr, "error: invalid immediate size %d for data type %d\n", imm_bytes, dt);
+		fprintf(stderr, "error: invalid immediate size %d for data type %d\n", imm_bytes, sdt);
 		return 1;
 	}
 
@@ -176,8 +168,8 @@ static int apply_label_usage(FILE *outfile, struct label_usage *lu, uint64_t lab
 	if (jmp_br) {
 		int64_t imm_val = use_delta ? label_addr - lu->addr : label_addr;
 		// Bounds-check
-		long long min_val = 0, max_val = 0;
-		min_max_for_dt(dt, &min_val, &max_val);
+		int64_t min_val = 0, max_val = 0;
+		sdt_min_max(sdt, &min_val, &max_val);
 		if (imm_bytes < 8 && (imm_val < min_val || imm_val > max_val)) {
 			fprintf(stderr, "error: immediate label value out of range for opcode\n");
 			return 1;
@@ -441,24 +433,16 @@ int main(int argc, const char *argv[])
 				memcpy(buff + 1, pe.inst.imm, pe.inst.imm_len);
 			}
 			else { // Label immediate
-				// Check the immediate count for the opcode
-				int imm_count = imm_count_for_opcode(pe.inst.opcode);
-				if (imm_count != 1) {
-					fprintf(stderr, "error: instructions with %d immediates not yet supported\n", imm_count);
-					error = 1;
-					break;
-				}
 				// Get the immediate type
-				int dt = num_dt;
-				int ret = imm_types_for_opcode(pe.inst.opcode, &dt);
-				if (ret) {
-					fprintf(stderr, "error: failed to get immediate types for opcode 0x%02x, error %d\n",
-						pe.inst.opcode, ret);
+				int sdt = imm_type_for_opcode(pe.inst.opcode);
+				if (sdt < 0) {
+					fprintf(stderr, "error: failed to get immediate types for opcode 0x%02x\n",
+						pe.inst.opcode);
 					error = 1;
 					break;
 				}
 				// Get the immediate size
-				int imm_bytes = size_for_dt(dt);
+				int imm_bytes = sdt_size(sdt);
 				if (imm_bytes != pe.inst.imm_len) {
 					fprintf(stderr, "error: immediate length mismatch\n");
 					error = 1;

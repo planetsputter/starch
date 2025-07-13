@@ -90,7 +90,7 @@ static bool parse_string_lit(const char *str, char **bdest)
 }
 
 // Parse an integer literal. Returns whether the conversion was successful.
-static bool parse_int(const char *s, long long *val)
+static bool parse_int(const char *s, int64_t *val)
 {
 	if (*s == '\0') return false; // Empty string
 
@@ -153,12 +153,25 @@ static void u64_to_little8(uint64_t val, uint8_t *data)
 	data[7] = val >> 56;
 }
 
+// Return the 64-bit unsigned value represented by the given eight bytes
 static uint64_t little8_to_u64(const uint8_t *data)
 {
 	return (uint64_t)data[0] | ((uint64_t)data[1] << 8) |
 		((uint64_t)data[2] << 16) | ((uint64_t)data[3] << 24) |
 		((uint64_t)data[4] << 32) | ((uint64_t)data[5] << 40) |
 		((uint64_t)data[6] << 48) | ((uint64_t)data[7] << 56);
+}
+
+// Returns the minimum number of bytes required to represent the given value
+static int min_bytes_for_val(int64_t val)
+{
+	if (val < (int32_t)0x80000000) return 8;
+	if (val < (int16_t)0x8000) return 4;
+	if (val < (int8_t)0x80) return 2;
+	if (val <= (uint8_t)0xff) return 1;
+	if (val <= (uint16_t)0xffff) return 2;
+	if (val <= (uint32_t)0xffffffff) return 4;
+	return 8;
 }
 
 void parser_event_init(struct parser_event *pe)
@@ -198,8 +211,8 @@ int parser_event_print(const struct parser_event *pe, FILE *outfile)
 	case PET_INST: {
 		const char *name = name_for_opcode(pe->inst.opcode);
 		fprintf(outfile, "%s", name ? name : "unknown_opcode");
-		int immCount = imm_count_for_opcode(pe->inst.opcode);
-		if (immCount) { // @todo: Handle more than one immediate value
+		int sdt = imm_type_for_opcode(pe->inst.opcode);
+		if (sdt != SDT_VOID) {
 			fprintf(outfile, " 0x%lx", little8_to_u64(pe->inst.imm));
 		}
 		fprintf(outfile, "\n");
@@ -256,7 +269,8 @@ enum { // Parser syntax states
 enum { // Parser token states
 	PTS_DEFAULT,
 	PTS_IMM,
-	PTS_EOL = PTS_IMM + num_dt,
+	PTS_PIMM, // Immediate for pseudo-op
+	PTS_EOL,
 	PTS_DEF_KEY,
 	PTS_DEF_VAL,
 	PTS_SEC_ADDR,
@@ -338,36 +352,46 @@ static int parser_finish_token(struct parser *parser)
 		// Look up opcode
 		int opcode = opcode_for_name(symbol);
 		if (opcode < 0) {
-			fprintf(stderr, "error: unrecognized opcode \"%s\" in \"%s\" line %d char %d\n",
-				symbol, parser->filename, parser->tline, parser->tch);
-			ret = 1;
-			break;
-		}
-
-		// Look up immediate count for opcode
-		int imm_count = imm_count_for_opcode(opcode);
-		if (imm_count == 1) {
-			// Look up immediate type for opcode
-			int imm_type;
-			int ret = imm_types_for_opcode(opcode, &imm_type);
-			if (ret != 0) {
-				fprintf(stderr, "error: failed to look up immediate type for opcode %s in \"%s\" line %d char %d\n",
+			// Instruction is not an exact match for any opcode. Check for pseudo-ops.
+			// @todo: Add pseudo-ops to a table.
+			if (strcmp(symbol, "push8") == 0) {
+				parser->event.inst.opcode = op_push8as8;
+			}
+			else if (strcmp(symbol, "push16") == 0) {
+				parser->event.inst.opcode = op_push16as16;
+			}
+			else if (strcmp(symbol, "push32") == 0) {
+				parser->event.inst.opcode = op_push32as32;
+			}
+			else if (strcmp(symbol, "push64") == 0) {
+				parser->event.inst.opcode = op_push64as64;
+			}
+			else {
+				fprintf(stderr, "error: unrecognized opcode \"%s\" in \"%s\" line %d char %d\n",
 					symbol, parser->filename, parser->tline, parser->tch);
 				ret = 1;
 				break;
 			}
-			parser->ts = PTS_IMM + imm_type;
+			parser->ts = PTS_PIMM;
+			parser->event.type = PET_INST;
+			break;
 		}
-		else if (imm_count == 0) {
+
+		// Look up immediate count for opcode
+		int sdt = imm_type_for_opcode(opcode);
+		if (sdt < 0) {
+			fprintf(stderr, "error: failed to look up immediate type for opcode %s in \"%s\" line %d char %d\n",
+				symbol, parser->filename, parser->tline, parser->tch);
+			ret = 1;
+			break;
+		}
+		if (sdt == SDT_VOID) {
 			// Opcode has no immediates
 			parser->ts = PTS_EOL;
 		}
 		else {
-			// Currently there are no instructions with more than one immediate value
-			fprintf(stderr, "error: invalid immediate count %d for opcode %s in \"%s\" line %d char %d\n",
-				imm_count, symbol, parser->filename, parser->tline, parser->tch);
-			ret = 1;
-			break;
+			// Look up immediate type for opcode
+			parser->ts = PTS_IMM + sdt;
 		}
 
 		// Begin the instruction event
@@ -378,40 +402,24 @@ static int parser_finish_token(struct parser *parser)
 	//
 	// Parse immediate value
 	//
-	case PTS_IMM + dt_a8:
-	case PTS_IMM + dt_u8:
-	case PTS_IMM + dt_i8:
-	case PTS_IMM + dt_a16:
-	case PTS_IMM + dt_u16:
-	case PTS_IMM + dt_i16:
-	case PTS_IMM + dt_a32:
-	case PTS_IMM + dt_u32:
-	case PTS_IMM + dt_i32:
-	case PTS_IMM + dt_a64:
-	case PTS_IMM + dt_u64:
-	case PTS_IMM + dt_i64: {
-		// Look up immediate size
-		int dt = parser->ts - PTS_IMM;
-		int dt_size = size_for_dt(dt);
-		parser->event.inst.imm_len = dt_size;
-
+	case PTS_IMM:
+	case PTS_PIMM: {
 		if (symbol[0] == ':') { // Immediate is label
 			if (symbol[1] == '\0') { // Empty label
 				fprintf(stderr, "error: empty label in \"%s\" line %d char %d\n",
 					parser->filename, parser->tline, parser->tch);
 				ret = 1;
+				break;
 			}
-			else {
-				// Emit instruction event with label
-				parser->event.inst.imm_label = parser->token;
-				parser->token = NULL;
-			}
+			// Emit instruction event with label
+			parser->event.inst.imm_label = parser->token;
+			parser->token = NULL;
 			parser->ts = PTS_EOL; // Expect EOL
 			break;
 		}
 
 		// Parse immediate literal
-		long long litval;
+		int64_t litval;
 		bool success = parse_int(symbol, &litval);
 		if (!success) {
 			fprintf(stderr, "error: failed to parse integer literal \"%s\" in \"%s\" line %d char %d\n",
@@ -420,15 +428,68 @@ static int parser_finish_token(struct parser *parser)
 			break;
 		}
 
-		// Check bounds
-		long long minval, maxval;
-		min_max_for_dt(dt, &minval, &maxval);
-		if (dt_size < 8 && (litval < minval || litval > maxval)) {
-			fprintf(stderr, "error: literal \"%s\" is out of bounds for type in \"%s\" line %d char %d\n",
-					symbol, parser->filename, parser->tline, parser->tch);
-			ret = 1;
-			break;
+		// Look up immediate size
+		int opcode = parser->event.inst.opcode;
+		int sdt = imm_type_for_opcode(opcode);
+		int dt_size = sdt_size(sdt);
+
+		// Check immediate bounds
+		if (dt_size < 8) {
+			int64_t minval, maxval;
+			sdt_min_max(sdt, &minval, &maxval);
+			if (litval < minval || litval > maxval) {
+				fprintf(stderr, "error: literal \"%s\" is out of bounds for type in \"%s\" line %d char %d\n",
+						symbol, parser->filename, parser->tline, parser->tch);
+				ret = 1;
+				break;
+			}
 		}
+
+		int imm_len = dt_size;
+		if (parser->ts == PTS_PIMM) {
+			// Compact pseudo-ops where possible
+			int min_len = min_bytes_for_val(litval);
+			switch (opcode) {
+			case op_push16as16:
+				if (min_len < 2) {
+					imm_len = 1;
+					if (litval < 0) opcode = op_push8asi16;
+					else opcode = op_push8asu16;
+				}
+				break;
+			case op_push32as32:
+				if (min_len < 2) {
+					imm_len = 1;
+					if (litval < 0) opcode = op_push8asi32;
+					else opcode = op_push8asu32;
+				}
+				else if (min_len < 3) {
+					imm_len = 2;
+					if (litval < 0) opcode = op_push16asi32;
+					else opcode = op_push16asu32;
+				}
+				break;
+			case op_push64as64:
+				if (min_len < 2) {
+					imm_len = 1;
+					if (litval < 0) opcode = op_push8asi64;
+					else opcode = op_push8asu64;
+				}
+				else if (min_len < 3) {
+					imm_len = 2;
+					if (litval < 0) opcode = op_push16asi64;
+					else opcode = op_push16asu64;
+				}
+				else if (min_len < 5) {
+					imm_len = 4;
+					if (litval < 0) opcode = op_push32asi64;
+					else opcode = op_push32asu64;
+				}
+				break;
+			}
+			parser->event.inst.opcode = opcode;
+		}
+		parser->event.inst.imm_len = imm_len;
 
 		// Transform literal value to byte array
 		u64_to_little8((uint64_t)litval, parser->event.inst.imm);
@@ -476,7 +537,7 @@ static int parser_finish_token(struct parser *parser)
 	//
 	case PTS_SEC_ADDR: {
 		// Parse immediate literal
-		long long litval;
+		int64_t litval;
 		bool success = parse_int(symbol, &litval);
 		if (!success) {
 			fprintf(stderr, "error: failed to parse integer literal \"%s\" in \"%s\" line %d char %d\n",

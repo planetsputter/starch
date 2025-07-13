@@ -61,22 +61,22 @@ These operations are used to push immediate data (data in program memory) onto t
 
 | Op Code     | PC After | Stack Before | Stack After     |
 |:----------- |:-------- |:------------ |:--------------- |
-| push8       | PC+2     |              | (PC+1)8         |
+| push8as8    | PC+2     |              | (PC+1)8         |
 | push8asu16  | PC+2     |              | (PC+1)8 as u16  |
 | push8asu32  | PC+2     |              | (PC+1)8 as u32  |
 | push8asu64  | PC+2     |              | (PC+1)8 as u64  |
 | push8asi16  | PC+2     |              | (PC+1)8 as i16  |
 | push8asi32  | PC+2     |              | (PC+1)8 as i32  |
 | push8asi64  | PC+2     |              | (PC+1)8 as i64  |
-| push16      | PC+3     |              | (PC+1)16        |
+| push16as16  | PC+3     |              | (PC+1)16        |
 | push16asu32 | PC+3     |              | (PC+1)16 as u32 |
 | push16asu64 | PC+3     |              | (PC+1)16 as u64 |
 | push16asi32 | PC+3     |              | (PC+1)16 as i32 |
 | push16asi64 | PC+3     |              | (PC+1)16 as i64 |
-| push32      | PC+5     |              | (PC+1)32        |
+| push32as32  | PC+5     |              | (PC+1)32        |
 | push32asu64 | PC+5     |              | (PC+1)32 as u64 |
 | push32asi64 | PC+5     |              | (PC+1)32 as i64 |
-| push64      | PC+9     |              | (PC+1)64        |
+| push64as64  | PC+9     |              | (PC+1)64        |
 
 ### Pop Operations
 
