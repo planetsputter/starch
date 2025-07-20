@@ -594,9 +594,12 @@ int main(int argc, const char *argv[])
 	}
 
 	if (sec_count) {
-		error = stub_save_section(outfile, sec_count - 1, &curr_sec);
-		if (error) {
+		int save_error = stub_save_section(outfile, sec_count - 1, &curr_sec);
+		if (save_error) {
 			fprintf(stderr, "error: failed to save section %d to \"%s\"\n", sec_count - 1, arg_output);
+			if (error == 0) {
+				error = save_error;
+			}
 		}
 	}
 

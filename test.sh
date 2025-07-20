@@ -29,4 +29,12 @@ $DISTASM a.stb -o dis.st
 echo checking for symmetric dis/assembly
 cmp allops.st dis.st
 
+# Check assembly of pseudo-ops
+echo assembling pseudo-ops
+$STASM psops.st
+echo disassembling pseudo-ops
+$DISTASM a.stb -o dis.st
+echo checking for proper disassembly
+cmp psops-dis.st dis.st
+
 echo all tests passed

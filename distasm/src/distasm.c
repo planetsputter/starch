@@ -189,7 +189,10 @@ int main(int argc, const char *argv[])
 			if (ret) break;
 
 			// Print value
-			if (val == 0) { // Print zero as "0"
+			if (sdt == SDT_VOID) {
+				// Do nothing
+			}
+			else if (val == 0) { // Print zero as "0", no matter the data type
 				ret = fprintf(outfile, " 0");
 			}
 			else switch (sdt) {

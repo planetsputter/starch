@@ -391,7 +391,7 @@ static int parser_finish_token(struct parser *parser)
 		}
 		else {
 			// Look up immediate type for opcode
-			parser->ts = PTS_IMM + sdt;
+			parser->ts = PTS_IMM;
 		}
 
 		// Begin the instruction event
