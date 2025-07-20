@@ -4,7 +4,7 @@
 # Expansion of undefined variables is an error.
 set -Eeu
 
-trap 'echo test failed on line $LINENO' ERR
+trap 'echo test.sh failed on line $LINENO' ERR
 
 # Change to test directory
 cd test
@@ -36,5 +36,10 @@ echo disassembling pseudo-ops
 $DISTASM a.stb -o dis.st
 echo checking for proper disassembly
 cmp psops-dis.st dis.st
+
+# Run individual tests
+echo testing add8, sub8
+$STASM test-add8-sub8.st
+$STEM a.stb
 
 echo all tests passed

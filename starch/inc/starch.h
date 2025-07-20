@@ -383,6 +383,7 @@ enum {
 enum {
 	STERR_NONE = 0,
 	STERR_BAD_INST, // Bad instruction
+	STERR_ASSERT_FAILURE, // IO assertion failed
 	STERR_BAD_ALIGN, // Bad alignment
 	STERR_BAD_IO_ACCESS, // Access to unused IO memory
 	STERR_BAD_FRAME_ACCESS, // Access to protected stack frame data

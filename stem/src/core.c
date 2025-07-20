@@ -17,9 +17,10 @@ enum {
 	IO_STDIN_ADDR  = 0x1000,
 	IO_STDOUT_ADDR = 0x1001,
 	IO_FLUSH_ADDR  = 0x1002,
-	IO_URAND_ADDR  = 0x1010,
-	END_IO_ADDR    = 0x8000,
-	INIT_PC_VAL    = 0x8000, // Initial PC
+	IO_URAND_ADDR  = 0x1003,
+	IO_ASSERT_ADDR = 0x100b,
+	END_IO_ADDR    = 0x2000,
+	INIT_PC_VAL    = 0x2000, // Initial PC
 
 	STDINOUT_BUFF_SIZE = 0x400,
 };
@@ -111,8 +112,11 @@ static int core_mem_write8(struct core *core, struct mem *mem, uint64_t addr, ui
 		if (addr == IO_STDOUT_ADDR) {
 			return core_write_stdout(core, data);
 		}
-		else if (addr == IO_FLUSH_ADDR) {
+		if (addr == IO_FLUSH_ADDR) {
 			return core_flush_stdout(core);
+		}
+		if (addr == IO_ASSERT_ADDR) {
+			return data == 0 ? STERR_ASSERT_FAILURE : 0;
 		}
 		return STERR_BAD_IO_ACCESS;
 	}
@@ -139,6 +143,9 @@ static int core_mem_write16(struct core *core, struct mem *mem, uint64_t addr, u
 
 	// Check IO memory
 	if (addr < END_IO_ADDR) {
+		if (addr == IO_ASSERT_ADDR) {
+			return data == 0 ? STERR_ASSERT_FAILURE : 0;
+		}
 		return STERR_BAD_IO_ACCESS; // No 16-bit IO write operations currently
 	}
 
@@ -164,6 +171,9 @@ static int core_mem_write32(struct core *core, struct mem *mem, uint64_t addr, u
 
 	// Check IO memory
 	if (addr < END_IO_ADDR) {
+		if (addr == IO_ASSERT_ADDR) {
+			return data == 0 ? STERR_ASSERT_FAILURE : 0;
+		}
 		return STERR_BAD_IO_ACCESS; // No 32-bit IO write operations currently
 	}
 
@@ -189,6 +199,9 @@ static int core_mem_write64(struct core *core, struct mem *mem, uint64_t addr, u
 
 	// Check IO memory
 	if (addr < END_IO_ADDR) {
+		if (addr == IO_ASSERT_ADDR) {
+			return data == 0 ? STERR_ASSERT_FAILURE : 0;
+		}
 		return STERR_BAD_IO_ACCESS; // No 64-bit IO write operations currently
 	}
 

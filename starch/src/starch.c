@@ -835,6 +835,8 @@ const char *name_for_sterr(int sterr)
 		return "STERR_NONE";
 	case STERR_BAD_INST:
 		return "STERR_BAD_INST";
+	case STERR_ASSERT_FAILURE:
+		return "STERR_ASSERT_FAILURE";
 	case STERR_BAD_ALIGN:
 		return "STERR_BAD_ALIGN";
 	case STERR_BAD_IO_ACCESS:
