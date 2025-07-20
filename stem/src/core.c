@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/random.h>
 #include <unistd.h>
 
 #include "core.h"
@@ -13,10 +14,12 @@
 //
 enum {
 	// Special addresses
-	IO_STDIN_ADDR  = 0x400,
-	IO_STDOUT_ADDR = 0x401,
-	IO_FLUSH_ADDR  = 0x402,
-	END_IO_ADDR    = 0x1000, // Initial PC
+	IO_STDIN_ADDR  = 0x1000,
+	IO_STDOUT_ADDR = 0x1001,
+	IO_FLUSH_ADDR  = 0x1002,
+	IO_URAND_ADDR  = 0x1010,
+	END_IO_ADDR    = 0x8000,
+	INIT_PC_VAL    = 0x8000, // Initial PC
 
 	STDINOUT_BUFF_SIZE = 0x400,
 };
@@ -24,7 +27,7 @@ enum {
 void core_init(struct core *core)
 {
 	memset(core, 0, sizeof(struct core));
-	core->pc = END_IO_ADDR;
+	core->pc = INIT_PC_VAL;
 	core->stdin_buff = (uint8_t*)malloc(STDINOUT_BUFF_SIZE);
 	core->stdout_buff = (uint8_t*)malloc(STDINOUT_BUFF_SIZE);
 }
@@ -35,6 +38,22 @@ void core_destroy(struct core *core)
 	core->stdout_buff = NULL;
 	free(core->stdin_buff);
 	core->stdin_buff = NULL;
+}
+
+// @todo: Could move to utility library
+// Read buflen random bytes into the buffer at buf.
+// Returns zero on success, negative on failure.
+static int core_get_random(void *buf, int buflen)
+{
+	int count;
+	for (count = 0; count < buflen; ) {
+		int ret = getrandom((uint8_t*)buf + count, buflen - count, 0);
+		if (ret < 0) {
+			return ret;
+		}
+		count += ret;
+	}
+	return 0;
 }
 
 static int core_read_stdin(struct core *core, uint8_t *b)
@@ -198,6 +217,9 @@ static int core_mem_read8(struct core *core, struct mem *mem, uint64_t addr, uin
 		if (addr == IO_STDIN_ADDR) {
 			return core_read_stdin(core, data);
 		}
+		if (addr == IO_URAND_ADDR) {
+			return core_get_random(data, 1);
+		}
 		return STERR_BAD_IO_ACCESS; // No 8-bit IO read operations currently
 	}
 
@@ -223,6 +245,9 @@ static int core_mem_read16(struct core *core, struct mem *mem, uint64_t addr, ui
 
 	// Check IO memory
 	if (addr < END_IO_ADDR) {
+		if (addr == IO_URAND_ADDR) {
+			return core_get_random(data, 2);
+		}
 		return STERR_BAD_IO_ACCESS; // No 16-bit IO read operations currently
 	}
 
@@ -248,6 +273,9 @@ static int core_mem_read32(struct core *core, struct mem *mem, uint64_t addr, ui
 
 	// Check IO memory
 	if (addr < END_IO_ADDR) {
+		if (addr == IO_URAND_ADDR) {
+			return core_get_random(data, 4);
+		}
 		return STERR_BAD_IO_ACCESS;
 	}
 
@@ -273,6 +301,9 @@ static int core_mem_read64(struct core *core, struct mem *mem, uint64_t addr, ui
 
 	// Check IO memory
 	if (addr < END_IO_ADDR) {
+		if (addr == IO_URAND_ADDR) {
+			return core_get_random(data, 8);
+		}
 		return STERR_BAD_IO_ACCESS; // No 64-bit IO read operations currently
 	}
 
