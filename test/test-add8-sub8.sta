@@ -1,6 +1,6 @@
-; test-add8-sub8.st
+; test-add8-sub8.sta
 
-.include "sys.st"
+.include "sys.sta"
 
 ; Memory map
 ; 0x1000 - 0x2000: IO

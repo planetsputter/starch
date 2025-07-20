@@ -23,23 +23,23 @@ echo testing utf8 library
 
 # Assemble a file which contains every opcode
 echo assembling all opcodes
-$STASM allops.st
+$STASM allops.sta
 echo disassembling all opcodes
-$DISTASM a.stb -o dis.st
+$DISTASM a.stb -o dis.sta
 echo checking for symmetric dis/assembly
-cmp allops.st dis.st
+cmp allops.sta dis.sta
 
 # Check assembly of pseudo-ops
 echo assembling pseudo-ops
-$STASM psops.st
+$STASM psops.sta
 echo disassembling pseudo-ops
-$DISTASM a.stb -o dis.st
+$DISTASM a.stb -o dis.sta
 echo checking for proper disassembly
-cmp psops-dis.st dis.st
+cmp psops-dis.sta dis.sta
 
 # Run individual tests
 echo testing add8, sub8
-$STASM test-add8-sub8.st
+$STASM test-add8-sub8.sta
 $STEM a.stb
 
 echo all tests passed

@@ -1,3 +1,5 @@
 /.build
 *.swp
 /__pycache__
+/test/a.stb
+/test/dis.sta
