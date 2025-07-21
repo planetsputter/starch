@@ -103,7 +103,7 @@ static int core_write_stdout(struct core *core, uint8_t b)
 static int core_mem_write8(struct core *core, struct mem *mem, uint64_t addr, uint8_t data)
 {
 	// Check frame access
-	if (addr >= core->sfp && addr < core->sfp + STFRAME_SIZE) {
+	if (addr < core->sbp && addr >= core->sfp && addr < core->sfp + STFRAME_SIZE) {
 		return STERR_BAD_FRAME_ACCESS;
 	}
 
@@ -137,7 +137,7 @@ static int core_stack_write8(struct core *core, struct mem *mem, uint64_t addr, 
 static int core_mem_write16(struct core *core, struct mem *mem, uint64_t addr, uint16_t data)
 {
 	// Check frame access
-	if (addr >= core->sfp - 1 && addr < core->sfp + STFRAME_SIZE) {
+	if (addr < core->sbp && addr >= core->sfp - 1 && addr < core->sfp + STFRAME_SIZE) {
 		return STERR_BAD_FRAME_ACCESS;
 	}
 
@@ -165,7 +165,7 @@ static int core_stack_write16(struct core *core, struct mem *mem, uint64_t addr,
 static int core_mem_write32(struct core *core, struct mem *mem, uint64_t addr, uint32_t data)
 {
 	// Check frame access
-	if (addr >= core->sfp - 3 && addr < core->sfp + STFRAME_SIZE) {
+	if (addr < core->sbp && addr >= core->sfp - 3 && addr < core->sfp + STFRAME_SIZE) {
 		return STERR_BAD_FRAME_ACCESS;
 	}
 
@@ -193,7 +193,7 @@ static int core_stack_write32(struct core *core, struct mem *mem, uint64_t addr,
 static int core_mem_write64(struct core *core, struct mem *mem, uint64_t addr, uint64_t data)
 {
 	// Check frame access
-	if (addr >= core->sfp - 7 && addr < core->sfp + STFRAME_SIZE) {
+	if (addr < core->sbp && addr >= core->sfp - 7 && addr < core->sfp + STFRAME_SIZE) {
 		return STERR_BAD_FRAME_ACCESS;
 	}
 
@@ -221,7 +221,7 @@ static int core_stack_write64(struct core *core, struct mem *mem, uint64_t addr,
 static int core_mem_read8(struct core *core, struct mem *mem, uint64_t addr, uint8_t *data)
 {
 	// Check frame access
-	if (addr >= core->sfp && addr < core->sfp + STFRAME_SIZE) {
+	if (addr < core->sbp && addr >= core->sfp && addr < core->sfp + STFRAME_SIZE) {
 		return STERR_BAD_FRAME_ACCESS;
 	}
 
@@ -252,7 +252,7 @@ static int core_stack_read8(struct core *core, struct mem *mem, uint64_t addr, u
 static int core_mem_read16(struct core *core, struct mem *mem, uint64_t addr, uint16_t *data)
 {
 	// Check frame access
-	if (addr >= core->sfp - 1 && addr < core->sfp + STFRAME_SIZE) {
+	if (addr < core->sbp && addr >= core->sfp - 1 && addr < core->sfp + STFRAME_SIZE) {
 		return STERR_BAD_FRAME_ACCESS;
 	}
 
@@ -280,7 +280,7 @@ static int core_stack_read16(struct core *core, struct mem *mem, uint64_t addr, 
 static int core_mem_read32(struct core *core, struct mem *mem, uint64_t addr, uint32_t *data)
 {
 	// Check frame access
-	if (addr >= core->sfp - 3 && addr < core->sfp + STFRAME_SIZE) {
+	if (addr < core->sbp && addr >= core->sfp - 3 && addr < core->sfp + STFRAME_SIZE) {
 		return STERR_BAD_FRAME_ACCESS;
 	}
 
@@ -308,7 +308,7 @@ static int core_stack_read32(struct core *core, struct mem *mem, uint64_t addr, 
 static int core_mem_read64(struct core *core, struct mem *mem, uint64_t addr, uint64_t *data)
 {
 	// Check frame access
-	if (addr >= core->sfp - 7 && addr < core->sfp + STFRAME_SIZE) {
+	if (addr < core->sbp && addr >= core->sfp - 7 && addr < core->sfp + STFRAME_SIZE) {
 		return STERR_BAD_FRAME_ACCESS;
 	}
 
@@ -2082,7 +2082,7 @@ int core_step(struct core *core, struct mem *mem)
 	// Conditional branching operations
 	//
 	case op_brz8:
-		ret = core_mem_read64(core, mem, core->pc + 1, &temp_u64); // Read address
+		ret = core_mem_read64(core, mem, core->pc + 1, &temp_addr); // Read address
 		if (ret) break;
 		ret = core_stack_read8(core, mem, core->sp, &temp_u8); // Read condition
 		if (ret) break;
@@ -2090,12 +2090,12 @@ int core_step(struct core *core, struct mem *mem)
 			core->pc += 9;
 		}
 		else {
-			core->pc = temp_u64;
+			core->pc = temp_addr;
 		}
 		core->sp += 1;
 		break;
 	case op_brz16:
-		ret = core_mem_read64(core, mem, core->pc + 1, &temp_u64); // Read address
+		ret = core_mem_read64(core, mem, core->pc + 1, &temp_addr); // Read address
 		if (ret) break;
 		ret = core_stack_read16(core, mem, core->sp, &temp_u16); // Read condition
 		if (ret) break;
@@ -2103,12 +2103,12 @@ int core_step(struct core *core, struct mem *mem)
 			core->pc += 9;
 		}
 		else {
-			core->pc = temp_u64;
+			core->pc = temp_addr;
 		}
 		core->sp += 2;
 		break;
 	case op_brz32:
-		ret = core_mem_read64(core, mem, core->pc + 1, &temp_u64); // Read address
+		ret = core_mem_read64(core, mem, core->pc + 1, &temp_addr); // Read address
 		if (ret) break;
 		ret = core_stack_read32(core, mem, core->sp, &temp_u32); // Read condition
 		if (ret) break;
@@ -2116,12 +2116,12 @@ int core_step(struct core *core, struct mem *mem)
 			core->pc += 9;
 		}
 		else {
-			core->pc = temp_u64;
+			core->pc = temp_addr;
 		}
 		core->sp += 4;
 		break;
 	case op_brz64:
-		ret = core_mem_read64(core, mem, core->pc + 1, &temp_u64); // Read address
+		ret = core_mem_read64(core, mem, core->pc + 1, &temp_addr); // Read address
 		if (ret) break;
 		ret = core_stack_read64(core, mem, core->sp, &temp_u64); // Read condition
 		if (ret) break;
@@ -2129,7 +2129,7 @@ int core_step(struct core *core, struct mem *mem)
 			core->pc += 9;
 		}
 		else {
-			core->pc = temp_u64;
+			core->pc = temp_addr;
 		}
 		core->sp += 8;
 		break;

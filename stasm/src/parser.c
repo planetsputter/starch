@@ -268,7 +268,7 @@ enum { // Parser syntax states
 
 enum { // Parser token states
 	PTS_DEFAULT,
-	PTS_IMM,
+	PTS_IMM, // Immediate for instruction or raw data
 	PTS_PIMM, // Immediate for pseudo-op
 	PTS_EOL,
 	PTS_DEF_KEY,
@@ -325,6 +325,26 @@ static int parser_finish_token(struct parser *parser)
 			}
 			else if (strcmp(parser->token + 1, "include") == 0) {
 				parser->ts = PTS_INCLUDE;
+			}
+			else if (strcmp(parser->token + 1, "data8") == 0) {
+				parser->event.type = PET_DATA;
+				parser->event.data.len = 1;
+				parser->ts = PTS_IMM;
+			}
+			else if (strcmp(parser->token + 1, "data16") == 0) {
+				parser->event.type = PET_DATA;
+				parser->event.data.len = 2;
+				parser->ts = PTS_IMM;
+			}
+			else if (strcmp(parser->token + 1, "data32") == 0) {
+				parser->event.type = PET_DATA;
+				parser->event.data.len = 4;
+				parser->ts = PTS_IMM;
+			}
+			else if (strcmp(parser->token + 1, "data64") == 0) {
+				parser->event.type = PET_DATA;
+				parser->event.data.len = 8;
+				parser->ts = PTS_IMM;
 			}
 			else {
 				fprintf(stderr, "error: unrecognized assembler command \"%s\" in \"%s\" line %d char %d\n",
@@ -404,6 +424,7 @@ static int parser_finish_token(struct parser *parser)
 	//
 	case PTS_IMM:
 	case PTS_PIMM: {
+		int64_t immval; // Immediate value
 		if (symbol[0] == ':') { // Immediate is label
 			if (symbol[1] == '\0') { // Empty label
 				fprintf(stderr, "error: empty label in \"%s\" line %d char %d\n",
@@ -411,33 +432,64 @@ static int parser_finish_token(struct parser *parser)
 				ret = 1;
 				break;
 			}
+			// @todo: Allow labels to be used for raw data
+			if (parser->event.type == PET_DATA) {
+				fprintf(stderr, "error: labels not supported for raw data in \"%s\" line %d char %d\n",
+					parser->filename, parser->tline, parser->tch);
+				ret = 1;
+				break;
+			}
 			// Emit instruction event with label
 			parser->event.inst.imm_label = parser->token;
 			parser->token = NULL;
-			parser->ts = PTS_EOL; // Expect EOL
-			break;
+		}
+		else {
+			// Parse immediate literal
+			bool success = parse_int(symbol, &immval);
+			if (!success) {
+				fprintf(stderr, "error: failed to parse integer literal \"%s\" in \"%s\" line %d char %d\n",
+					symbol, parser->filename, parser->tline, parser->tch);
+				ret = 1;
+				break;
+			}
 		}
 
-		// Parse immediate literal
-		int64_t litval;
-		bool success = parse_int(symbol, &litval);
-		if (!success) {
-			fprintf(stderr, "error: failed to parse integer literal \"%s\" in \"%s\" line %d char %d\n",
-				symbol, parser->filename, parser->tline, parser->tch);
-			ret = 1;
-			break;
+		// Look up immediate type and size
+		int opcode = 0;
+		int sdt;
+		if (parser->event.type == PET_DATA) {
+			// Raw data size determines immediate data type
+			// @todo: Could make cleaner with a function to look up data type for size
+			if (parser->event.data.len == 1) {
+				sdt = SDT_A8;
+			}
+			else if (parser->event.data.len == 2) {
+				sdt = SDT_A16;
+			}
+			else if (parser->event.data.len == 4) {
+				sdt = SDT_A32;
+			}
+			else if (parser->event.data.len == 8) {
+				sdt = SDT_A64;
+			}
+			else {
+				fprintf(stderr, "error: bad raw data size in \"%s\" line %d char %d\n",
+					parser->filename, parser->tline, parser->tch);
+				ret = 1;
+				break;
+			}
 		}
-
-		// Look up immediate size
-		int opcode = parser->event.inst.opcode;
-		int sdt = imm_type_for_opcode(opcode);
+		else { // Look up data type based on opcode
+			opcode = parser->event.inst.opcode;
+			sdt = imm_type_for_opcode(opcode);
+		}
 		int dt_size = sdt_size(sdt);
 
-		// Check immediate bounds
-		if (dt_size < 8) {
+		// Check literal immediate bounds
+		if (dt_size < 8 && symbol[0] != ':') {
 			int64_t minval, maxval;
 			sdt_min_max(sdt, &minval, &maxval);
-			if (litval < minval || litval > maxval) {
+			if (immval < minval || immval > maxval) {
 				fprintf(stderr, "error: literal \"%s\" is out of bounds for type in \"%s\" line %d char %d\n",
 						symbol, parser->filename, parser->tline, parser->tch);
 				ret = 1;
@@ -448,51 +500,64 @@ static int parser_finish_token(struct parser *parser)
 		int imm_len = dt_size;
 		if (parser->ts == PTS_PIMM) {
 			// Compact pseudo-ops where possible
-			int min_len = min_bytes_for_val(litval);
+			int min_len = min_bytes_for_val(immval);
 			switch (opcode) {
+			case op_push8as8:
+				// Already as compact as possible
+				break;
 			case op_push16as16:
 				if (min_len < 2) {
 					imm_len = 1;
-					if (litval < 0) opcode = op_push8asi16;
+					if (immval < 0) opcode = op_push8asi16;
 					else opcode = op_push8asu16;
 				}
 				break;
 			case op_push32as32:
 				if (min_len < 2) {
 					imm_len = 1;
-					if (litval < 0) opcode = op_push8asi32;
+					if (immval < 0) opcode = op_push8asi32;
 					else opcode = op_push8asu32;
 				}
 				else if (min_len < 3) {
 					imm_len = 2;
-					if (litval < 0) opcode = op_push16asi32;
+					if (immval < 0) opcode = op_push16asi32;
 					else opcode = op_push16asu32;
 				}
 				break;
 			case op_push64as64:
 				if (min_len < 2) {
 					imm_len = 1;
-					if (litval < 0) opcode = op_push8asi64;
+					if (immval < 0) opcode = op_push8asi64;
 					else opcode = op_push8asu64;
 				}
 				else if (min_len < 3) {
 					imm_len = 2;
-					if (litval < 0) opcode = op_push16asi64;
+					if (immval < 0) opcode = op_push16asi64;
 					else opcode = op_push16asu64;
 				}
 				else if (min_len < 5) {
 					imm_len = 4;
-					if (litval < 0) opcode = op_push32asi64;
+					if (immval < 0) opcode = op_push32asi64;
 					else opcode = op_push32asu64;
 				}
 				break;
+			default:
+				fprintf(stderr, "error: invalid opcode for pseudo-op in \"%s\" line %d char %d\n",
+						parser->filename, parser->tline, parser->tch);
+				ret = 1;
 			}
+			if (ret) break;
 			parser->event.inst.opcode = opcode;
 		}
-		parser->event.inst.imm_len = imm_len;
 
 		// Transform literal value to byte array
-		u64_to_little8((uint64_t)litval, parser->event.inst.imm);
+		if (parser->event.type == PET_DATA) {
+			u64_to_little8((uint64_t)immval, parser->event.data.raw);
+		}
+		else {
+			u64_to_little8((uint64_t)immval, parser->event.inst.imm);
+			parser->event.inst.imm_len = imm_len;
+		}
 
 		parser->ts = PTS_EOL; // Expect end of line
 	}	break;

@@ -499,6 +499,25 @@ int main(int argc, const char *argv[])
 		}	break;
 
 		//
+		// Raw data
+		//
+		case PET_DATA: {
+			if (sec_count == 0) {
+				fprintf(stderr, "error: expected section definition before raw data\n");
+				error = 1;
+				break;
+			}
+
+			// Write raw data to output file
+			size_t written = fwrite(pe.data.raw, 1, pe.data.len, outfile);
+			if (written != (size_t)pe.data.len) {
+				fprintf(stderr, "error: failed to write to output file %s, errno %d\n", arg_output, errno);
+				error = 1;
+				break;
+			}
+		}	break;
+
+		//
 		// Include file
 		//
 		case PET_INCLUDE:

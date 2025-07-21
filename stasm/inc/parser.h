@@ -14,6 +14,7 @@
 enum parser_event_type {
 	PET_NONE = 0,
 	PET_INST, // Instruction emitted
+	PET_DATA, // Raw data
 	PET_SECTION, // Begin new section
 	PET_INCLUDE, // Include a file
 	PET_LABEL, // A label
@@ -29,6 +30,10 @@ struct parser_event {
 			uint8_t imm[8]; // Immediate data
 			char *imm_label; // B-string, immediate label or NULL
 		} inst;
+		struct { // For PET_DATA
+			uint8_t len;
+			uint8_t raw[8];
+		} data;
 		struct { // For PET_SECTION
 			uint64_t addr;
 			uint8_t flags;
