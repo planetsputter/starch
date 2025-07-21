@@ -6,13 +6,47 @@
 ; 0x1000 - 0x2000: IO
 ; 0x2000 - 0x3000: program
 ; 0x3000 - 0x4000: stack
+; 0x4000 - 0x5000: static
 
+;
+; Definitions
+;
+.define STATIC_ADDR 0x4000
+.define MAX_REPS 16
+
+;
+; Static data section
+;
+.section $STATIC_ADDR
+
+.data64 0 ; rep64
+
+;
+; Instruction section
+;
 .section $INIT_PC_VAL
 
 setsbp 0x4000
 setsfp 0x4000
 setsp  0x4000
 setslp 0x3000
+
+:begin
+push64 $STATIC_ADDR
+loadpop64        ; rep64
+dup64            ; rep64, rep64
+push64 $MAX_REPS ; rep64, rep64, $MAX_REPS
+cltu64           ; rep64, rep64 < $MAX_REPS
+brz64 :end       ; rep64
+call :test_add8_sub8
+push64 1         ; rep64, 1_64
+add64            ; rep64 + 1_64
+push64 $STATIC_ADDR
+storerpop64
+pop64
+rjmpi8 :begin
+:end
+halt
 
 :test_add8_sub8
 
@@ -70,4 +104,4 @@ ceq8        ; a8, b8, a8 + b8 == b8 + a8
 push64 $ASSERT_ADDR
 storerpop8  ; assert(a8 + b8 == b8 + a8)
 
-halt
+ret ; test_add8_sub8

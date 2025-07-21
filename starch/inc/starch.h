@@ -371,13 +371,6 @@ int sdt_size(int sdt);
 int imm_type_for_opcode(int opcode);
 
 //
-// Constants
-//
-enum {
-	STFRAME_SIZE = 16, // Stack frame size
-};
-
-//
 // Error conditions
 //
 enum {
