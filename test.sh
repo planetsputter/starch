@@ -38,8 +38,8 @@ echo checking for proper disassembly
 cmp psops-dis.sta dis.sta
 
 # Run individual tests
-echo testing add8, sub8
-$STASM test-add8-sub8.sta
+echo testing add, sub
+$STASM test-add-sub.sta
 $STEM a.stb
 
 echo all tests passed
