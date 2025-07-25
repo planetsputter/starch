@@ -88,18 +88,14 @@ enum {
 	op_sub16,   // Subtract 2 byte integers replacing with difference
 	op_sub32,   // Subtract 4 byte integers replacing with difference
 	op_sub64,   // Subtract 8 byte integers replacing with difference
-	op_subr8,    // Subtract 1 byte integers replacing with difference
-	op_subr16,   // Subtract 2 byte integers replacing with difference
-	op_subr32,   // Subtract 4 byte integers replacing with difference
-	op_subr64,   // Subtract 8 byte integers replacing with difference
-	op_mulu8,   // Multiply 1 byte unsigned integers replacing with product
-	op_mulu16,  // Multiply 2 byte unsigned integers replacing with product
-	op_mulu32,  // Multiply 4 byte unsigned integers replacing with product
-	op_mulu64,  // Multiply 8 byte unsigned integers replacing with product
-	op_muli8,   // Multiply 1 byte signed integers replacing with product
-	op_muli16,  // Multiply 2 byte signed integers replacing with product
-	op_muli32,  // Multiply 4 byte signed integers replacing with product
-	op_muli64,  // Multiply 8 byte signed integers replacing with product
+	op_subr8,   // Subtract 1 byte integers replacing with difference
+	op_subr16,  // Subtract 2 byte integers replacing with difference
+	op_subr32,  // Subtract 4 byte integers replacing with difference
+	op_subr64,  // Subtract 8 byte integers replacing with difference
+	op_mul8,    // Multiply 1 byte integers replacing with product
+	op_mul16,   // Multiply 2 byte integers replacing with product
+	op_mul32,   // Multiply 4 byte integers replacing with product
+	op_mul64,   // Multiply 8 byte integers replacing with product
 	op_divu8,   // Divide 1 byte unsigned integers replacing with quotient
 	op_divu16,  // Divide 2 byte unsigned integers replacing with quotient
 	op_divu32,  // Divide 4 byte unsigned integers replacing with quotient
@@ -377,6 +373,7 @@ enum {
 	STERR_NONE = 0,
 	STERR_BAD_INST, // Bad instruction
 	STERR_ASSERT_FAILURE, // IO assertion failed
+	STERR_DIV_BY_ZERO, // Division by zero
 	STERR_BAD_ALIGN, // Bad alignment
 	STERR_BAD_IO_ACCESS, // Access to unused IO memory
 	STERR_BAD_FRAME_ACCESS, // Access to protected stack frame data

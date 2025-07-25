@@ -820,7 +820,7 @@ int core_step(struct core *core, struct mem *mem)
 		core->sp += 8;
 		core->pc += 1;
 		break;
-	case op_mulu8:
+	case op_mul8:
 		ret = core_stack_read8(core, mem, core->sp, &temp_u8b); // Read operand
 		if (ret) break;
 		ret = core_stack_read8(core, mem, core->sp + 1, &temp_u8); // Read operand
@@ -830,7 +830,7 @@ int core_step(struct core *core, struct mem *mem)
 		core->sp += 1;
 		core->pc += 1;
 		break;
-	case op_mulu16:
+	case op_mul16:
 		ret = core_stack_read16(core, mem, core->sp, &temp_u16b); // Read operand
 		if (ret) break;
 		ret = core_stack_read16(core, mem, core->sp + 2, &temp_u16); // Read operand
@@ -840,7 +840,7 @@ int core_step(struct core *core, struct mem *mem)
 		core->sp += 2;
 		core->pc += 1;
 		break;
-	case op_mulu32:
+	case op_mul32:
 		ret = core_stack_read32(core, mem, core->sp, &temp_u32b); // Read operand
 		if (ret) break;
 		ret = core_stack_read32(core, mem, core->sp + 4, &temp_u32); // Read operand
@@ -850,7 +850,7 @@ int core_step(struct core *core, struct mem *mem)
 		core->sp += 4;
 		core->pc += 1;
 		break;
-	case op_mulu64:
+	case op_mul64:
 		ret = core_stack_read64(core, mem, core->sp, &temp_u64b); // Read operand
 		if (ret) break;
 		ret = core_stack_read64(core, mem, core->sp + 8, &temp_u64); // Read operand
@@ -860,51 +860,15 @@ int core_step(struct core *core, struct mem *mem)
 		core->sp += 8;
 		core->pc += 1;
 		break;
-	case op_muli8:
-		ret = core_stack_read8(core, mem, core->sp, &temp_u8b); // Read operand
-		if (ret) break;
-		ret = core_stack_read8(core, mem, core->sp + 1, &temp_u8); // Read operand
-		if (ret) break;
-		ret = core_stack_write8(core, mem, core->sp + 1, (int8_t)temp_u8 * (int8_t)temp_u8b); // Write product
-		if (ret) break;
-		core->sp += 1;
-		core->pc += 1;
-		break;
-	case op_muli16:
-		ret = core_stack_read16(core, mem, core->sp, &temp_u16b); // Read operand
-		if (ret) break;
-		ret = core_stack_read16(core, mem, core->sp + 2, &temp_u16); // Read operand
-		if (ret) break;
-		ret = core_stack_write16(core, mem, core->sp + 2, (int16_t)temp_u16 * (int16_t)temp_u16b); // Write product
-		if (ret) break;
-		core->sp += 2;
-		core->pc += 1;
-		break;
-	case op_muli32:
-		ret = core_stack_read32(core, mem, core->sp, &temp_u32b); // Read operand
-		if (ret) break;
-		ret = core_stack_read32(core, mem, core->sp + 4, &temp_u32); // Read operand
-		if (ret) break;
-		ret = core_stack_write32(core, mem, core->sp + 4, (int32_t)temp_u32 * (int32_t)temp_u32b); // Write product
-		if (ret) break;
-		core->sp += 4;
-		core->pc += 1;
-		break;
-	case op_muli64:
-		ret = core_stack_read64(core, mem, core->sp, &temp_u64b); // Read operand
-		if (ret) break;
-		ret = core_stack_read64(core, mem, core->sp + 8, &temp_u64); // Read operand
-		if (ret) break;
-		ret = core_stack_write64(core, mem, core->sp + 8, (int64_t)temp_u64 * (int64_t)temp_u64b); // Write product
-		if (ret) break;
-		core->sp += 8;
-		core->pc += 1;
-		break;
 	case op_divu8:
 		ret = core_stack_read8(core, mem, core->sp, &temp_u8b); // Read operand
 		if (ret) break;
 		ret = core_stack_read8(core, mem, core->sp + 1, &temp_u8); // Read operand
 		if (ret) break;
+		if (temp_u8b == 0) {
+			ret = STERR_DIV_BY_ZERO;
+			break;
+		}
 		ret = core_stack_write8(core, mem, core->sp + 1, temp_u8 / temp_u8b); // Write quotient
 		if (ret) break;
 		core->sp += 1;
@@ -915,6 +879,10 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_stack_read16(core, mem, core->sp + 2, &temp_u16); // Read operand
 		if (ret) break;
+		if (temp_u16b == 0) {
+			ret = STERR_DIV_BY_ZERO;
+			break;
+		}
 		ret = core_stack_write16(core, mem, core->sp + 2, temp_u16 / temp_u16b); // Write quotient
 		if (ret) break;
 		core->sp += 2;
@@ -925,6 +893,10 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_stack_read32(core, mem, core->sp + 4, &temp_u32); // Read operand
 		if (ret) break;
+		if (temp_u32b == 0) {
+			ret = STERR_DIV_BY_ZERO;
+			break;
+		}
 		ret = core_stack_write32(core, mem, core->sp + 4, temp_u32 / temp_u32b); // Write quotient
 		if (ret) break;
 		core->sp += 4;
@@ -935,6 +907,10 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_stack_read64(core, mem, core->sp + 8, &temp_u64); // Read operand
 		if (ret) break;
+		if (temp_u64b == 0) {
+			ret = STERR_DIV_BY_ZERO;
+			break;
+		}
 		ret = core_stack_write64(core, mem, core->sp + 8, temp_u64 / temp_u64b); // Write quotient
 		if (ret) break;
 		core->sp += 8;
@@ -945,6 +921,10 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_stack_read8(core, mem, core->sp + 1, &temp_u8); // Read operand
 		if (ret) break;
+		if (temp_u8 == 0) {
+			ret = STERR_DIV_BY_ZERO;
+			break;
+		}
 		ret = core_stack_write8(core, mem, core->sp + 1, temp_u8b / temp_u8); // Write quotient
 		if (ret) break;
 		core->sp += 1;
@@ -955,6 +935,10 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_stack_read16(core, mem, core->sp + 2, &temp_u16); // Read operand
 		if (ret) break;
+		if (temp_u16 == 0) {
+			ret = STERR_DIV_BY_ZERO;
+			break;
+		}
 		ret = core_stack_write16(core, mem, core->sp + 2, temp_u16b / temp_u16); // Write quotient
 		if (ret) break;
 		core->sp += 2;
@@ -965,6 +949,10 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_stack_read32(core, mem, core->sp + 4, &temp_u32); // Read operand
 		if (ret) break;
+		if (temp_u32 == 0) {
+			ret = STERR_DIV_BY_ZERO;
+			break;
+		}
 		ret = core_stack_write32(core, mem, core->sp + 4, temp_u32b / temp_u32); // Write quotient
 		if (ret) break;
 		core->sp += 4;
@@ -975,6 +963,10 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_stack_read64(core, mem, core->sp + 8, &temp_u64); // Read operand
 		if (ret) break;
+		if (temp_u64 == 0) {
+			ret = STERR_DIV_BY_ZERO;
+			break;
+		}
 		ret = core_stack_write64(core, mem, core->sp + 8, temp_u64b / temp_u64); // Write quotient
 		if (ret) break;
 		core->sp += 8;
@@ -985,6 +977,10 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_stack_read8(core, mem, core->sp + 1, &temp_u8); // Read operand
 		if (ret) break;
+		if (temp_u8b == 0) {
+			ret = STERR_DIV_BY_ZERO;
+			break;
+		}
 		ret = core_stack_write8(core, mem, core->sp + 1, (int8_t)temp_u8 / (int8_t)temp_u8b); // Write quotient
 		if (ret) break;
 		core->sp += 1;
@@ -995,6 +991,10 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_stack_read16(core, mem, core->sp + 2, &temp_u16); // Read operand
 		if (ret) break;
+		if (temp_u16b == 0) {
+			ret = STERR_DIV_BY_ZERO;
+			break;
+		}
 		ret = core_stack_write16(core, mem, core->sp + 2, (int16_t)temp_u16 / (int16_t)temp_u16b); // Write quotient
 		if (ret) break;
 		core->sp += 2;
@@ -1005,6 +1005,10 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_stack_read32(core, mem, core->sp + 4, &temp_u32); // Read operand
 		if (ret) break;
+		if (temp_u32b == 0) {
+			ret = STERR_DIV_BY_ZERO;
+			break;
+		}
 		ret = core_stack_write32(core, mem, core->sp + 4, (int32_t)temp_u32 / (int32_t)temp_u32b); // Write quotient
 		if (ret) break;
 		core->sp += 4;
@@ -1015,6 +1019,10 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_stack_read64(core, mem, core->sp + 8, &temp_u64); // Read operand
 		if (ret) break;
+		if (temp_u64b == 0) {
+			ret = STERR_DIV_BY_ZERO;
+			break;
+		}
 		ret = core_stack_write64(core, mem, core->sp + 8, (int64_t)temp_u64 / (int64_t)temp_u64b); // Write quotient
 		if (ret) break;
 		core->sp += 8;
@@ -1025,6 +1033,10 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_stack_read8(core, mem, core->sp + 1, &temp_u8); // Read operand
 		if (ret) break;
+		if (temp_u8 == 0) {
+			ret = STERR_DIV_BY_ZERO;
+			break;
+		}
 		ret = core_stack_write8(core, mem, core->sp + 1, (int8_t)temp_u8b / (int8_t)temp_u8); // Write quotient
 		if (ret) break;
 		core->sp += 1;
@@ -1035,6 +1047,10 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_stack_read16(core, mem, core->sp + 2, &temp_u16); // Read operand
 		if (ret) break;
+		if (temp_u16 == 0) {
+			ret = STERR_DIV_BY_ZERO;
+			break;
+		}
 		ret = core_stack_write16(core, mem, core->sp + 2, (int16_t)temp_u16b / (int16_t)temp_u16); // Write quotient
 		if (ret) break;
 		core->sp += 2;
@@ -1045,6 +1061,10 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_stack_read32(core, mem, core->sp + 4, &temp_u32); // Read operand
 		if (ret) break;
+		if (temp_u32 == 0) {
+			ret = STERR_DIV_BY_ZERO;
+			break;
+		}
 		ret = core_stack_write32(core, mem, core->sp + 4, (int32_t)temp_u32b / (int32_t)temp_u32); // Write quotient
 		if (ret) break;
 		core->sp += 4;
@@ -1055,6 +1075,10 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_stack_read64(core, mem, core->sp + 8, &temp_u64); // Read operand
 		if (ret) break;
+		if (temp_u64 == 0) {
+			ret = STERR_DIV_BY_ZERO;
+			break;
+		}
 		ret = core_stack_write64(core, mem, core->sp + 8, (int64_t)temp_u64b / (int64_t)temp_u64); // Write quotient
 		if (ret) break;
 		core->sp += 8;
@@ -1065,6 +1089,10 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_stack_read8(core, mem, core->sp + 1, &temp_u8); // Read operand
 		if (ret) break;
+		if (temp_u8b == 0) {
+			ret = STERR_DIV_BY_ZERO;
+			break;
+		}
 		ret = core_stack_write8(core, mem, core->sp + 1, temp_u8 % temp_u8b); // Write remainder
 		if (ret) break;
 		core->sp += 1;
@@ -1075,6 +1103,10 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_stack_read16(core, mem, core->sp + 2, &temp_u16); // Read operand
 		if (ret) break;
+		if (temp_u16b == 0) {
+			ret = STERR_DIV_BY_ZERO;
+			break;
+		}
 		ret = core_stack_write16(core, mem, core->sp + 2, temp_u16 % temp_u16b); // Write remainder
 		if (ret) break;
 		core->sp += 2;
@@ -1085,6 +1117,10 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_stack_read32(core, mem, core->sp + 4, &temp_u32); // Read operand
 		if (ret) break;
+		if (temp_u32b == 0) {
+			ret = STERR_DIV_BY_ZERO;
+			break;
+		}
 		ret = core_stack_write32(core, mem, core->sp + 4, temp_u32 % temp_u32b); // Write remainder
 		if (ret) break;
 		core->sp += 4;
@@ -1095,6 +1131,10 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_stack_read64(core, mem, core->sp + 8, &temp_u64); // Read operand
 		if (ret) break;
+		if (temp_u64b == 0) {
+			ret = STERR_DIV_BY_ZERO;
+			break;
+		}
 		ret = core_stack_write64(core, mem, core->sp + 8, temp_u64 % temp_u64b); // Write remainder
 		if (ret) break;
 		core->sp += 8;
@@ -1105,6 +1145,10 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_stack_read8(core, mem, core->sp + 1, &temp_u8); // Read operand
 		if (ret) break;
+		if (temp_u8 == 0) {
+			ret = STERR_DIV_BY_ZERO;
+			break;
+		}
 		ret = core_stack_write8(core, mem, core->sp + 1, temp_u8b % temp_u8); // Write remainder
 		if (ret) break;
 		core->sp += 1;
@@ -1115,6 +1159,10 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_stack_read16(core, mem, core->sp + 2, &temp_u16); // Read operand
 		if (ret) break;
+		if (temp_u16 == 0) {
+			ret = STERR_DIV_BY_ZERO;
+			break;
+		}
 		ret = core_stack_write16(core, mem, core->sp + 2, temp_u16b % temp_u16); // Write remainder
 		if (ret) break;
 		core->sp += 2;
@@ -1125,6 +1173,10 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_stack_read32(core, mem, core->sp + 4, &temp_u32); // Read operand
 		if (ret) break;
+		if (temp_u32 == 0) {
+			ret = STERR_DIV_BY_ZERO;
+			break;
+		}
 		ret = core_stack_write32(core, mem, core->sp + 4, temp_u32b % temp_u32); // Write remainder
 		if (ret) break;
 		core->sp += 4;
@@ -1135,6 +1187,10 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_stack_read64(core, mem, core->sp + 8, &temp_u64); // Read operand
 		if (ret) break;
+		if (temp_u64 == 0) {
+			ret = STERR_DIV_BY_ZERO;
+			break;
+		}
 		ret = core_stack_write64(core, mem, core->sp + 8, temp_u64b % temp_u64); // Write remainder
 		if (ret) break;
 		core->sp += 8;
@@ -1145,6 +1201,10 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_stack_read8(core, mem, core->sp + 1, &temp_u8); // Read operand
 		if (ret) break;
+		if (temp_u8b == 0) {
+			ret = STERR_DIV_BY_ZERO;
+			break;
+		}
 		ret = core_stack_write8(core, mem, core->sp + 1, (int8_t)temp_u8 % (int8_t)temp_u8b); // Write remainder
 		if (ret) break;
 		core->sp += 1;
@@ -1155,6 +1215,10 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_stack_read16(core, mem, core->sp + 2, &temp_u16); // Read operand
 		if (ret) break;
+		if (temp_u16b == 0) {
+			ret = STERR_DIV_BY_ZERO;
+			break;
+		}
 		ret = core_stack_write16(core, mem, core->sp + 2, (int16_t)temp_u16 % (int16_t)temp_u16b); // Write remainder
 		if (ret) break;
 		core->sp += 2;
@@ -1165,6 +1229,10 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_stack_read32(core, mem, core->sp + 4, &temp_u32); // Read operand
 		if (ret) break;
+		if (temp_u32b == 0) {
+			ret = STERR_DIV_BY_ZERO;
+			break;
+		}
 		ret = core_stack_write32(core, mem, core->sp + 4, (int32_t)temp_u32 % (int32_t)temp_u32b); // Write remainder
 		if (ret) break;
 		core->sp += 4;
@@ -1175,6 +1243,10 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_stack_read64(core, mem, core->sp + 8, &temp_u64); // Read operand
 		if (ret) break;
+		if (temp_u64b == 0) {
+			ret = STERR_DIV_BY_ZERO;
+			break;
+		}
 		ret = core_stack_write64(core, mem, core->sp + 8, (int64_t)temp_u64 % (int64_t)temp_u64b); // Write remainder
 		if (ret) break;
 		core->sp += 8;
@@ -1185,6 +1257,10 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_stack_read8(core, mem, core->sp + 1, &temp_u8); // Read operand
 		if (ret) break;
+		if (temp_u8 == 0) {
+			ret = STERR_DIV_BY_ZERO;
+			break;
+		}
 		ret = core_stack_write8(core, mem, core->sp + 1, (int8_t)temp_u8b % (int8_t)temp_u8); // Write remainder
 		if (ret) break;
 		core->sp += 1;
@@ -1195,6 +1271,10 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_stack_read16(core, mem, core->sp + 2, &temp_u16); // Read operand
 		if (ret) break;
+		if (temp_u16 == 0) {
+			ret = STERR_DIV_BY_ZERO;
+			break;
+		}
 		ret = core_stack_write16(core, mem, core->sp + 2, (int16_t)temp_u16b % (int16_t)temp_u16); // Write remainder
 		if (ret) break;
 		core->sp += 2;
@@ -1205,6 +1285,10 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_stack_read32(core, mem, core->sp + 4, &temp_u32); // Read operand
 		if (ret) break;
+		if (temp_u32 == 0) {
+			ret = STERR_DIV_BY_ZERO;
+			break;
+		}
 		ret = core_stack_write32(core, mem, core->sp + 4, (int32_t)temp_u32b % (int32_t)temp_u32); // Write remainder
 		if (ret) break;
 		core->sp += 4;
@@ -1215,6 +1299,10 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_stack_read64(core, mem, core->sp + 8, &temp_u64); // Read operand
 		if (ret) break;
+		if (temp_u64 == 0) {
+			ret = STERR_DIV_BY_ZERO;
+			break;
+		}
 		ret = core_stack_write64(core, mem, core->sp + 8, (int64_t)temp_u64b % (int64_t)temp_u64); // Write remainder
 		if (ret) break;
 		core->sp += 8;

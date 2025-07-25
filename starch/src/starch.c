@@ -89,14 +89,10 @@ static const char *names[256] = {
 	[op_subr16] = "subr16",
 	[op_subr32] = "subr32",
 	[op_subr64] = "subr64",
-	[op_mulu8] = "mulu8",
-	[op_mulu16] = "mulu16",
-	[op_mulu32] = "mulu32",
-	[op_mulu64] = "mulu64",
-	[op_muli8] = "muli8",
-	[op_muli16] = "muli16",
-	[op_muli32] = "muli32",
-	[op_muli64] = "muli64",
+	[op_mul8] = "mul8",
+	[op_mul16] = "mul16",
+	[op_mul32] = "mul32",
+	[op_mul64] = "mul64",
 	[op_divu8] = "divu8",
 	[op_divu16] = "divu16",
 	[op_divu32] = "divu32",
@@ -562,14 +558,10 @@ int imm_type_for_opcode(int opcode)
 	case op_subr16:
 	case op_subr32:
 	case op_subr64:
-	case op_mulu8:
-	case op_mulu16:
-	case op_mulu32:
-	case op_mulu64:
-	case op_muli8:
-	case op_muli16:
-	case op_muli32:
-	case op_muli64:
+	case op_mul8:
+	case op_mul16:
+	case op_mul32:
+	case op_mul64:
 	case op_divu8:
 	case op_divu16:
 	case op_divu32:
@@ -837,6 +829,8 @@ const char *name_for_sterr(int sterr)
 		return "STERR_BAD_INST";
 	case STERR_ASSERT_FAILURE:
 		return "STERR_ASSERT_FAILURE";
+	case STERR_DIV_BY_ZERO:
+		return "STERR_DIV_BY_ZERO";
 	case STERR_BAD_ALIGN:
 		return "STERR_BAD_ALIGN";
 	case STERR_BAD_IO_ACCESS:
