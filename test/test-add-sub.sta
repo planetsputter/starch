@@ -51,6 +51,7 @@ rjmpi8 :begin
 :end
 halt
 
+
 :test_add8_sub8
 
 ; Test that add8 has a zero identity
@@ -106,6 +107,22 @@ add8        ; a8, b8, a8 + b8, b8 + a8
 ceq8        ; a8, b8, a8 + b8 == b8 + a8
 push64 $ASSERT_ADDR
 storerpop8  ; assert(a8 + b8 == b8 + a8)
+pop8        ; a8, b8
+
+; Test that subr8 is converse to sub8
+push64 -1
+loadpopsfp8 ; a8, b8, a8
+push64 -2
+loadpopsfp8 ; a8, b8, a8, b8
+sub8        ; a8, b8, a8 - b8
+push64 -2
+loadpopsfp8 ; a8, b8, a8 - b8, b8
+push64 -1
+loadpopsfp8 ; a8, b8, a8 - b8, b8, a8
+subr8       ; a8, b8, a8 - b8, a8 - b8
+ceq8        ; a8, b8, a8 - b8 == a8 - b8
+push64 $ASSERT_ADDR
+storerpop8  ; assert(a8 - b8 == a8 - b8)
 
 ret ; test_add8_sub8
 
@@ -164,6 +181,22 @@ add16        ; a16, b16, a16 + b16, b16 + a16
 ceq16        ; a16, b16, a16 + b16 == b16 + a16
 push64 $ASSERT_ADDR
 storerpop16  ; assert(a16 + b16 == b16 + a16)
+pop16        ; a16, b16
+
+; Test that subr16 is converse to sub16
+push64 -2
+loadpopsfp16 ; a16, b16, a16
+push64 -4
+loadpopsfp16 ; a16, b16, a16, b16
+sub16        ; a16, b16, a16 - b16
+push64 -4
+loadpopsfp16 ; a16, b16, a16 - b16, b16
+push64 -2
+loadpopsfp16 ; a16, b16, a16 - b16, b16, a16
+subr16       ; a16, b16, a16 - b16, a16 - b16
+ceq16        ; a16, b16, a16 - b16 == a16 - b16
+push64 $ASSERT_ADDR
+storerpop16  ; assert(a16 - b16 == a16 - b16)
 
 ret ; test_add16_sub16
 
@@ -222,6 +255,22 @@ add32        ; a32, b32, a32 + b32, b32 + a32
 ceq32        ; a32, b32, a32 + b32 == b32 + a32
 push64 $ASSERT_ADDR
 storerpop32  ; assert(a32 + b32 == b32 + a32)
+pop32        ; a32, b32
+
+; Test that subr32 is converse to sub32
+push64 -4
+loadpopsfp32 ; a32, b32, a32
+push64 -8
+loadpopsfp32 ; a32, b32, a32, b32
+sub32        ; a32, b32, a32 - b32
+push64 -8
+loadpopsfp32 ; a32, b32, a32 - b32, b32
+push64 -4
+loadpopsfp32 ; a32, b32, a32 - b32, b32, a32
+subr32       ; a32, b32, a32 - b32, a32 - b32
+ceq32        ; a32, b32, a32 - b32 == a32 - b32
+push64 $ASSERT_ADDR
+storerpop32  ; assert(a32 - b32 == a32 - b32)
 
 ret ; test_add32_sub32
 
@@ -280,5 +329,21 @@ add64        ; a64, b64, a64 + b64, b64 + a64
 ceq64        ; a64, b64, a64 + b64 == b64 + a64
 push64 $ASSERT_ADDR
 storerpop64  ; assert(a64 + b64 == b64 + a64)
+pop64        ; a64, b64
+
+; Test that subr64 is converse to sub64
+push64 -8
+loadpopsfp64 ; a64, b64, a64
+push64 -16
+loadpopsfp64 ; a64, b64, a64, b64
+sub64        ; a64, b64, a64 - b64
+push64 -16
+loadpopsfp64 ; a64, b64, a64 - b64, b64
+push64 -8
+loadpopsfp64 ; a64, b64, a64 - b64, b64, a64
+subr64       ; a64, b64, a64 - b64, a64 - b64
+ceq64        ; a64, b64, a64 - b64 == a64 - b64
+push64 $ASSERT_ADDR
+storerpop64  ; assert(a64 - b64 == a64 - b64)
 
 ret ; test_add64_sub64
