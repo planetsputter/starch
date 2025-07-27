@@ -41,5 +41,8 @@ cmp psops-dis.sta dis.sta
 echo testing add, sub
 $STASM test-add-sub.sta
 $STEM a.stb
+echo testing mul, div, mod
+$STASM test-mul-div-mod.sta
+$STEM a.stb
 
 echo all tests passed
