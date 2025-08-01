@@ -623,15 +623,22 @@ int main(int argc, const char *argv[])
 	}
 
 	// Destroy label record list
+	bool undefined_label = false;
 	for (; label_recs;) {
-		if (label_recs->usages) { // Check for undefined labels that have not been applied
+		// Check for undefined labels.
+		// It's not worth printing these errors if another error already occurred, because
+		// the other error may have halted assembly before the labels were defined.
+		if (error == 0 && label_recs->usages) {
 			fprintf(stderr, "error: use of undefined label \"%s\"\n", label_recs->label);
-			error = 1;
+			undefined_label = true;
 		}
 		struct label_rec *prev = label_recs->prev;
 		label_rec_destroy(label_recs);
 		free(label_recs);
 		label_recs = prev;
+	}
+	if (undefined_label) {
+		error = 1;
 	}
 
 	// Destroy include chain

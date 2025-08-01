@@ -230,18 +230,18 @@ static struct mem_node *mem_get_page(struct mem *mem, uint64_t addr)
 int mem_write8(struct mem *mem, uint64_t addr, uint8_t data)
 {
 	if (addr >= mem->size) {
-		return STERR_BAD_ADDR;
+		return STINT_BAD_ADDR;
 	}
 
 	struct mem_node *page = mem_get_page(mem, addr);
 	page->data[addr & MEM_PAGE_MASK] = data;
-	return STERR_NONE;
+	return 0;
 }
 
 int mem_write16(struct mem *mem, uint64_t addr, uint16_t data)
 {
 	if (addr >= mem->size - 1) {
-		return STERR_BAD_ADDR;
+		return STINT_BAD_ADDR;
 	}
 
 	struct mem_node *page = mem_get_page(mem, addr);
@@ -251,13 +251,13 @@ int mem_write16(struct mem *mem, uint64_t addr, uint16_t data)
 		page = mem_get_page(mem, addr);
 	}
 	page->data[addr & MEM_PAGE_MASK] = data >> 8;
-	return STERR_NONE;
+	return 0;
 }
 
 int mem_write32(struct mem *mem, uint64_t addr, uint32_t data)
 {
 	if (addr >= mem->size - 3) {
-		return STERR_BAD_ADDR;
+		return STINT_BAD_ADDR;
 	}
 
 	struct mem_node *page = mem_get_page(mem, addr);
@@ -270,13 +270,13 @@ int mem_write32(struct mem *mem, uint64_t addr, uint32_t data)
 			page = mem_get_page(mem, addr);
 		}
 	}
-	return STERR_NONE;
+	return 0;
 }
 
 int mem_write64(struct mem *mem, uint64_t addr, uint64_t data)
 {
 	if (addr >= mem->size - 7) {
-		return STERR_BAD_ADDR;
+		return STINT_BAD_ADDR;
 	}
 
 	struct mem_node *page = mem_get_page(mem, addr);
@@ -289,24 +289,24 @@ int mem_write64(struct mem *mem, uint64_t addr, uint64_t data)
 			page = mem_get_page(mem, addr);
 		}
 	}
-	return STERR_NONE;
+	return 0;
 }
 
 int mem_read8(struct mem *mem, uint64_t addr, uint8_t *data)
 {
 	if (addr >= mem->size) {
-		return STERR_BAD_ADDR;
+		return STINT_BAD_ADDR;
 	}
 
 	struct mem_node *page = mem_get_page(mem, addr);
 	*data = page->data[addr & MEM_PAGE_MASK];
-	return STERR_NONE;
+	return 0;
 }
 
 int mem_read16(struct mem *mem, uint64_t addr, uint16_t *data)
 {
 	if (addr >= mem->size - 1) {
-		return STERR_BAD_ADDR;
+		return STINT_BAD_ADDR;
 	}
 
 	struct mem_node *page = mem_get_page(mem, addr);
@@ -319,13 +319,13 @@ int mem_read16(struct mem *mem, uint64_t addr, uint16_t *data)
 		}
 	}
 	*data = temp;
-	return STERR_NONE;
+	return 0;
 }
 
 int mem_read32(struct mem *mem, uint64_t addr, uint32_t *data)
 {
 	if (addr >= mem->size - 3) {
-		return STERR_BAD_ADDR;
+		return STINT_BAD_ADDR;
 	}
 
 	struct mem_node *page = mem_get_page(mem, addr);
@@ -338,13 +338,13 @@ int mem_read32(struct mem *mem, uint64_t addr, uint32_t *data)
 		}
 	}
 	*data = temp;
-	return STERR_NONE;
+	return 0;
 }
 
 int mem_read64(struct mem *mem, uint64_t addr, uint64_t *data)
 {
 	if (addr >= mem->size - 7) {
-		return STERR_BAD_ADDR;
+		return STINT_BAD_ADDR;
 	}
 
 	struct mem_node *page = mem_get_page(mem, addr);
@@ -357,7 +357,7 @@ int mem_read64(struct mem *mem, uint64_t addr, uint64_t *data)
 		}
 	}
 	*data = temp;
-	return STERR_NONE;
+	return 0;
 }
 
 int mem_load_image(struct mem *mem, uint64_t addr, uint64_t size, FILE *image_file)

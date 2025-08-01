@@ -247,6 +247,6 @@ setsbp 0
 setsfp 0
 setsp 0
 setslp 0
-halt
+halt 0
 ext
 nop

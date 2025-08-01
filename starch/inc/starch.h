@@ -320,7 +320,7 @@ enum {
 	op_setsfp, // Set SFP to 8 byte imm
 	op_setsp,  // Set SP to 8 byte imm
 	op_setslp, // Set SLP to 8 byte imm
-	op_halt,   // Halts the processor
+	op_halt,   // Halts the processor with 1 byte unsigned imm exit code
 	op_ext,    // Introduces an extended operation
 	op_nop,    // No op
 };
@@ -367,21 +367,41 @@ int sdt_size(int sdt);
 int imm_type_for_opcode(int opcode);
 
 //
-// Error conditions
+// Interrupt numbers
 //
 enum {
-	STERR_NONE = 0,
-	STERR_BAD_INST, // Bad instruction
-	STERR_ASSERT_FAILURE, // IO assertion failed
-	STERR_DIV_BY_ZERO, // Division by zero
-	STERR_BAD_ALIGN, // Bad alignment
-	STERR_BAD_IO_ACCESS, // Access to unused IO memory
-	STERR_BAD_FRAME_ACCESS, // Access to protected stack frame data
-	STERR_BAD_STACK_ACCESS, // Stack access out of stack memory region
-	STERR_BAD_ADDR, // Address out of range
-	STERR_HALT, // Processor halted
-	STERR_NUM_ERRORS,
+	STINT_NONE = 0, // No interrupt
+	STINT_BAD_INST, // Bad instruction
+	STINT_ASSERT_FAILURE, // IO assertion failed
+	STINT_DIV_BY_ZERO, // Division by zero
+	STINT_BAD_ALIGN, // Bad alignment
+	STINT_BAD_IO_ACCESS, // Access to unused IO memory
+	STINT_BAD_FRAME_ACCESS, // Access to protected stack frame data
+	STINT_BAD_STACK_ACCESS, // Stack access out of stack memory region
+	STINT_BAD_ADDR, // Address out of range
+	STINT_NUM_INTS,
 };
 
-// Returns a string error code for the given integer error code
-const char *name_for_sterr(int);
+//
+// Core memory map
+//
+enum {
+	// Page 0 (0x0000-0x0fff) is reserved to help detect unintentional NULL pointer dereferences
+
+	// Page 1 (0x1000-0x1fff) is IO memory which performs various special functions
+	IO_STDIN_ADDR  = 0x1000,
+	IO_STDOUT_ADDR = 0x1001,
+	IO_FLUSH_ADDR  = 0x1002,
+	IO_URAND_ADDR  = 0x1003,
+	IO_ASSERT_ADDR = 0x100b,
+	END_IO_ADDR    = 0x2000,
+
+	// Page 2 (0x2000-0x2fff) contains 256 16-byte interrupt instruction sections
+	BEGIN_INT_ADDR = 0x2000,
+
+	// Page 3 is the start of program code
+	INIT_PC_VAL    = 0x3000, // Initial PC
+};
+
+// Returns a string name for the given interrupt number
+const char *name_for_stint(int);

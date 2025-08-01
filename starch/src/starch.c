@@ -805,6 +805,8 @@ int imm_type_for_opcode(int opcode)
 		ret = SDT_U64;
 		break;
 	case op_halt:
+		ret = SDT_U8;
+		break;
 	case op_ext:
 		// @todo
 	case op_nop:
@@ -819,30 +821,27 @@ int imm_type_for_opcode(int opcode)
 	return ret;
 }
 
-const char *name_for_sterr(int sterr)
+const char *name_for_stint(int stint)
 {
-	switch (sterr) {
-	// Generic starch errors
-	case STERR_NONE:
-		return "STERR_NONE";
-	case STERR_BAD_INST:
-		return "STERR_BAD_INST";
-	case STERR_ASSERT_FAILURE:
-		return "STERR_ASSERT_FAILURE";
-	case STERR_DIV_BY_ZERO:
-		return "STERR_DIV_BY_ZERO";
-	case STERR_BAD_ALIGN:
-		return "STERR_BAD_ALIGN";
-	case STERR_BAD_IO_ACCESS:
-		return "STERR_BAD_IO_ACCESS";
-	case STERR_BAD_FRAME_ACCESS:
-		return "STERR_BAD_FRAME_ACCESS";
-	case STERR_BAD_STACK_ACCESS:
-		return "STERR_BAD_STACK_ACCESS";
-	case STERR_BAD_ADDR:
-		return "STERR_BAD_ADDR";
-	case STERR_HALT:
-		return "STERR_HALT";
+	switch (stint) {
+	case STINT_NONE:
+		return "STINT_NONE";
+	case STINT_BAD_INST:
+		return "STINT_BAD_INST";
+	case STINT_ASSERT_FAILURE:
+		return "STINT_ASSERT_FAILURE";
+	case STINT_DIV_BY_ZERO:
+		return "STINT_DIV_BY_ZERO";
+	case STINT_BAD_ALIGN:
+		return "STINT_BAD_ALIGN";
+	case STINT_BAD_IO_ACCESS:
+		return "STINT_BAD_IO_ACCESS";
+	case STINT_BAD_FRAME_ACCESS:
+		return "STINT_BAD_FRAME_ACCESS";
+	case STINT_BAD_STACK_ACCESS:
+		return "STINT_BAD_STACK_ACCESS";
+	case STINT_BAD_ADDR:
+		return "STINT_BAD_ADDR";
 	}
-	return "STERR_UNKNOWN";
+	return "STINT_UNKNOWN";
 }

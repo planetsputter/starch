@@ -49,7 +49,7 @@ storerpop64
 pop64
 rjmpi8 :begin
 :end
-halt
+halt 0
 
 
 :test_add8_sub8

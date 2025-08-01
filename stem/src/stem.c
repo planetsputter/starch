@@ -119,21 +119,28 @@ int main(int argc, const char *argv[])
 		return ret;
 	}
 
-	// Initialize emulated memory. Give ourselves 1 GiB emulated physical memory.
-	struct mem memory;
-	mem_init(&memory, 0x40000000);
-
-	// Initialize a core
-	struct core core;
-	core_init(&core);
-
 	// Get number of sections
 	int maxnsec = 0, nsec = 0;
 	ret = stub_get_section_counts(infile, &maxnsec, &nsec);
 	if (ret) {
+		fclose(infile);
 		fprintf(stderr, "error: failed to get section counts from \"%s\"\n", arg_image);
 		return ret;
 	}
+
+	// Initialize emulated memory. Give ourselves 1 GiB emulated physical memory.
+	struct mem memory;
+	mem_init(&memory, 0x40000000);
+
+	// Prepare hard-coded interrupt handlers, which just halt with the interrupt number
+	for (int i = 1; i < 256; i++) {
+		mem_write8(&memory, BEGIN_INT_ADDR + i * 16, op_halt);
+		mem_write8(&memory, BEGIN_INT_ADDR + i * 16 + 1, i);
+	}
+
+	// Initialize a core
+	struct core core;
+	core_init(&core);
 
 	// Load all sections in input file into memory
 	struct stub_sec sec;
@@ -155,15 +162,14 @@ int main(int argc, const char *argv[])
 
 	if (ret == 0) {
 		// Sections loaded. Emulate.
-		for (int cycles = 0; (max_cycles < 0 || cycles < max_cycles) && ret == 0; cycles++) {
+		for (int cycles = 0; (max_cycles < 0 || cycles < max_cycles) && ret >= 0 && ret < 256; cycles++) {
 			ret = core_step(&core, &memory);
 		}
-		// Print an error message for non-halt error codes
-		if (ret != STERR_HALT && ret != STERR_NONE) {
-			fprintf(stderr, "error: an error occurred during emulation: %s (%d)\n", name_for_sterr(ret), ret);
+		if (ret < 0) {
+			fprintf(stderr, "error: an error occurred during emulation\n");
 		}
-		else {
-			ret = STERR_NONE;
+		else if (ret >= 256) { // Core halted
+			ret -= 256;
 		}
 
 		// Create a hex dump if requested
@@ -174,7 +180,10 @@ int main(int argc, const char *argv[])
 				ret = 1;
 			}
 			else {
-				ret = mem_dump_hex(&memory, 0, 0, dumpfile);
+				int err = mem_dump_hex(&memory, 0, 0, dumpfile);
+				if (err) {
+					ret = err;
+				}
 				fclose(dumpfile);
 			}
 		}

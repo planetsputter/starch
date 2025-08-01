@@ -9,19 +9,8 @@
 #include "core.h"
 #include "starch.h"
 
-//
-// Memory constants
-//
+// Constants
 enum {
-	// Special addresses
-	IO_STDIN_ADDR  = 0x1000,
-	IO_STDOUT_ADDR = 0x1001,
-	IO_FLUSH_ADDR  = 0x1002,
-	IO_URAND_ADDR  = 0x1003,
-	IO_ASSERT_ADDR = 0x100b,
-	END_IO_ADDR    = 0x2000,
-	INIT_PC_VAL    = 0x2000, // Initial PC
-
 	STDINOUT_BUFF_SIZE = 0x400,
 };
 
@@ -104,7 +93,7 @@ static int core_mem_write8(struct core *core, struct mem *mem, uint64_t addr, ui
 {
 	// Check frame access
 	if (addr < core->sbp && addr >= core->sfp && addr < core->sfp + 8) {
-		return STERR_BAD_FRAME_ACCESS;
+		return STINT_BAD_FRAME_ACCESS;
 	}
 
 	// Check IO memory
@@ -116,9 +105,9 @@ static int core_mem_write8(struct core *core, struct mem *mem, uint64_t addr, ui
 			return core_flush_stdout(core);
 		}
 		if (addr == IO_ASSERT_ADDR) {
-			return data == 0 ? STERR_ASSERT_FAILURE : 0;
+			return data == 0 ? STINT_ASSERT_FAILURE : 0;
 		}
-		return STERR_BAD_IO_ACCESS;
+		return STINT_BAD_IO_ACCESS;
 	}
 
 	return mem_write8(mem, addr, data);
@@ -128,7 +117,7 @@ static int core_stack_write8(struct core *core, struct mem *mem, uint64_t addr, 
 {
 	// Check stack bounds
 	if (addr >= core->sbp || addr < core->slp) {
-		return STERR_BAD_STACK_ACCESS;
+		return STINT_BAD_STACK_ACCESS;
 	}
 
 	return core_mem_write8(core, mem, addr, data);
@@ -138,15 +127,15 @@ static int core_mem_write16(struct core *core, struct mem *mem, uint64_t addr, u
 {
 	// Check frame access
 	if (addr < core->sbp && addr >= core->sfp - 1 && addr < core->sfp + 8) {
-		return STERR_BAD_FRAME_ACCESS;
+		return STINT_BAD_FRAME_ACCESS;
 	}
 
 	// Check IO memory
 	if (addr < END_IO_ADDR) {
 		if (addr == IO_ASSERT_ADDR) {
-			return data == 0 ? STERR_ASSERT_FAILURE : 0;
+			return data == 0 ? STINT_ASSERT_FAILURE : 0;
 		}
-		return STERR_BAD_IO_ACCESS; // No 16-bit IO write operations currently
+		return STINT_BAD_IO_ACCESS; // No 16-bit IO write operations currently
 	}
 
 	return mem_write16(mem, addr, data);
@@ -156,7 +145,7 @@ static int core_stack_write16(struct core *core, struct mem *mem, uint64_t addr,
 {
 	// Check stack bounds
 	if (addr >= core->sbp - 1 || addr < core->slp) {
-		return STERR_BAD_STACK_ACCESS;
+		return STINT_BAD_STACK_ACCESS;
 	}
 
 	return core_mem_write16(core, mem, addr, data);
@@ -166,15 +155,15 @@ static int core_mem_write32(struct core *core, struct mem *mem, uint64_t addr, u
 {
 	// Check frame access
 	if (addr < core->sbp && addr >= core->sfp - 3 && addr < core->sfp + 8) {
-		return STERR_BAD_FRAME_ACCESS;
+		return STINT_BAD_FRAME_ACCESS;
 	}
 
 	// Check IO memory
 	if (addr < END_IO_ADDR) {
 		if (addr == IO_ASSERT_ADDR) {
-			return data == 0 ? STERR_ASSERT_FAILURE : 0;
+			return data == 0 ? STINT_ASSERT_FAILURE : 0;
 		}
-		return STERR_BAD_IO_ACCESS; // No 32-bit IO write operations currently
+		return STINT_BAD_IO_ACCESS; // No 32-bit IO write operations currently
 	}
 
 	return mem_write32(mem, addr, data);
@@ -184,7 +173,7 @@ static int core_stack_write32(struct core *core, struct mem *mem, uint64_t addr,
 {
 	// Check stack bounds
 	if (addr >= core->sbp - 3 || addr < core->slp) {
-		return STERR_BAD_STACK_ACCESS;
+		return STINT_BAD_STACK_ACCESS;
 	}
 
 	return core_mem_write32(core, mem, addr, data);
@@ -194,15 +183,15 @@ static int core_mem_write64(struct core *core, struct mem *mem, uint64_t addr, u
 {
 	// Check frame access
 	if (addr < core->sbp && addr >= core->sfp - 7 && addr < core->sfp + 8) {
-		return STERR_BAD_FRAME_ACCESS;
+		return STINT_BAD_FRAME_ACCESS;
 	}
 
 	// Check IO memory
 	if (addr < END_IO_ADDR) {
 		if (addr == IO_ASSERT_ADDR) {
-			return data == 0 ? STERR_ASSERT_FAILURE : 0;
+			return data == 0 ? STINT_ASSERT_FAILURE : 0;
 		}
-		return STERR_BAD_IO_ACCESS; // No 64-bit IO write operations currently
+		return STINT_BAD_IO_ACCESS; // No 64-bit IO write operations currently
 	}
 
 	return mem_write64(mem, addr, data);
@@ -212,7 +201,7 @@ static int core_stack_write64(struct core *core, struct mem *mem, uint64_t addr,
 {
 	// Check stack bounds
 	if (addr >= core->sbp - 7 || addr < core->slp) {
-		return STERR_BAD_STACK_ACCESS;
+		return STINT_BAD_STACK_ACCESS;
 	}
 
 	return core_mem_write64(core, mem, addr, data);
@@ -222,7 +211,7 @@ static int core_mem_read8(struct core *core, struct mem *mem, uint64_t addr, uin
 {
 	// Check frame access
 	if (addr < core->sbp && addr >= core->sfp && addr < core->sfp + 8) {
-		return STERR_BAD_FRAME_ACCESS;
+		return STINT_BAD_FRAME_ACCESS;
 	}
 
 	// Check IO memory
@@ -233,7 +222,7 @@ static int core_mem_read8(struct core *core, struct mem *mem, uint64_t addr, uin
 		if (addr == IO_URAND_ADDR) {
 			return core_get_random(data, 1);
 		}
-		return STERR_BAD_IO_ACCESS; // No 8-bit IO read operations currently
+		return STINT_BAD_IO_ACCESS; // No 8-bit IO read operations currently
 	}
 
 	return mem_read8(mem, addr, data);
@@ -243,7 +232,7 @@ static int core_stack_read8(struct core *core, struct mem *mem, uint64_t addr, u
 {
 	// Check stack bounds
 	if (addr >= core->sbp || addr < core->slp) {
-		return STERR_BAD_STACK_ACCESS;
+		return STINT_BAD_STACK_ACCESS;
 	}
 
 	return core_mem_read8(core, mem, addr, data);
@@ -253,7 +242,7 @@ static int core_mem_read16(struct core *core, struct mem *mem, uint64_t addr, ui
 {
 	// Check frame access
 	if (addr < core->sbp && addr >= core->sfp - 1 && addr < core->sfp + 8) {
-		return STERR_BAD_FRAME_ACCESS;
+		return STINT_BAD_FRAME_ACCESS;
 	}
 
 	// Check IO memory
@@ -261,7 +250,7 @@ static int core_mem_read16(struct core *core, struct mem *mem, uint64_t addr, ui
 		if (addr == IO_URAND_ADDR) {
 			return core_get_random(data, 2);
 		}
-		return STERR_BAD_IO_ACCESS; // No 16-bit IO read operations currently
+		return STINT_BAD_IO_ACCESS; // No 16-bit IO read operations currently
 	}
 
 	return mem_read16(mem, addr, data);
@@ -271,7 +260,7 @@ static int core_stack_read16(struct core *core, struct mem *mem, uint64_t addr, 
 {
 	// Check stack bounds
 	if (addr >= core->sbp - 1 || addr < core->slp) {
-		return STERR_BAD_STACK_ACCESS;
+		return STINT_BAD_STACK_ACCESS;
 	}
 
 	return core_mem_read16(core, mem, addr, data);
@@ -281,7 +270,7 @@ static int core_mem_read32(struct core *core, struct mem *mem, uint64_t addr, ui
 {
 	// Check frame access
 	if (addr < core->sbp && addr >= core->sfp - 3 && addr < core->sfp + 8) {
-		return STERR_BAD_FRAME_ACCESS;
+		return STINT_BAD_FRAME_ACCESS;
 	}
 
 	// Check IO memory
@@ -289,7 +278,7 @@ static int core_mem_read32(struct core *core, struct mem *mem, uint64_t addr, ui
 		if (addr == IO_URAND_ADDR) {
 			return core_get_random(data, 4);
 		}
-		return STERR_BAD_IO_ACCESS;
+		return STINT_BAD_IO_ACCESS;
 	}
 
 	return mem_read32(mem, addr, data);
@@ -299,7 +288,7 @@ static int core_stack_read32(struct core *core, struct mem *mem, uint64_t addr, 
 {
 	// Check stack bounds
 	if (addr >= core->sbp - 3 || addr < core->slp) {
-		return STERR_BAD_STACK_ACCESS;
+		return STINT_BAD_STACK_ACCESS;
 	}
 
 	return core_mem_read32(core, mem, addr, data);
@@ -309,7 +298,7 @@ static int core_mem_read64(struct core *core, struct mem *mem, uint64_t addr, ui
 {
 	// Check frame access
 	if (addr < core->sbp && addr >= core->sfp - 7 && addr < core->sfp + 8) {
-		return STERR_BAD_FRAME_ACCESS;
+		return STINT_BAD_FRAME_ACCESS;
 	}
 
 	// Check IO memory
@@ -317,7 +306,7 @@ static int core_mem_read64(struct core *core, struct mem *mem, uint64_t addr, ui
 		if (addr == IO_URAND_ADDR) {
 			return core_get_random(data, 8);
 		}
-		return STERR_BAD_IO_ACCESS; // No 64-bit IO read operations currently
+		return STINT_BAD_IO_ACCESS; // No 64-bit IO read operations currently
 	}
 
 	return mem_read64(mem, addr, data);
@@ -327,7 +316,7 @@ static int core_stack_read64(struct core *core, struct mem *mem, uint64_t addr, 
 {
 	// Check stack bounds
 	if (addr >= core->sbp - 7 || addr < core->slp) {
-		return STERR_BAD_STACK_ACCESS;
+		return STINT_BAD_STACK_ACCESS;
 	}
 
 	return core_mem_read64(core, mem, addr, data);
@@ -338,7 +327,6 @@ int core_step(struct core *core, struct mem *mem)
 	// Fetch instruction from memory
 	uint8_t opcode;
 	int ret = core_mem_read8(core, mem, core->pc, &opcode);
-	if (ret) return ret;
 
 	// Temporary variables for use by instructions
 	uint8_t temp_u8, temp_u8b;
@@ -349,12 +337,12 @@ int core_step(struct core *core, struct mem *mem)
 	//
 	// Execute instruction on core and memory
 	//
-	switch (opcode) {
+	if (ret == 0) switch (opcode) {
 	//
 	// Invalid instruction
 	//
 	case op_invalid:
-		ret = STERR_BAD_INST;
+		ret = STINT_BAD_INST;
 		break;
 
 	//
@@ -866,7 +854,7 @@ int core_step(struct core *core, struct mem *mem)
 		ret = core_stack_read8(core, mem, core->sp + 1, &temp_u8); // Read operand
 		if (ret) break;
 		if (temp_u8b == 0) {
-			ret = STERR_DIV_BY_ZERO;
+			ret = STINT_DIV_BY_ZERO;
 			break;
 		}
 		ret = core_stack_write8(core, mem, core->sp + 1, temp_u8 / temp_u8b); // Write quotient
@@ -880,7 +868,7 @@ int core_step(struct core *core, struct mem *mem)
 		ret = core_stack_read16(core, mem, core->sp + 2, &temp_u16); // Read operand
 		if (ret) break;
 		if (temp_u16b == 0) {
-			ret = STERR_DIV_BY_ZERO;
+			ret = STINT_DIV_BY_ZERO;
 			break;
 		}
 		ret = core_stack_write16(core, mem, core->sp + 2, temp_u16 / temp_u16b); // Write quotient
@@ -894,7 +882,7 @@ int core_step(struct core *core, struct mem *mem)
 		ret = core_stack_read32(core, mem, core->sp + 4, &temp_u32); // Read operand
 		if (ret) break;
 		if (temp_u32b == 0) {
-			ret = STERR_DIV_BY_ZERO;
+			ret = STINT_DIV_BY_ZERO;
 			break;
 		}
 		ret = core_stack_write32(core, mem, core->sp + 4, temp_u32 / temp_u32b); // Write quotient
@@ -908,7 +896,7 @@ int core_step(struct core *core, struct mem *mem)
 		ret = core_stack_read64(core, mem, core->sp + 8, &temp_u64); // Read operand
 		if (ret) break;
 		if (temp_u64b == 0) {
-			ret = STERR_DIV_BY_ZERO;
+			ret = STINT_DIV_BY_ZERO;
 			break;
 		}
 		ret = core_stack_write64(core, mem, core->sp + 8, temp_u64 / temp_u64b); // Write quotient
@@ -922,7 +910,7 @@ int core_step(struct core *core, struct mem *mem)
 		ret = core_stack_read8(core, mem, core->sp + 1, &temp_u8); // Read operand
 		if (ret) break;
 		if (temp_u8 == 0) {
-			ret = STERR_DIV_BY_ZERO;
+			ret = STINT_DIV_BY_ZERO;
 			break;
 		}
 		ret = core_stack_write8(core, mem, core->sp + 1, temp_u8b / temp_u8); // Write quotient
@@ -936,7 +924,7 @@ int core_step(struct core *core, struct mem *mem)
 		ret = core_stack_read16(core, mem, core->sp + 2, &temp_u16); // Read operand
 		if (ret) break;
 		if (temp_u16 == 0) {
-			ret = STERR_DIV_BY_ZERO;
+			ret = STINT_DIV_BY_ZERO;
 			break;
 		}
 		ret = core_stack_write16(core, mem, core->sp + 2, temp_u16b / temp_u16); // Write quotient
@@ -950,7 +938,7 @@ int core_step(struct core *core, struct mem *mem)
 		ret = core_stack_read32(core, mem, core->sp + 4, &temp_u32); // Read operand
 		if (ret) break;
 		if (temp_u32 == 0) {
-			ret = STERR_DIV_BY_ZERO;
+			ret = STINT_DIV_BY_ZERO;
 			break;
 		}
 		ret = core_stack_write32(core, mem, core->sp + 4, temp_u32b / temp_u32); // Write quotient
@@ -964,7 +952,7 @@ int core_step(struct core *core, struct mem *mem)
 		ret = core_stack_read64(core, mem, core->sp + 8, &temp_u64); // Read operand
 		if (ret) break;
 		if (temp_u64 == 0) {
-			ret = STERR_DIV_BY_ZERO;
+			ret = STINT_DIV_BY_ZERO;
 			break;
 		}
 		ret = core_stack_write64(core, mem, core->sp + 8, temp_u64b / temp_u64); // Write quotient
@@ -978,7 +966,7 @@ int core_step(struct core *core, struct mem *mem)
 		ret = core_stack_read8(core, mem, core->sp + 1, &temp_u8); // Read operand
 		if (ret) break;
 		if (temp_u8b == 0) {
-			ret = STERR_DIV_BY_ZERO;
+			ret = STINT_DIV_BY_ZERO;
 			break;
 		}
 		ret = core_stack_write8(core, mem, core->sp + 1, (int8_t)temp_u8 / (int8_t)temp_u8b); // Write quotient
@@ -992,7 +980,7 @@ int core_step(struct core *core, struct mem *mem)
 		ret = core_stack_read16(core, mem, core->sp + 2, &temp_u16); // Read operand
 		if (ret) break;
 		if (temp_u16b == 0) {
-			ret = STERR_DIV_BY_ZERO;
+			ret = STINT_DIV_BY_ZERO;
 			break;
 		}
 		ret = core_stack_write16(core, mem, core->sp + 2, (int16_t)temp_u16 / (int16_t)temp_u16b); // Write quotient
@@ -1006,7 +994,7 @@ int core_step(struct core *core, struct mem *mem)
 		ret = core_stack_read32(core, mem, core->sp + 4, &temp_u32); // Read operand
 		if (ret) break;
 		if (temp_u32b == 0) {
-			ret = STERR_DIV_BY_ZERO;
+			ret = STINT_DIV_BY_ZERO;
 			break;
 		}
 		ret = core_stack_write32(core, mem, core->sp + 4, (int32_t)temp_u32 / (int32_t)temp_u32b); // Write quotient
@@ -1020,7 +1008,7 @@ int core_step(struct core *core, struct mem *mem)
 		ret = core_stack_read64(core, mem, core->sp + 8, &temp_u64); // Read operand
 		if (ret) break;
 		if (temp_u64b == 0) {
-			ret = STERR_DIV_BY_ZERO;
+			ret = STINT_DIV_BY_ZERO;
 			break;
 		}
 		ret = core_stack_write64(core, mem, core->sp + 8, (int64_t)temp_u64 / (int64_t)temp_u64b); // Write quotient
@@ -1034,7 +1022,7 @@ int core_step(struct core *core, struct mem *mem)
 		ret = core_stack_read8(core, mem, core->sp + 1, &temp_u8); // Read operand
 		if (ret) break;
 		if (temp_u8 == 0) {
-			ret = STERR_DIV_BY_ZERO;
+			ret = STINT_DIV_BY_ZERO;
 			break;
 		}
 		ret = core_stack_write8(core, mem, core->sp + 1, (int8_t)temp_u8b / (int8_t)temp_u8); // Write quotient
@@ -1048,7 +1036,7 @@ int core_step(struct core *core, struct mem *mem)
 		ret = core_stack_read16(core, mem, core->sp + 2, &temp_u16); // Read operand
 		if (ret) break;
 		if (temp_u16 == 0) {
-			ret = STERR_DIV_BY_ZERO;
+			ret = STINT_DIV_BY_ZERO;
 			break;
 		}
 		ret = core_stack_write16(core, mem, core->sp + 2, (int16_t)temp_u16b / (int16_t)temp_u16); // Write quotient
@@ -1062,7 +1050,7 @@ int core_step(struct core *core, struct mem *mem)
 		ret = core_stack_read32(core, mem, core->sp + 4, &temp_u32); // Read operand
 		if (ret) break;
 		if (temp_u32 == 0) {
-			ret = STERR_DIV_BY_ZERO;
+			ret = STINT_DIV_BY_ZERO;
 			break;
 		}
 		ret = core_stack_write32(core, mem, core->sp + 4, (int32_t)temp_u32b / (int32_t)temp_u32); // Write quotient
@@ -1076,7 +1064,7 @@ int core_step(struct core *core, struct mem *mem)
 		ret = core_stack_read64(core, mem, core->sp + 8, &temp_u64); // Read operand
 		if (ret) break;
 		if (temp_u64 == 0) {
-			ret = STERR_DIV_BY_ZERO;
+			ret = STINT_DIV_BY_ZERO;
 			break;
 		}
 		ret = core_stack_write64(core, mem, core->sp + 8, (int64_t)temp_u64b / (int64_t)temp_u64); // Write quotient
@@ -1090,7 +1078,7 @@ int core_step(struct core *core, struct mem *mem)
 		ret = core_stack_read8(core, mem, core->sp + 1, &temp_u8); // Read operand
 		if (ret) break;
 		if (temp_u8b == 0) {
-			ret = STERR_DIV_BY_ZERO;
+			ret = STINT_DIV_BY_ZERO;
 			break;
 		}
 		ret = core_stack_write8(core, mem, core->sp + 1, temp_u8 % temp_u8b); // Write remainder
@@ -1104,7 +1092,7 @@ int core_step(struct core *core, struct mem *mem)
 		ret = core_stack_read16(core, mem, core->sp + 2, &temp_u16); // Read operand
 		if (ret) break;
 		if (temp_u16b == 0) {
-			ret = STERR_DIV_BY_ZERO;
+			ret = STINT_DIV_BY_ZERO;
 			break;
 		}
 		ret = core_stack_write16(core, mem, core->sp + 2, temp_u16 % temp_u16b); // Write remainder
@@ -1118,7 +1106,7 @@ int core_step(struct core *core, struct mem *mem)
 		ret = core_stack_read32(core, mem, core->sp + 4, &temp_u32); // Read operand
 		if (ret) break;
 		if (temp_u32b == 0) {
-			ret = STERR_DIV_BY_ZERO;
+			ret = STINT_DIV_BY_ZERO;
 			break;
 		}
 		ret = core_stack_write32(core, mem, core->sp + 4, temp_u32 % temp_u32b); // Write remainder
@@ -1132,7 +1120,7 @@ int core_step(struct core *core, struct mem *mem)
 		ret = core_stack_read64(core, mem, core->sp + 8, &temp_u64); // Read operand
 		if (ret) break;
 		if (temp_u64b == 0) {
-			ret = STERR_DIV_BY_ZERO;
+			ret = STINT_DIV_BY_ZERO;
 			break;
 		}
 		ret = core_stack_write64(core, mem, core->sp + 8, temp_u64 % temp_u64b); // Write remainder
@@ -1146,7 +1134,7 @@ int core_step(struct core *core, struct mem *mem)
 		ret = core_stack_read8(core, mem, core->sp + 1, &temp_u8); // Read operand
 		if (ret) break;
 		if (temp_u8 == 0) {
-			ret = STERR_DIV_BY_ZERO;
+			ret = STINT_DIV_BY_ZERO;
 			break;
 		}
 		ret = core_stack_write8(core, mem, core->sp + 1, temp_u8b % temp_u8); // Write remainder
@@ -1160,7 +1148,7 @@ int core_step(struct core *core, struct mem *mem)
 		ret = core_stack_read16(core, mem, core->sp + 2, &temp_u16); // Read operand
 		if (ret) break;
 		if (temp_u16 == 0) {
-			ret = STERR_DIV_BY_ZERO;
+			ret = STINT_DIV_BY_ZERO;
 			break;
 		}
 		ret = core_stack_write16(core, mem, core->sp + 2, temp_u16b % temp_u16); // Write remainder
@@ -1174,7 +1162,7 @@ int core_step(struct core *core, struct mem *mem)
 		ret = core_stack_read32(core, mem, core->sp + 4, &temp_u32); // Read operand
 		if (ret) break;
 		if (temp_u32 == 0) {
-			ret = STERR_DIV_BY_ZERO;
+			ret = STINT_DIV_BY_ZERO;
 			break;
 		}
 		ret = core_stack_write32(core, mem, core->sp + 4, temp_u32b % temp_u32); // Write remainder
@@ -1188,7 +1176,7 @@ int core_step(struct core *core, struct mem *mem)
 		ret = core_stack_read64(core, mem, core->sp + 8, &temp_u64); // Read operand
 		if (ret) break;
 		if (temp_u64 == 0) {
-			ret = STERR_DIV_BY_ZERO;
+			ret = STINT_DIV_BY_ZERO;
 			break;
 		}
 		ret = core_stack_write64(core, mem, core->sp + 8, temp_u64b % temp_u64); // Write remainder
@@ -1202,7 +1190,7 @@ int core_step(struct core *core, struct mem *mem)
 		ret = core_stack_read8(core, mem, core->sp + 1, &temp_u8); // Read operand
 		if (ret) break;
 		if (temp_u8b == 0) {
-			ret = STERR_DIV_BY_ZERO;
+			ret = STINT_DIV_BY_ZERO;
 			break;
 		}
 		ret = core_stack_write8(core, mem, core->sp + 1, (int8_t)temp_u8 % (int8_t)temp_u8b); // Write remainder
@@ -1216,7 +1204,7 @@ int core_step(struct core *core, struct mem *mem)
 		ret = core_stack_read16(core, mem, core->sp + 2, &temp_u16); // Read operand
 		if (ret) break;
 		if (temp_u16b == 0) {
-			ret = STERR_DIV_BY_ZERO;
+			ret = STINT_DIV_BY_ZERO;
 			break;
 		}
 		ret = core_stack_write16(core, mem, core->sp + 2, (int16_t)temp_u16 % (int16_t)temp_u16b); // Write remainder
@@ -1230,7 +1218,7 @@ int core_step(struct core *core, struct mem *mem)
 		ret = core_stack_read32(core, mem, core->sp + 4, &temp_u32); // Read operand
 		if (ret) break;
 		if (temp_u32b == 0) {
-			ret = STERR_DIV_BY_ZERO;
+			ret = STINT_DIV_BY_ZERO;
 			break;
 		}
 		ret = core_stack_write32(core, mem, core->sp + 4, (int32_t)temp_u32 % (int32_t)temp_u32b); // Write remainder
@@ -1244,7 +1232,7 @@ int core_step(struct core *core, struct mem *mem)
 		ret = core_stack_read64(core, mem, core->sp + 8, &temp_u64); // Read operand
 		if (ret) break;
 		if (temp_u64b == 0) {
-			ret = STERR_DIV_BY_ZERO;
+			ret = STINT_DIV_BY_ZERO;
 			break;
 		}
 		ret = core_stack_write64(core, mem, core->sp + 8, (int64_t)temp_u64 % (int64_t)temp_u64b); // Write remainder
@@ -1258,7 +1246,7 @@ int core_step(struct core *core, struct mem *mem)
 		ret = core_stack_read8(core, mem, core->sp + 1, &temp_u8); // Read operand
 		if (ret) break;
 		if (temp_u8 == 0) {
-			ret = STERR_DIV_BY_ZERO;
+			ret = STINT_DIV_BY_ZERO;
 			break;
 		}
 		ret = core_stack_write8(core, mem, core->sp + 1, (int8_t)temp_u8b % (int8_t)temp_u8); // Write remainder
@@ -1272,7 +1260,7 @@ int core_step(struct core *core, struct mem *mem)
 		ret = core_stack_read16(core, mem, core->sp + 2, &temp_u16); // Read operand
 		if (ret) break;
 		if (temp_u16 == 0) {
-			ret = STERR_DIV_BY_ZERO;
+			ret = STINT_DIV_BY_ZERO;
 			break;
 		}
 		ret = core_stack_write16(core, mem, core->sp + 2, (int16_t)temp_u16b % (int16_t)temp_u16); // Write remainder
@@ -1286,7 +1274,7 @@ int core_step(struct core *core, struct mem *mem)
 		ret = core_stack_read32(core, mem, core->sp + 4, &temp_u32); // Read operand
 		if (ret) break;
 		if (temp_u32 == 0) {
-			ret = STERR_DIV_BY_ZERO;
+			ret = STINT_DIV_BY_ZERO;
 			break;
 		}
 		ret = core_stack_write32(core, mem, core->sp + 4, (int32_t)temp_u32b % (int32_t)temp_u32); // Write remainder
@@ -1300,7 +1288,7 @@ int core_step(struct core *core, struct mem *mem)
 		ret = core_stack_read64(core, mem, core->sp + 8, &temp_u64); // Read operand
 		if (ret) break;
 		if (temp_u64 == 0) {
-			ret = STERR_DIV_BY_ZERO;
+			ret = STINT_DIV_BY_ZERO;
 			break;
 		}
 		ret = core_stack_write64(core, mem, core->sp + 8, (int64_t)temp_u64b % (int64_t)temp_u64); // Write remainder
@@ -2133,7 +2121,7 @@ int core_step(struct core *core, struct mem *mem)
 		core->sfp = temp_u64; // Adjust SFP
 		ret = core_stack_read64(core, mem, temp_u64b, &temp_u64); // Read RETA
 		if (ret) {
-			core->sfp = temp_u64b; // Restore original SFP on error
+			core->sfp = temp_u64b; // Restore original SFP on interrupt
 			break;
 		}
 		core->sp = temp_u64b + 16;
@@ -2876,14 +2864,28 @@ int core_step(struct core *core, struct mem *mem)
 		core->pc += 9;
 		break;
 	case op_halt:
+		ret = core_mem_read8(core, mem, core->pc + 1, &temp_u8); // Read exit code imm
+		if (ret) break;
 		core_flush_stdout(core);
-		return STERR_HALT;
+		ret = 256 + temp_u8;
+		break;
 	case op_ext:
+		// @todo
+		ret = -1;
+		break;
 	case op_nop:
-		return -1;
+		core->pc += 1;
+		break;
 
 	default:
-		return -1;
+		ret = -1;
+		break;
+	}
+
+	if (ret > 0 && ret < 256) {
+		// An interrupt occurred. Vector to interrupt handler.
+		// @todo: Need a way to save and restore processor state like sfp.
+		core->pc = BEGIN_INT_ADDR + 16 * ret;
 	}
 
 	return ret;

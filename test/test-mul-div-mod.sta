@@ -49,7 +49,7 @@ storerpop64
 pop64
 rjmpi8 :begin
 :end
-halt
+halt 0
 
 ;
 ;test_mul8_div8_mod8
