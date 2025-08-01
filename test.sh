@@ -44,5 +44,8 @@ $STEM a.stb
 echo testing mul, div, mod
 $STASM test-mul-div-mod.sta
 $STEM a.stb
+echo testing bitwise logical operations
+$STASM test-bit-ops.sta
+$STEM a.stb
 
 echo all tests passed

@@ -1,0 +1,596 @@
+; test-bit-ops.sta
+
+.include "sys.sta"
+
+; Memory map
+; 0x0000 - 0x1000: reserved
+; 0x1000 - 0x2000: IO
+; 0x2000 - 0x3000: interrupt
+; 0x3000 - 0x4000: program
+; 0x4000 - 0x5000: stack
+; 0x5000 - 0x6000: static
+
+;
+; Definitions
+;
+.define STATIC_ADDR  0x5000
+.define STACK_BOTTOM 0x5000
+.define STACK_LIMIT  0x4000
+.define MAX_REPS     16
+
+;
+; Static data section
+;
+.section $STATIC_ADDR
+
+.data64 0 ; rep64
+
+;
+; Instruction section
+;
+.section $INIT_PC_VAL
+
+setsbp $STACK_BOTTOM
+setsfp $STACK_BOTTOM
+setsp  $STACK_BOTTOM
+setslp $STACK_LIMIT
+
+:begin
+push64 $STATIC_ADDR
+loadpop64        ; rep64
+dup64            ; rep64, rep64
+push64 $MAX_REPS ; rep64, rep64, $MAX_REPS
+cltu64           ; rep64, rep64 < $MAX_REPS
+brz64 :end       ; rep64
+call :test_bit_ops8
+call :test_bit_ops16
+call :test_bit_ops32
+call :test_bit_ops64
+push64 1         ; rep64, 1_64
+add64            ; rep64 + 1_64
+push64 $STATIC_ADDR
+storerpop64
+pop64
+rjmpi8 :begin
+:end
+halt 0
+
+:test_bit_ops8
+
+; Test that bxor8 has a zero identity
+push64 $URAND_ADDR
+loadpop8    ; a8
+dup8        ; a8, a8
+dup8        ; a8, a8, a8
+push8 0     ; a8, a8, a8, 0_8
+bxor8       ; a8, a8, a8 ^ 0_8
+ceq8        ; a8, a8 == a8 ^ 0_8
+push64 $ASSERT_ADDR
+storerpop8  ; assert(a8 == a8 ^ 0_8)
+pop8        ; a8
+
+; Test that a8 ^ a8 == 0_8
+dup8        ; a8, a8
+dup8        ; a8, a8, a8
+bxor8       ; a8, a8 ^ a8
+push8 0     ; a8, a8 ^ a8, 0_8
+ceq8        ; a8, a8 ^ a8 == 0_8
+push64 $ASSERT_ADDR
+storerpop8  ; assert(a8 ^ a8 == 0_8)
+pop8        ; a8
+
+; Test that a8 == a8 & a8
+dup8        ; a8, a8
+dup8        ; a8, a8, a8
+dup8        ; a8, a8, a8, a8
+band8       ; a8, a8, a8 & a8
+ceq8        ; a8, a8 == a8 & a8
+push64 $ASSERT_ADDR
+storerpop8  ; assert(a8 == a8 & a8)
+pop8        ; a8
+
+; Test that a8 & 0_8 == 0_8
+dup8        ; a8, a8
+push8 0     ; a8, a8, 0_8
+band8       ; a8, a8 & 0_8
+push8 0     ; a8, a8 & 0_8, 0_8
+ceq8        ; a8, a8 & 0_8 == 0_8
+push64 $ASSERT_ADDR
+storerpop8  ; assert(a8 & 0_8 == 0_8)
+pop8        ; a8
+
+; Test that a8 == a8 | a8
+dup8        ; a8, a8
+dup8        ; a8, a8, a8
+dup8        ; a8, a8, a8, a8
+bor8        ; a8, a8, a8 | a8
+ceq8        ; a8, a8 == a8 | a8
+push64 $ASSERT_ADDR
+storerpop8  ; assert(a8 == a8 | a8)
+pop8        ; a8
+
+; Test that a8 == a8 | 0_8
+dup8        ; a8, a8
+dup8        ; a8, a8, a8
+push8 0     ; a8, a8, a8, 0_8
+bor8        ; a8, a8, a8 | 0_8
+ceq8        ; a8, a8 == a8 | 0_8
+push64 $ASSERT_ADDR
+storerpop8  ; assert(a8 == a8 | 0_8)
+pop8        ; a8
+
+; Test that a8 != ~a8
+dup8        ; a8, a8
+dup8        ; a8, a8, a8
+binv8       ; a8, a8, ~a8
+cne8        ; a8, a8 != ~a8
+push64 $ASSERT_ADDR
+storerpop8  ; assert(a8 != ~a8)
+pop8        ; a8
+
+; Test that a8 == ~~a8
+dup8        ; a8, a8
+dup8        ; a8, a8, a8
+binv8       ; a8, a8, ~a8
+binv8       ; a8, a8, ~~a8
+ceq8        ; a8, a8 == ~~a8
+push64 $ASSERT_ADDR
+storerpop8  ; assert(a8 == ~~a8)
+pop8        ; a8
+
+; Test that bxor8 is commutative
+push64 $URAND_ADDR
+loadpop8    ; a8, b8
+push64 -1
+loadpopsfp8 ; a8, b8, a8
+push64 -2
+loadpopsfp8 ; a8, b8, a8, b8
+bxor8       ; a8, b8, a8 ^ b8
+push64 -2
+loadpopsfp8 ; a8, b8, a8 ^ b8, b8
+push64 -1
+loadpopsfp8 ; a8, b8, a8 ^ b8, b8, a8
+bxor8       ; a8, b8, a8 ^ b8, b8 ^ a8
+ceq8        ; a8, b8, a8 ^ b8 == b8 ^ a8
+push64 $ASSERT_ADDR
+storerpop8  ; assert(a8 ^ b8 == b8 ^ a8)
+pop8        ; a8, b8
+
+; Test that band8 is commutative
+push64 -1
+loadpopsfp8 ; a8, b8, a8
+push64 -2
+loadpopsfp8 ; a8, b8, a8, b8
+band8       ; a8, b8, a8 & b8
+push64 -2
+loadpopsfp8 ; a8, b8, a8 & b8, b8
+push64 -1
+loadpopsfp8 ; a8, b8, a8 & b8, b8, a8
+band8       ; a8, b8, a8 & b8, b8 & a8
+ceq8        ; a8, b8, a8 & b8 == b8 & a8
+push64 $ASSERT_ADDR
+storerpop8  ; assert(a8 & b8 == b8 & a8)
+pop8        ; a8, b8
+
+; Test that bor8 is commutative
+push64 -1
+loadpopsfp8 ; a8, b8, a8
+push64 -2
+loadpopsfp8 ; a8, b8, a8, b8
+bor8        ; a8, b8, a8 | b8
+push64 -2
+loadpopsfp8 ; a8, b8, a8 | b8, b8
+push64 -1
+loadpopsfp8 ; a8, b8, a8 | b8, b8, a8
+bor8        ; a8, b8, a8 | b8, b8 | a8
+ceq8        ; a8, b8, a8 | b8 == b8 | a8
+push64 $ASSERT_ADDR
+storerpop8  ; assert(a8 | b8 == b8 | a8)
+pop8        ; a8, b8
+
+ret ; test_bit_ops8
+
+:test_bit_ops16
+
+; Test that bxor16 has a zero identity
+push64 $URAND_ADDR
+loadpop16    ; a16
+dup16        ; a16, a16
+dup16        ; a16, a16, a16
+push16 0     ; a16, a16, a16, 0_16
+bxor16       ; a16, a16, a16 ^ 0_16
+ceq16        ; a16, a16 == a16 ^ 0_16
+push64 $ASSERT_ADDR
+storerpop16  ; assert(a16 == a16 ^ 0_16)
+pop16        ; a16
+
+; Test that a16 ^ a16 == 0_16
+dup16        ; a16, a16
+dup16        ; a16, a16, a16
+bxor16       ; a16, a16 ^ a16
+push16 0     ; a16, a16 ^ a16, 0_16
+ceq16        ; a16, a16 ^ a16 == 0_16
+push64 $ASSERT_ADDR
+storerpop16  ; assert(a16 ^ a16 == 0_16)
+pop16        ; a16
+
+; Test that a16 == a16 & a16
+dup16        ; a16, a16
+dup16        ; a16, a16, a16
+dup16        ; a16, a16, a16, a16
+band16       ; a16, a16, a16 & a16
+ceq16        ; a16, a16 == a16 & a16
+push64 $ASSERT_ADDR
+storerpop16  ; assert(a16 == a16 & a16)
+pop16        ; a16
+
+; Test that a16 & 0_16 == 0_16
+dup16        ; a16, a16
+push16 0     ; a16, a16, 0_16
+band16       ; a16, a16 & 0_16
+push16 0     ; a16, a16 & 0_16, 0_16
+ceq16        ; a16, a16 & 0_16 == 0_16
+push64 $ASSERT_ADDR
+storerpop16  ; assert(a16 & 0_16 == 0_16)
+pop16        ; a16
+
+; Test that a16 == a16 | a16
+dup16        ; a16, a16
+dup16        ; a16, a16, a16
+dup16        ; a16, a16, a16, a16
+bor16        ; a16, a16, a16 | a16
+ceq16        ; a16, a16 == a16 | a16
+push64 $ASSERT_ADDR
+storerpop16  ; assert(a16 == a16 | a16)
+pop16        ; a16
+
+; Test that a16 == a16 | 0_16
+dup16        ; a16, a16
+dup16        ; a16, a16, a16
+push16 0     ; a16, a16, a16, 0_16
+bor16        ; a16, a16, a16 | 0_16
+ceq16        ; a16, a16 == a16 | 0_16
+push64 $ASSERT_ADDR
+storerpop16  ; assert(a16 == a16 | 0_16)
+pop16        ; a16
+
+; Test that a16 != ~a16
+dup16        ; a16, a16
+dup16        ; a16, a16, a16
+binv16       ; a16, a16, ~a16
+cne16        ; a16, a16 != ~a16
+push64 $ASSERT_ADDR
+storerpop16  ; assert(a16 != ~a16)
+pop16        ; a16
+
+; Test that a16 == ~~a16
+dup16        ; a16, a16
+dup16        ; a16, a16, a16
+binv16       ; a16, a16, ~a16
+binv16       ; a16, a16, ~~a16
+ceq16        ; a16, a16 == ~~a16
+push64 $ASSERT_ADDR
+storerpop16  ; assert(a16 == ~~a16)
+pop16        ; a16
+
+; Test that bxor16 is commutative
+push64 $URAND_ADDR
+loadpop16    ; a16, b16
+push64 -2
+loadpopsfp16 ; a16, b16, a16
+push64 -4
+loadpopsfp16 ; a16, b16, a16, b16
+bxor16       ; a16, b16, a16 ^ b16
+push64 -4
+loadpopsfp16 ; a16, b16, a16 ^ b16, b16
+push64 -2
+loadpopsfp16 ; a16, b16, a16 ^ b16, b16, a16
+bxor16       ; a16, b16, a16 ^ b16, b16 ^ a16
+ceq16        ; a16, b16, a16 ^ b16 == b16 ^ a16
+push64 $ASSERT_ADDR
+storerpop16  ; assert(a16 ^ b16 == b16 ^ a16)
+pop16        ; a16, b16
+
+; Test that band16 is commutative
+push64 -2
+loadpopsfp16 ; a16, b16, a16
+push64 -4
+loadpopsfp16 ; a16, b16, a16, b16
+band16       ; a16, b16, a16 & b16
+push64 -4
+loadpopsfp16 ; a16, b16, a16 & b16, b16
+push64 -2
+loadpopsfp16 ; a16, b16, a16 & b16, b16, a16
+band16       ; a16, b16, a16 & b16, b16 & a16
+ceq16        ; a16, b16, a16 & b16 == b16 & a16
+push64 $ASSERT_ADDR
+storerpop16  ; assert(a16 & b16 == b16 & a16)
+pop16        ; a16, b16
+
+; Test that bor16 is commutative
+push64 -2
+loadpopsfp16 ; a16, b16, a16
+push64 -4
+loadpopsfp16 ; a16, b16, a16, b16
+bor16        ; a16, b16, a16 | b16
+push64 -4
+loadpopsfp16 ; a16, b16, a16 | b16, b16
+push64 -2
+loadpopsfp16 ; a16, b16, a16 | b16, b16, a16
+bor16        ; a16, b16, a16 | b16, b16 | a16
+ceq16        ; a16, b16, a16 | b16 == b16 | a16
+push64 $ASSERT_ADDR
+storerpop16  ; assert(a16 | b16 == b16 | a16)
+pop16        ; a16, b16
+
+ret ; test_bit_ops16
+
+:test_bit_ops32
+
+; Test that bxor32 has a zero identity
+push64 $URAND_ADDR
+loadpop32    ; a32
+dup32        ; a32, a32
+dup32        ; a32, a32, a32
+push32 0     ; a32, a32, a32, 0_32
+bxor32       ; a32, a32, a32 ^ 0_32
+ceq32        ; a32, a32 == a32 ^ 0_32
+push64 $ASSERT_ADDR
+storerpop32  ; assert(a32 == a32 ^ 0_32)
+pop32        ; a32
+
+; Test that a32 ^ a32 == 0_32
+dup32        ; a32, a32
+dup32        ; a32, a32, a32
+bxor32       ; a32, a32 ^ a32
+push32 0     ; a32, a32 ^ a32, 0_32
+ceq32        ; a32, a32 ^ a32 == 0_32
+push64 $ASSERT_ADDR
+storerpop32  ; assert(a32 ^ a32 == 0_32)
+pop32        ; a32
+
+; Test that a32 == a32 & a32
+dup32        ; a32, a32
+dup32        ; a32, a32, a32
+dup32        ; a32, a32, a32, a32
+band32       ; a32, a32, a32 & a32
+ceq32        ; a32, a32 == a32 & a32
+push64 $ASSERT_ADDR
+storerpop32  ; assert(a32 == a32 & a32)
+pop32        ; a32
+
+; Test that a32 & 0_32 == 0_32
+dup32        ; a32, a32
+push32 0     ; a32, a32, 0_32
+band32       ; a32, a32 & 0_32
+push32 0     ; a32, a32 & 0_32, 0_32
+ceq32        ; a32, a32 & 0_32 == 0_32
+push64 $ASSERT_ADDR
+storerpop32  ; assert(a32 & 0_32 == 0_32)
+pop32        ; a32
+
+; Test that a32 == a32 | a32
+dup32        ; a32, a32
+dup32        ; a32, a32, a32
+dup32        ; a32, a32, a32, a32
+bor32        ; a32, a32, a32 | a32
+ceq32        ; a32, a32 == a32 | a32
+push64 $ASSERT_ADDR
+storerpop32  ; assert(a32 == a32 | a32)
+pop32        ; a32
+
+; Test that a32 == a32 | 0_32
+dup32        ; a32, a32
+dup32        ; a32, a32, a32
+push32 0     ; a32, a32, a32, 0_32
+bor32        ; a32, a32, a32 | 0_32
+ceq32        ; a32, a32 == a32 | 0_32
+push64 $ASSERT_ADDR
+storerpop32  ; assert(a32 == a32 | 0_32)
+pop32        ; a32
+
+; Test that a32 != ~a32
+dup32        ; a32, a32
+dup32        ; a32, a32, a32
+binv32       ; a32, a32, ~a32
+cne32        ; a32, a32 != ~a32
+push64 $ASSERT_ADDR
+storerpop32  ; assert(a32 != ~a32)
+pop32        ; a32
+
+; Test that a32 == ~~a32
+dup32        ; a32, a32
+dup32        ; a32, a32, a32
+binv32       ; a32, a32, ~a32
+binv32       ; a32, a32, ~~a32
+ceq32        ; a32, a32 == ~~a32
+push64 $ASSERT_ADDR
+storerpop32  ; assert(a32 == ~~a32)
+pop32        ; a32
+
+; Test that bxor32 is commutative
+push64 $URAND_ADDR
+loadpop32    ; a32, b32
+push64 -4
+loadpopsfp32 ; a32, b32, a32
+push64 -8
+loadpopsfp32 ; a32, b32, a32, b32
+bxor32       ; a32, b32, a32 ^ b32
+push64 -8
+loadpopsfp32 ; a32, b32, a32 ^ b32, b32
+push64 -4
+loadpopsfp32 ; a32, b32, a32 ^ b32, b32, a32
+bxor32       ; a32, b32, a32 ^ b32, b32 ^ a32
+ceq32        ; a32, b32, a32 ^ b32 == b32 ^ a32
+push64 $ASSERT_ADDR
+storerpop32  ; assert(a32 ^ b32 == b32 ^ a32)
+pop32        ; a32, b32
+
+; Test that band32 is commutative
+push64 -4
+loadpopsfp32 ; a32, b32, a32
+push64 -8
+loadpopsfp32 ; a32, b32, a32, b32
+band32       ; a32, b32, a32 & b32
+push64 -8
+loadpopsfp32 ; a32, b32, a32 & b32, b32
+push64 -4
+loadpopsfp32 ; a32, b32, a32 & b32, b32, a32
+band32       ; a32, b32, a32 & b32, b32 & a32
+ceq32        ; a32, b32, a32 & b32 == b32 & a32
+push64 $ASSERT_ADDR
+storerpop32  ; assert(a32 & b32 == b32 & a32)
+pop32        ; a32, b32
+
+; Test that bor32 is commutative
+push64 -4
+loadpopsfp32 ; a32, b32, a32
+push64 -8
+loadpopsfp32 ; a32, b32, a32, b32
+bor32        ; a32, b32, a32 | b32
+push64 -8
+loadpopsfp32 ; a32, b32, a32 | b32, b32
+push64 -4
+loadpopsfp32 ; a32, b32, a32 | b32, b32, a32
+bor32        ; a32, b32, a32 | b32, b32 | a32
+ceq32        ; a32, b32, a32 | b32 == b32 | a32
+push64 $ASSERT_ADDR
+storerpop32  ; assert(a32 | b32 == b32 | a32)
+pop32        ; a32, b32
+
+ret ; test_bit_ops32
+
+:test_bit_ops64
+
+; Test that bxor64 has a zero identity
+push64 $URAND_ADDR
+loadpop64    ; a64
+dup64        ; a64, a64
+dup64        ; a64, a64, a64
+push64 0     ; a64, a64, a64, 0_64
+bxor64       ; a64, a64, a64 ^ 0_64
+ceq64        ; a64, a64 == a64 ^ 0_64
+push64 $ASSERT_ADDR
+storerpop64  ; assert(a64 == a64 ^ 0_64)
+pop64        ; a64
+
+; Test that a64 ^ a64 == 0_64
+dup64        ; a64, a64
+dup64        ; a64, a64, a64
+bxor64       ; a64, a64 ^ a64
+push64 0     ; a64, a64 ^ a64, 0_64
+ceq64        ; a64, a64 ^ a64 == 0_64
+push64 $ASSERT_ADDR
+storerpop64  ; assert(a64 ^ a64 == 0_64)
+pop64        ; a64
+
+; Test that a64 == a64 & a64
+dup64        ; a64, a64
+dup64        ; a64, a64, a64
+dup64        ; a64, a64, a64, a64
+band64       ; a64, a64, a64 & a64
+ceq64        ; a64, a64 == a64 & a64
+push64 $ASSERT_ADDR
+storerpop64  ; assert(a64 == a64 & a64)
+pop64        ; a64
+
+; Test that a64 & 0_64 == 0_64
+dup64        ; a64, a64
+push64 0     ; a64, a64, 0_64
+band64       ; a64, a64 & 0_64
+push64 0     ; a64, a64 & 0_64, 0_64
+ceq64        ; a64, a64 & 0_64 == 0_64
+push64 $ASSERT_ADDR
+storerpop64  ; assert(a64 & 0_64 == 0_64)
+pop64        ; a64
+
+; Test that a64 == a64 | a64
+dup64        ; a64, a64
+dup64        ; a64, a64, a64
+dup64        ; a64, a64, a64, a64
+bor64        ; a64, a64, a64 | a64
+ceq64        ; a64, a64 == a64 | a64
+push64 $ASSERT_ADDR
+storerpop64  ; assert(a64 == a64 | a64)
+pop64        ; a64
+
+; Test that a64 == a64 | 0_64
+dup64        ; a64, a64
+dup64        ; a64, a64, a64
+push64 0     ; a64, a64, a64, 0_64
+bor64        ; a64, a64, a64 | 0_64
+ceq64        ; a64, a64 == a64 | 0_64
+push64 $ASSERT_ADDR
+storerpop64  ; assert(a64 == a64 | 0_64)
+pop64        ; a64
+
+; Test that a64 != ~a64
+dup64        ; a64, a64
+dup64        ; a64, a64, a64
+binv64       ; a64, a64, ~a64
+cne64        ; a64, a64 != ~a64
+push64 $ASSERT_ADDR
+storerpop64  ; assert(a64 != ~a64)
+pop64        ; a64
+
+; Test that a64 == ~~a64
+dup64        ; a64, a64
+dup64        ; a64, a64, a64
+binv64       ; a64, a64, ~a64
+binv64       ; a64, a64, ~~a64
+ceq64        ; a64, a64 == ~~a64
+push64 $ASSERT_ADDR
+storerpop64  ; assert(a64 == ~~a64)
+pop64        ; a64
+
+; Test that bxor64 is commutative
+push64 $URAND_ADDR
+loadpop64    ; a64, b64
+push64 -8
+loadpopsfp64 ; a64, b64, a64
+push64 -16
+loadpopsfp64 ; a64, b64, a64, b64
+bxor64       ; a64, b64, a64 ^ b64
+push64 -16
+loadpopsfp64 ; a64, b64, a64 ^ b64, b64
+push64 -8
+loadpopsfp64 ; a64, b64, a64 ^ b64, b64, a64
+bxor64       ; a64, b64, a64 ^ b64, b64 ^ a64
+ceq64        ; a64, b64, a64 ^ b64 == b64 ^ a64
+push64 $ASSERT_ADDR
+storerpop64  ; assert(a64 ^ b64 == b64 ^ a64)
+pop64        ; a64, b64
+
+; Test that band64 is commutative
+push64 -8
+loadpopsfp64 ; a64, b64, a64
+push64 -16
+loadpopsfp64 ; a64, b64, a64, b64
+band64       ; a64, b64, a64 & b64
+push64 -16
+loadpopsfp64 ; a64, b64, a64 & b64, b64
+push64 -8
+loadpopsfp64 ; a64, b64, a64 & b64, b64, a64
+band64       ; a64, b64, a64 & b64, b64 & a64
+ceq64        ; a64, b64, a64 & b64 == b64 & a64
+push64 $ASSERT_ADDR
+storerpop64  ; assert(a64 & b64 == b64 & a64)
+pop64        ; a64, b64
+
+; Test that bor64 is commutative
+push64 -8
+loadpopsfp64 ; a64, b64, a64
+push64 -16
+loadpopsfp64 ; a64, b64, a64, b64
+bor64        ; a64, b64, a64 | b64
+push64 -16
+loadpopsfp64 ; a64, b64, a64 | b64, b64
+push64 -8
+loadpopsfp64 ; a64, b64, a64 | b64, b64, a64
+bor64        ; a64, b64, a64 | b64, b64 | a64
+ceq64        ; a64, b64, a64 | b64 == b64 | a64
+push64 $ASSERT_ADDR
+storerpop64  ; assert(a64 | b64 == b64 | a64)
+pop64        ; a64, b64
+
+ret ; test_bit_ops64
