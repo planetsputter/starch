@@ -3,16 +3,20 @@
 .include "sys.sta"
 
 ; Memory map
+; 0x0000 - 0x1000: reserved
 ; 0x1000 - 0x2000: IO
-; 0x2000 - 0x3000: program
-; 0x3000 - 0x4000: stack
-; 0x4000 - 0x5000: static
+; 0x2000 - 0x3000: interrupt
+; 0x3000 - 0x4000: program
+; 0x4000 - 0x5000: stack
+; 0x5000 - 0x6000: static
 
 ;
 ; Definitions
 ;
-.define STATIC_ADDR 0x4000
-.define MAX_REPS 16
+.define STATIC_ADDR  0x5000
+.define STACK_BOTTOM 0x5000
+.define STACK_LIMIT  0x4000
+.define MAX_REPS     16
 
 ;
 ; Static data section
@@ -26,10 +30,10 @@
 ;
 .section $INIT_PC_VAL
 
-setsbp 0x4000
-setsfp 0x4000
-setsp  0x4000
-setslp 0x3000
+setsbp $STACK_BOTTOM
+setsfp $STACK_BOTTOM
+setsp  $STACK_BOTTOM
+setslp $STACK_LIMIT
 
 :begin
 push64 $STATIC_ADDR
