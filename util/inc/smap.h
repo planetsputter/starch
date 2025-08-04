@@ -28,5 +28,6 @@ void smap_destroy(struct smap*);
 char *smap_get(struct smap*, const char *key);
 
 // Inserts the given key-value pair into the smap, overwriting the value
-// of any matching key after deleting using the provided function
+// of any matching key after deleting using the provided function.
+// Takes ownership of the strings.
 void smap_insert(struct smap *smap, char *key, char *val);

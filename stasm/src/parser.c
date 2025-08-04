@@ -9,6 +9,34 @@
 #include "parser.h"
 #include "starch.h"
 
+// Automatic symbols, besides instruction opcodes
+struct autosym {
+	const char *name;
+	uint64_t val;
+};
+struct autosym autosyms[] = {
+	{ "STINT_INVALID_INST", STINT_INVALID_INST },
+	{ "STINT_ASSERT_FAILURE", STINT_ASSERT_FAILURE },
+	{ "STINT_DIV_BY_ZERO", STINT_DIV_BY_ZERO },
+	{ "STINT_BAD_ALIGN", STINT_BAD_ALIGN },
+	{ "STINT_BAD_IO_ACCESS", STINT_BAD_IO_ACCESS },
+	{ "STINT_BAD_FRAME_ACCESS", STINT_BAD_FRAME_ACCESS },
+	{ "STINT_BAD_STACK_ACCESS", STINT_BAD_STACK_ACCESS },
+	{ "STINT_BAD_ADDR", STINT_BAD_ADDR },
+	{ "STINT_NUM_INTS", STINT_NUM_INTS },
+};
+static struct autosym *get_autosym(const char *name)
+{
+	struct autosym *ret = NULL;
+	for (size_t i = 0; i < sizeof(autosyms) / sizeof(struct autosym); i++) {
+		if (strcmp(autosyms[i].name, name) == 0) {
+			ret = autosyms + i;
+			break;
+		}
+	}
+	return ret;
+}
+
 // Returns the nibble value of the given hexzdecimal character
 static char nibble_for_hex(char hex)
 {
@@ -293,6 +321,41 @@ static int parser_finish_token(struct parser *parser)
 		}
 		else { // Look up an existing symbol definition
 			symbol = smap_get(&parser->defs, parser->token + 1);
+
+			if (!symbol) {
+				// Check for automatic opcode symbols
+				char symbuf[32];
+				if (strncmp(parser->token + 1, "OP_", 3) == 0) {
+					// Verify all letters are uppercase and length is below limit
+					char *s;
+					for (s = parser->token + 4; isupper(*s) || isdigit(*s); s++);
+					if (*s == '\0' && (s - parser->token - 4) < 32) { // All letters are uppercase
+						// Convert to lowercase
+						strncpy(symbuf, parser->token + 4, sizeof(symbuf));
+						for (s = symbuf; *s != '\0'; s++) {
+							*s = tolower(*s);
+						}
+						// Attempt to look up opcode
+						int opcode = opcode_for_name(symbuf);
+						if (opcode >= 0) {
+							sprintf(symbuf, "%d", opcode);
+							symbol = bstr_dup(symbuf);
+						}
+					}
+				}
+				else {
+					// Look up other automatic symbols
+					struct autosym *as = get_autosym(parser->token + 1);
+					if (as) {
+						sprintf(symbuf, "%lu", as->val);
+						symbol = bstr_dup(symbuf);
+					}
+				}
+				if (symbol) {
+					smap_insert(&parser->defs, bstr_dup(parser->token + 1), symbol);
+				}
+			}
+
 			if (!symbol) {
 				fprintf(stderr, "error: undefined symbol \"%s\" in \"%s\" line %d char %d\n",
 					parser->token + 1, parser->filename, parser->tline, parser->tch);

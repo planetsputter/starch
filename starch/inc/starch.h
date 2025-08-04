@@ -371,7 +371,7 @@ int imm_type_for_opcode(int opcode);
 //
 enum {
 	STINT_NONE = 0, // No interrupt
-	STINT_BAD_INST, // Bad instruction
+	STINT_INVALID_INST, // Bad instruction
 	STINT_ASSERT_FAILURE, // IO assertion failed
 	STINT_DIV_BY_ZERO, // Division by zero
 	STINT_BAD_ALIGN, // Bad alignment

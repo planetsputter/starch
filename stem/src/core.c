@@ -342,7 +342,7 @@ int core_step(struct core *core, struct mem *mem)
 	// Invalid instruction
 	//
 	case op_invalid:
-		ret = STINT_BAD_INST;
+		ret = STINT_INVALID_INST;
 		break;
 
 	//

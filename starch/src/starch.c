@@ -826,8 +826,8 @@ const char *name_for_stint(int stint)
 	switch (stint) {
 	case STINT_NONE:
 		return "STINT_NONE";
-	case STINT_BAD_INST:
-		return "STINT_BAD_INST";
+	case STINT_INVALID_INST:
+		return "STINT_INVALID_INST";
 	case STINT_ASSERT_FAILURE:
 		return "STINT_ASSERT_FAILURE";
 	case STINT_DIV_BY_ZERO:
