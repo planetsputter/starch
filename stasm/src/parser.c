@@ -15,15 +15,21 @@ struct autosym {
 	uint64_t val;
 };
 struct autosym autosyms[] = {
+	// Interrupt numbers
 	{ "STINT_INVALID_INST", STINT_INVALID_INST },
 	{ "STINT_ASSERT_FAILURE", STINT_ASSERT_FAILURE },
 	{ "STINT_DIV_BY_ZERO", STINT_DIV_BY_ZERO },
-	{ "STINT_BAD_ALIGN", STINT_BAD_ALIGN },
 	{ "STINT_BAD_IO_ACCESS", STINT_BAD_IO_ACCESS },
 	{ "STINT_BAD_FRAME_ACCESS", STINT_BAD_FRAME_ACCESS },
 	{ "STINT_BAD_STACK_ACCESS", STINT_BAD_STACK_ACCESS },
 	{ "STINT_BAD_ADDR", STINT_BAD_ADDR },
 	{ "STINT_NUM_INTS", STINT_NUM_INTS },
+	// IO addresses
+	{ "IO_STDIN_ADDR", IO_STDIN_ADDR },
+	{ "IO_STDOUT_ADDR", IO_STDOUT_ADDR },
+	{ "IO_FLUSH_ADDR", IO_FLUSH_ADDR },
+	{ "IO_URAND_ADDR", IO_URAND_ADDR },
+	{ "IO_ASSERT_ADDR", IO_ASSERT_ADDR },
 };
 static struct autosym *get_autosym(const char *name)
 {
@@ -239,14 +245,28 @@ int parser_event_print(const struct parser_event *pe, FILE *outfile)
 	case PET_INST: {
 		const char *name = name_for_opcode(pe->inst.opcode);
 		fprintf(outfile, "%s", name ? name : "unknown_opcode");
-		int sdt = imm_type_for_opcode(pe->inst.opcode);
-		if (sdt != SDT_VOID) {
-			fprintf(outfile, " 0x%lx", little8_to_u64(pe->inst.imm));
+		if (pe->inst.imm_label) {
+			fprintf(outfile, " %s\n", pe->inst.imm_label);
 		}
-		fprintf(outfile, "\n");
+		else {
+			int sdt = imm_type_for_opcode(pe->inst.opcode);
+			if (sdt != SDT_VOID) {
+				fprintf(outfile, " 0x%lx", little8_to_u64(pe->inst.imm));
+			}
+			fprintf(outfile, "\n");
+		}
 	}	break;
+	case PET_DATA:
+		fprintf(outfile, ".data%d 0x%lx\n", pe->data.len, little8_to_u64(pe->data.raw));
+		break;
 	case PET_SECTION:
 		fprintf(outfile, ".section 0x%lx\n", pe->sec.addr);
+		break;
+	case PET_INCLUDE:
+		fprintf(outfile, ".include \"%s\"\n", pe->filename);
+		break;
+	case PET_LABEL:
+		fprintf(outfile, "%s\n", pe->label);
 		break;
 	default:
 		fprintf(outfile, "unknown_parser_event\n");
@@ -505,6 +525,7 @@ static int parser_finish_token(struct parser *parser)
 			// Emit instruction event with label
 			parser->event.inst.imm_label = parser->token;
 			parser->token = NULL;
+			immval = 0;
 		}
 		else {
 			// Parse immediate literal
@@ -561,7 +582,7 @@ static int parser_finish_token(struct parser *parser)
 		}
 
 		int imm_len = dt_size;
-		if (parser->ts == PTS_PIMM) {
+		if (parser->ts == PTS_PIMM && symbol[0] != ':') {
 			// Compact pseudo-ops where possible
 			int min_len = min_bytes_for_val(immval);
 			switch (opcode) {

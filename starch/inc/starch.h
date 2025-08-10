@@ -374,7 +374,6 @@ enum {
 	STINT_INVALID_INST, // Bad instruction
 	STINT_ASSERT_FAILURE, // IO assertion failed
 	STINT_DIV_BY_ZERO, // Division by zero
-	STINT_BAD_ALIGN, // Bad alignment
 	STINT_BAD_IO_ACCESS, // Access to unused IO memory
 	STINT_BAD_FRAME_ACCESS, // Access to protected stack frame data
 	STINT_BAD_STACK_ACCESS, // Stack access out of stack memory region

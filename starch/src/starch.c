@@ -832,8 +832,6 @@ const char *name_for_stint(int stint)
 		return "STINT_ASSERT_FAILURE";
 	case STINT_DIV_BY_ZERO:
 		return "STINT_DIV_BY_ZERO";
-	case STINT_BAD_ALIGN:
-		return "STINT_BAD_ALIGN";
 	case STINT_BAD_IO_ACCESS:
 		return "STINT_BAD_IO_ACCESS";
 	case STINT_BAD_FRAME_ACCESS:
