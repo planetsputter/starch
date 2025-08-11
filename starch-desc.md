@@ -40,7 +40,7 @@ To call a function that takes arguments, arguments are pushed onto the stack beg
 
 Note that while function arguments are pushed to the stack from last to first, the last argument pushed being thought of as the "leftmost", individual instructions which perform a non-commutative operation such as subtraction typically consider the last argument pushed to be the "rightmost". This is to be more similar to postfix notation. These instructions also typically have an order-reversed variant.
 
-Functions are prohibited by the memory management unit from accessing (reading or writing) the function return address, that is, data at addresses from SFP to SFP + 7, inclusively. This helps prevent certain classes of attacks which seek to overwrite the return pointer of a function and transfer control to insecure code.
+Functions are prohibited by the memory management unit from accessing (reading or writing) protected stack frame data, that is, data at addresses from SFP to SFP + 15, inclusively. This helps prevent certain classes of attacks which seek to overwrite the return pointer of a function and transfer control to insecure code.
 
 Instruction Set
 ---------------
