@@ -1,0 +1,1124 @@
+; test-int.sta
+;
+; Test interrupts
+
+.include "sys.sta"
+
+; Memory map
+; 0x0000 - 0x1000: reserved
+; 0x1000 - 0x2000: IO
+; 0x2000 - 0x3000: interrupt
+; 0x3000 - 0x4000: program
+; 0x4000 - 0x5000: stack
+; 0x5000 - 0x6000: static
+
+;
+; Definitions
+;
+.define STATIC_ADDR  0x5000
+.define STACK_BOTTOM 0x5000
+.define STACK_LIMIT  0x4000
+.define MAX_REPS     64
+
+;
+; Static data section
+;
+.section $STATIC_ADDR
+
+:rep64_data
+.data64 0
+
+;
+; Instruction section
+;
+.section $INIT_PC_VAL
+
+setsbp $STACK_BOTTOM
+setsfp $STACK_BOTTOM
+setsp  $STACK_BOTTOM
+setslp $STACK_LIMIT
+
+;
+; Main program loop
+;
+:begin
+push64 :rep64_data
+loadpop64        ; rep64
+dup64            ; rep64, rep64
+push64 $MAX_REPS ; rep64, rep64, $MAX_REPS
+cltu64           ; rep64, rep64 < $MAX_REPS
+brz64 :end       ; rep64
+call :test_int
+push64 1         ; rep64, 1_64
+add64            ; rep64 + 1_64
+push64 :rep64_data
+storerpop64      ; rep64 = rep64 + 1
+pop64
+rjmpi8 :begin
+:end
+halt 0
+
+;
+; Set the given interrupt handler to jump to the given address
+;
+:set_int_addr ; intu8, addr64
+push64 17
+loadpopsfp64  ; addr64
+push64 16
+loadpopsfp8   ; addr64, intu8
+prom8u64      ; addr64, intu64
+push64 16
+mul64         ; addr64, intu64 * 16
+push64 $BEGIN_INT_ADDR
+add64         ; addr64, intu64 * 16 + $BEGIN_INT_ADDR
+push8 $OP_JMP
+storepop8
+push64 1
+add64         ; addr64, intu64 * 16 + $BEGIN_INT_ADDR + 1
+storerpop64   ; addr64
+ret
+
+;
+; Restore the default handler for the given interrupt, which halts with the interrupt code
+;
+:restore_int_handler ; intu8
+push64 16
+loadpopsfp8 ; intu8
+dup8        ; intu8, intu8
+prom8u64    ; intu8, intu64
+push64 16   ; intu8, intu64, 16_64
+mul64       ; intu8, intu64 * 16
+push64 $BEGIN_INT_ADDR
+add64       ; intu8, intu64 * 16 + $BEGIN_INT_ADDR
+push8 $OP_HALT
+storepop8
+ret
+
+;
+; Test stack frame data protection
+;
+:test_frame_protect
+
+; For loadsfp8
+push64 :after_loadsfp8
+push8 $STINT_BAD_FRAME_ACCESS
+call :set_int_addr
+pop8
+pop64
+push64 $IO_URAND_ADDR
+loadpop64
+push64 16
+modu64
+loadsfp8
+halt 1
+:after_loadsfp8
+pop64
+
+; For loadsfp16
+push64 :after_loadsfp16
+push8 $STINT_BAD_FRAME_ACCESS
+call :set_int_addr
+pop8
+pop64
+push64 $IO_URAND_ADDR
+loadpop64
+push64 17
+modu64
+push64 -1
+add64
+loadsfp16
+halt 1
+:after_loadsfp16
+pop64
+
+; For loadsfp32
+push64 :after_loadsfp32
+push8 $STINT_BAD_FRAME_ACCESS
+call :set_int_addr
+pop8
+pop64
+push64 $IO_URAND_ADDR
+loadpop64
+push64 19
+modu64
+push64 -3
+add64
+loadsfp32
+halt 1
+:after_loadsfp32
+pop64
+
+; For loadsfp64
+push64 :after_loadsfp64
+push8 $STINT_BAD_FRAME_ACCESS
+call :set_int_addr
+pop8
+pop64
+push64 $IO_URAND_ADDR
+loadpop64
+push64 23
+modu64
+push64 -7
+add64
+loadsfp64
+halt 1
+:after_loadsfp64
+pop64
+
+; For loadpopsfp8
+push64 :after_loadpopsfp8
+push8 $STINT_BAD_FRAME_ACCESS
+call :set_int_addr
+pop8
+pop64
+push64 $IO_URAND_ADDR
+loadpop64
+push64 16
+modu64
+loadpopsfp8
+halt 1
+:after_loadpopsfp8
+pop64
+
+; For loadpopsfp16
+push64 :after_loadpopsfp16
+push8 $STINT_BAD_FRAME_ACCESS
+call :set_int_addr
+pop8
+pop64
+push64 $IO_URAND_ADDR
+loadpop64
+push64 17
+modu64
+push64 -1
+add64
+loadpopsfp16
+halt 1
+:after_loadpopsfp16
+pop64
+
+; For loadpopsfp32
+push64 :after_loadpopsfp32
+push8 $STINT_BAD_FRAME_ACCESS
+call :set_int_addr
+pop8
+pop64
+push64 $IO_URAND_ADDR
+loadpop64
+push64 19
+modu64
+push64 -3
+add64
+loadpopsfp32
+halt 1
+:after_loadpopsfp32
+pop64
+
+; For loadpopsfp64
+push64 :after_loadpopsfp64
+push8 $STINT_BAD_FRAME_ACCESS
+call :set_int_addr
+pop8
+pop64
+push64 $IO_URAND_ADDR
+loadpop64
+push64 23
+modu64
+push64 -7
+add64
+loadpopsfp64
+halt 1
+:after_loadpopsfp64
+pop64
+
+; For storesfp8
+push64 :after_storesfp8
+push8 $STINT_BAD_FRAME_ACCESS
+call :set_int_addr
+pop8
+pop64
+push64 $IO_URAND_ADDR
+loadpop64
+push64 16
+modu64
+push64 $IO_URAND_ADDR
+loadpop8
+storesfp8
+halt 1
+:after_storesfp8
+pop8
+pop64
+
+; For storesfp16
+push64 :after_storesfp16
+push8 $STINT_BAD_FRAME_ACCESS
+call :set_int_addr
+pop8
+pop64
+push64 $IO_URAND_ADDR
+loadpop64
+push64 17
+modu64
+push64 -1
+add64
+push64 $IO_URAND_ADDR
+loadpop16
+storesfp16
+halt 1
+:after_storesfp16
+pop16
+pop64
+
+; For storesfp32
+push64 :after_storesfp32
+push8 $STINT_BAD_FRAME_ACCESS
+call :set_int_addr
+pop8
+pop64
+push64 $IO_URAND_ADDR
+loadpop64
+push64 19
+modu64
+push64 -3
+add64
+push64 $IO_URAND_ADDR
+loadpop32
+storesfp32
+halt 1
+:after_storesfp32
+pop32
+pop64
+
+; For storesfp64
+push64 :after_storesfp64
+push8 $STINT_BAD_FRAME_ACCESS
+call :set_int_addr
+pop8
+pop64
+push64 $IO_URAND_ADDR
+loadpop64
+push64 23
+modu64
+push64 -7
+add64
+push64 $IO_URAND_ADDR
+loadpop64
+storesfp64
+halt 1
+:after_storesfp64
+pop64
+pop64
+
+; For storepopsfp8
+push64 :after_storepopsfp8
+push8 $STINT_BAD_FRAME_ACCESS
+call :set_int_addr
+pop8
+pop64
+push64 $IO_URAND_ADDR
+loadpop64
+push64 16
+modu64
+push64 $IO_URAND_ADDR
+loadpop8
+storepopsfp8
+halt 1
+:after_storepopsfp8
+pop8
+pop64
+
+; For storepopsfp16
+push64 :after_storepopsfp16
+push8 $STINT_BAD_FRAME_ACCESS
+call :set_int_addr
+pop8
+pop64
+push64 $IO_URAND_ADDR
+loadpop64
+push64 17
+modu64
+push64 -1
+add64
+push64 $IO_URAND_ADDR
+loadpop16
+storepopsfp16
+halt 1
+:after_storepopsfp16
+pop16
+pop64
+
+; For storepopsfp32
+push64 :after_storepopsfp32
+push8 $STINT_BAD_FRAME_ACCESS
+call :set_int_addr
+pop8
+pop64
+push64 $IO_URAND_ADDR
+loadpop64
+push64 19
+modu64
+push64 -3
+add64
+push64 $IO_URAND_ADDR
+loadpop32
+storepopsfp32
+halt 1
+:after_storepopsfp32
+pop32
+pop64
+
+; For storepopsfp64
+push64 :after_storepopsfp64
+push8 $STINT_BAD_FRAME_ACCESS
+call :set_int_addr
+pop8
+pop64
+push64 $IO_URAND_ADDR
+loadpop64
+push64 23
+modu64
+push64 -7
+add64
+push64 $IO_URAND_ADDR
+loadpop64
+storepopsfp64
+halt 1
+:after_storepopsfp64
+pop64
+pop64
+
+; Restore the STINT_BAD_FRAME_ACCESS interrupt handler
+push8 $STINT_BAD_FRAME_ACCESS
+call :restore_int_handler
+pop8
+
+ret
+
+;
+; Test interrupts
+;
+:test_int
+
+;
+; Test that invalid instruction generates STINT_INVALID_INST
+;
+push64 :after_invalid     ; addr64
+push8 $STINT_INVALID_INST ; addr64, int8
+call :set_int_addr
+invalid                   ; Intentionally trigger invalid instruction interrupt
+halt 1                    ; Should not get here
+:after_invalid            ; Should get here instead
+call :restore_int_handler ; addr64, int8
+pop8
+pop64
+
+;
+; Test that an assertion failure generates STINT_ASSERT_FAILURE
+;
+; When writing 8 bits
+push64 :after_assert1       ; addr64
+push8 $STINT_ASSERT_FAILURE ; addr64, int8
+call :set_int_addr
+pop8
+pop64
+push64 $ASSERT_ADDR         ; $ASSERT_ADDR
+push8 0                     ; $ASSERT_ADDR, 0_8
+storepop8                   ; Generates assertion failure before pop
+halt 1                      ; Should not get here
+:after_assert1              ; Should get here instead
+pop8
+pop64
+; When writing 16 bits
+push64 :after_assert2       ; addr64
+push8 $STINT_ASSERT_FAILURE ; addr64, int8
+call :set_int_addr
+pop8
+pop64
+push64 $ASSERT_ADDR         ; $ASSERT_ADDR
+push16 0                    ; $ASSERT_ADDR, 0_16
+storepop16                  ; Generates assertion failure before pop
+halt 1                      ; Should not get here
+:after_assert2              ; Should get here instead
+pop16
+pop64
+; When writing 32 bits
+push64 :after_assert3       ; addr64
+push8 $STINT_ASSERT_FAILURE ; addr64, int8
+call :set_int_addr
+pop8
+pop64
+push64 $ASSERT_ADDR         ; $ASSERT_ADDR
+push32 0                    ; $ASSERT_ADDR, 0_32
+storepop32                  ; Generates assertion failure before pop
+halt 1                      ; Should not get here
+:after_assert3              ; Should get here instead
+pop32
+pop64
+; When writing 64 bits
+push64 :after_assert4       ; addr64
+push8 $STINT_ASSERT_FAILURE ; addr64, int8
+call :set_int_addr
+pop8
+pop64
+push64 $ASSERT_ADDR         ; $ASSERT_ADDR
+push64 0                    ; $ASSERT_ADDR, 0_64
+storepop64                  ; Generates assertion failure before pop
+halt 1                      ; Should not get here
+:after_assert4              ; Should get here instead
+pop64
+pop64
+; Restore original interrupt handler
+push8 $STINT_ASSERT_FAILURE
+call :restore_int_handler
+pop8
+; The fact that an assertion failure is not generated when a non-zero value is asserted
+; is amply demonstrated by the other tests.
+
+;
+; Test that division by zero produces STINT_DIV_BY_ZERO
+;
+; For divu8
+push64 :after_divu8
+push8 $STINT_DIV_BY_ZERO
+call :set_int_addr
+pop8
+pop64
+push64 $IO_URAND_ADDR
+loadpop8 ; a8
+push8 0  ; a8, 0_8
+divu8
+halt 1
+:after_divu8
+pop8
+pop8
+; For divu16
+push64 :after_divu16
+push8 $STINT_DIV_BY_ZERO
+call :set_int_addr
+pop8
+pop64
+push64 $IO_URAND_ADDR
+loadpop16 ; a16
+push16 0  ; a16, 0_16
+divu16
+halt 1
+:after_divu16
+pop16
+pop16
+; For divu32
+push64 :after_divu32
+push8 $STINT_DIV_BY_ZERO
+call :set_int_addr
+pop8
+pop64
+push64 $IO_URAND_ADDR
+loadpop32 ; a32
+push32 0  ; a32, 0_32
+divu32
+halt 1
+:after_divu32
+pop32
+pop32
+; For divu64
+push64 :after_divu64
+push8 $STINT_DIV_BY_ZERO
+call :set_int_addr
+pop8
+pop64
+push64 $IO_URAND_ADDR
+loadpop64 ; a64
+push64 0  ; a64, 0_64
+divu64
+halt 1
+:after_divu64
+pop64
+pop64
+
+; For divru8
+push64 :after_divru8
+push8 $STINT_DIV_BY_ZERO
+call :set_int_addr
+pop8
+pop64
+push8 0  ; 0_8
+push64 $IO_URAND_ADDR
+loadpop8 ; 0_8, a8
+divru8
+halt 1
+:after_divru8
+pop8
+pop8
+; For divru16
+push64 :after_divru16
+push8 $STINT_DIV_BY_ZERO
+call :set_int_addr
+pop8
+pop64
+push16 0  ; 0_16
+push64 $IO_URAND_ADDR
+loadpop16 ; 0_16, a16
+divru16
+halt 1
+:after_divru16
+pop16
+pop16
+; For divru32
+push64 :after_divru32
+push8 $STINT_DIV_BY_ZERO
+call :set_int_addr
+pop8
+pop64
+push32 0  ; 0_32
+push64 $IO_URAND_ADDR
+loadpop32 ; 0_32, a32
+divru32
+halt 1
+:after_divru32
+pop32
+pop32
+; For divru64
+push64 :after_divru64
+push8 $STINT_DIV_BY_ZERO
+call :set_int_addr
+pop8
+pop64
+push64 0  ; 0_64
+push64 $IO_URAND_ADDR
+loadpop64 ; 0_64, a64
+divru64
+halt 1
+:after_divru64
+pop64
+pop64
+
+; For divi8
+push64 :after_divi8
+push8 $STINT_DIV_BY_ZERO
+call :set_int_addr
+pop8
+pop64
+push64 $IO_URAND_ADDR
+loadpop8 ; a8
+push8 0  ; a8, 0_8
+divi8
+halt 1
+:after_divi8
+pop8
+pop8
+; For divi16
+push64 :after_divi16
+push8 $STINT_DIV_BY_ZERO
+call :set_int_addr
+pop8
+pop64
+push64 $IO_URAND_ADDR
+loadpop16 ; a16
+push16 0  ; a16, 0_16
+divi16
+halt 1
+:after_divi16
+pop16
+pop16
+; For divi32
+push64 :after_divi32
+push8 $STINT_DIV_BY_ZERO
+call :set_int_addr
+pop8
+pop64
+push64 $IO_URAND_ADDR
+loadpop32 ; a32
+push32 0  ; a32, 0_32
+divi32
+halt 1
+:after_divi32
+pop32
+pop32
+; For divi64
+push64 :after_divi64
+push8 $STINT_DIV_BY_ZERO
+call :set_int_addr
+pop8
+pop64
+push64 $IO_URAND_ADDR
+loadpop64 ; a64
+push64 0  ; a64, 0_64
+divi64
+halt 1
+:after_divi64
+pop64
+pop64
+
+; For divri8
+push64 :after_divri8
+push8 $STINT_DIV_BY_ZERO
+call :set_int_addr
+pop8
+pop64
+push8 0  ; 0_8
+push64 $IO_URAND_ADDR
+loadpop8 ; 0_8, a8
+divri8
+halt 1
+:after_divri8
+pop8
+pop8
+; For divri16
+push64 :after_divri16
+push8 $STINT_DIV_BY_ZERO
+call :set_int_addr
+pop8
+pop64
+push16 0  ; 0_16
+push64 $IO_URAND_ADDR
+loadpop16 ; 0_16, a16
+divri16
+halt 1
+:after_divri16
+pop16
+pop16
+; For divri32
+push64 :after_divri32
+push8 $STINT_DIV_BY_ZERO
+call :set_int_addr
+pop8
+pop64
+push32 0  ; 0_32
+push64 $IO_URAND_ADDR
+loadpop32 ; 0_32, a32
+divri32
+halt 1
+:after_divri32
+pop32
+pop32
+; For divri64
+push64 :after_divri64
+push8 $STINT_DIV_BY_ZERO
+call :set_int_addr
+pop8
+pop64
+push64 0  ; 0_64
+push64 $IO_URAND_ADDR
+loadpop64 ; 0_64, a64
+divri64
+halt 1
+:after_divri64
+pop64
+pop64
+
+;
+; Test that modulo by zero produces STINT_DIV_BY_ZERO
+;
+; For modu8
+push64 :after_modu8
+push8 $STINT_DIV_BY_ZERO
+call :set_int_addr
+pop8
+pop64
+push64 $IO_URAND_ADDR
+loadpop8 ; a8
+push8 0  ; a8, 0_8
+modu8
+halt 1
+:after_modu8
+pop8
+pop8
+; For modu16
+push64 :after_modu16
+push8 $STINT_DIV_BY_ZERO
+call :set_int_addr
+pop8
+pop64
+push64 $IO_URAND_ADDR
+loadpop16 ; a16
+push16 0  ; a16, 0_16
+modu16
+halt 1
+:after_modu16
+pop16
+pop16
+; For modu32
+push64 :after_modu32
+push8 $STINT_DIV_BY_ZERO
+call :set_int_addr
+pop8
+pop64
+push64 $IO_URAND_ADDR
+loadpop32 ; a32
+push32 0  ; a32, 0_32
+modu32
+halt 1
+:after_modu32
+pop32
+pop32
+; For modu64
+push64 :after_modu64
+push8 $STINT_DIV_BY_ZERO
+call :set_int_addr
+pop8
+pop64
+push64 $IO_URAND_ADDR
+loadpop64 ; a64
+push64 0  ; a64, 0_64
+modu64
+halt 1
+:after_modu64
+pop64
+pop64
+
+; For modru8
+push64 :after_modru8
+push8 $STINT_DIV_BY_ZERO
+call :set_int_addr
+pop8
+pop64
+push8 0  ; 0_8
+push64 $IO_URAND_ADDR
+loadpop8 ; 0_8, a8
+modru8
+halt 1
+:after_modru8
+pop8
+pop8
+; For modru16
+push64 :after_modru16
+push8 $STINT_DIV_BY_ZERO
+call :set_int_addr
+pop8
+pop64
+push16 0  ; 0_16
+push64 $IO_URAND_ADDR
+loadpop16 ; 0_16, a16
+modru16
+halt 1
+:after_modru16
+pop16
+pop16
+; For modru32
+push64 :after_modru32
+push8 $STINT_DIV_BY_ZERO
+call :set_int_addr
+pop8
+pop64
+push32 0  ; 0_32
+push64 $IO_URAND_ADDR
+loadpop32 ; 0_32, a32
+modru32
+halt 1
+:after_modru32
+pop32
+pop32
+; For modru64
+push64 :after_modru64
+push8 $STINT_DIV_BY_ZERO
+call :set_int_addr
+pop8
+pop64
+push64 0  ; 0_64
+push64 $IO_URAND_ADDR
+loadpop64 ; 0_64, a64
+modru64
+halt 1
+:after_modru64
+pop64
+pop64
+
+; For modi8
+push64 :after_modi8
+push8 $STINT_DIV_BY_ZERO
+call :set_int_addr
+pop8
+pop64
+push64 $IO_URAND_ADDR
+loadpop8 ; a8
+push8 0  ; a8, 0_8
+modi8
+halt 1
+:after_modi8
+pop8
+pop8
+; For modi16
+push64 :after_modi16
+push8 $STINT_DIV_BY_ZERO
+call :set_int_addr
+pop8
+pop64
+push64 $IO_URAND_ADDR
+loadpop16 ; a16
+push16 0  ; a16, 0_16
+modi16
+halt 1
+:after_modi16
+pop16
+pop16
+; For modi32
+push64 :after_modi32
+push8 $STINT_DIV_BY_ZERO
+call :set_int_addr
+pop8
+pop64
+push64 $IO_URAND_ADDR
+loadpop32 ; a32
+push32 0  ; a32, 0_32
+modi32
+halt 1
+:after_modi32
+pop32
+pop32
+; For modi64
+push64 :after_modi64
+push8 $STINT_DIV_BY_ZERO
+call :set_int_addr
+pop8
+pop64
+push64 $IO_URAND_ADDR
+loadpop64 ; a64
+push64 0  ; a64, 0_64
+modi64
+halt 1
+:after_modi64
+pop64
+pop64
+
+; For modri8
+push64 :after_modri8
+push8 $STINT_DIV_BY_ZERO
+call :set_int_addr
+pop8
+pop64
+push8 0  ; 0_8
+push64 $IO_URAND_ADDR
+loadpop8 ; 0_8, a8
+modri8
+halt 1
+:after_modri8
+pop8
+pop8
+; For modri16
+push64 :after_modri16
+push8 $STINT_DIV_BY_ZERO
+call :set_int_addr
+pop8
+pop64
+push16 0  ; 0_16
+push64 $IO_URAND_ADDR
+loadpop16 ; 0_16, a16
+modri16
+halt 1
+:after_modri16
+pop16
+pop16
+; For modri32
+push64 :after_modri32
+push8 $STINT_DIV_BY_ZERO
+call :set_int_addr
+pop8
+pop64
+push32 0  ; 0_32
+push64 $IO_URAND_ADDR
+loadpop32 ; 0_32, a32
+modri32
+halt 1
+:after_modri32
+pop32
+pop32
+; For modri64
+push64 :after_modri64
+push8 $STINT_DIV_BY_ZERO
+call :set_int_addr
+pop8
+pop64
+push64 0  ; 0_64
+push64 $IO_URAND_ADDR
+loadpop64 ; 0_64, a64
+modri64
+halt 1
+:after_modri64
+pop64
+pop64
+
+; Restore original STINT_DIV_BY_ZERO handler
+push8 $STINT_DIV_BY_ZERO
+call :restore_int_handler
+pop8
+
+;
+; Test that null pointer dereferences generate STINT_BAD_IO_ACCESS
+;
+push64 0
+; For load8
+push64 :after_load8
+push8 $STINT_BAD_IO_ACCESS
+call :set_int_addr
+pop8
+pop64
+load8
+halt 1
+:after_load8
+; For load16
+push64 :after_load16
+push8 $STINT_BAD_IO_ACCESS
+call :set_int_addr
+pop8
+pop64
+load16
+halt 1
+:after_load16
+; For load32
+push64 :after_load32
+push8 $STINT_BAD_IO_ACCESS
+call :set_int_addr
+pop8
+pop64
+load32
+halt 1
+:after_load32
+; For load64
+push64 :after_load64
+push8 $STINT_BAD_IO_ACCESS
+call :set_int_addr
+pop8
+pop64
+load64
+halt 1
+:after_load64
+; For loadpop8
+push64 :after_loadpop8
+push8 $STINT_BAD_IO_ACCESS
+call :set_int_addr
+pop8
+pop64
+loadpop8
+halt 1
+:after_loadpop8
+; For loadpop16
+push64 :after_loadpop16
+push8 $STINT_BAD_IO_ACCESS
+call :set_int_addr
+pop8
+pop64
+loadpop16
+halt 1
+:after_loadpop16
+; For loadpop32
+push64 :after_loadpop32
+push8 $STINT_BAD_IO_ACCESS
+call :set_int_addr
+pop8
+pop64
+loadpop32
+halt 1
+:after_loadpop32
+; For loadpop64
+push64 :after_loadpop64
+push8 $STINT_BAD_IO_ACCESS
+call :set_int_addr
+pop8
+pop64
+loadpop64
+halt 1
+:after_loadpop64
+
+; For store8
+push64 :after_store8
+push8 $STINT_BAD_IO_ACCESS
+call :set_int_addr
+pop8
+pop64
+push8 0
+store8
+halt 1
+:after_store8
+pop8
+; For store16
+push64 :after_store16
+push8 $STINT_BAD_IO_ACCESS
+call :set_int_addr
+pop8
+pop64
+push16 0
+store16
+halt 1
+:after_store16
+pop16
+; For store32
+push64 :after_store32
+push8 $STINT_BAD_IO_ACCESS
+call :set_int_addr
+pop8
+pop64
+push32 0
+store32
+halt 1
+:after_store32
+pop32
+; For store64
+push64 :after_store64
+push8 $STINT_BAD_IO_ACCESS
+call :set_int_addr
+pop8
+pop64
+push64 0
+store64
+halt 1
+:after_store64
+pop64
+; For storepop8
+push64 :after_storepop8
+push8 $STINT_BAD_IO_ACCESS
+call :set_int_addr
+pop8
+pop64
+push8 0
+storepop8
+halt 1
+:after_storepop8
+pop8
+; For storepop16
+push64 :after_storepop16
+push8 $STINT_BAD_IO_ACCESS
+call :set_int_addr
+pop8
+pop64
+push16 0
+storepop16
+halt 1
+:after_storepop16
+pop16
+; For storepop32
+push64 :after_storepop32
+push8 $STINT_BAD_IO_ACCESS
+call :set_int_addr
+pop8
+pop64
+push32 0
+storepop32
+halt 1
+:after_storepop32
+pop32
+; For storepop64
+push64 :after_storepop64
+push8 $STINT_BAD_IO_ACCESS
+call :set_int_addr
+pop8
+pop64
+push64 0
+storepop64
+halt 1
+:after_storepop64
+pop64
+
+pop64 ; Pop the NULL address
+
+; Restore the STINT_BAD_IO_ACCESS handler
+push8 $STINT_BAD_IO_ACCESS
+call :restore_int_handler
+pop8
+
+;
+; Test that bad frame access generates the STINT_BAD_FRAME_ACCESS interrupt
+;
+push64 0
+call :test_frame_protect
+pop64
+
+ret

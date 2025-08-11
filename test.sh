@@ -47,5 +47,8 @@ $STEM a.stb
 echo testing bitwise logical operations
 $STASM test-bit-ops.sta
 $STEM a.stb
+echo testing interrupts
+$STASM test-int.sta
+$STEM a.stb
 
 echo all tests passed
