@@ -37,7 +37,7 @@ push16asu64 0x100
 add64
 call :some_function
 ```
-For a full list of Starch opcodes, see [../../starch/doc/starch-desc.md](starch-desc.md).
+For a full list of Starch opcodes, see [../../starch/doc/starch-desc.md](../../starch/doc/starch-desc.md).
 
 #### Pseudo-ops
 
