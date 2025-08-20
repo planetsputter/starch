@@ -2883,7 +2883,7 @@ int core_step(struct core *core, struct mem *mem)
 		break;
 
 	default:
-		ret = -1;
+		ret = STINT_INVALID_INST;
 		break;
 	}
 

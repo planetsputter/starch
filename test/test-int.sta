@@ -400,17 +400,37 @@ ret
 :test_int
 
 ;
-; Test that invalid instruction generates STINT_INVALID_INST
+; Test that invalid instructions generate STINT_INVALID_INST
 ;
 push64 :after_invalid     ; addr64
 push8 $STINT_INVALID_INST ; addr64, int8
 call :set_int_addr
+pop8
+pop64
 invalid                   ; Intentionally trigger invalid instruction interrupt
 halt 1                    ; Should not get here
 :after_invalid            ; Should get here instead
-call :restore_int_handler ; addr64, int8
+push64 :after_invalid_00
+push8 $STINT_INVALID_INST
+call :set_int_addr
 pop8
 pop64
+; We want to show that 0x00 is an invalid instruction, because it is common in data
+.data8 0
+halt 1
+:after_invalid_00
+push64 :after_invalid_ff
+push8 $STINT_INVALID_INST
+call :set_int_addr
+pop8
+pop64
+; We want to show that 0xff is an invalid instruction, because it is common in data
+.data8 0xff
+halt 1
+:after_invalid_ff
+push8 $STINT_INVALID_INST
+call :restore_int_handler ; int8
+pop8
 
 ;
 ; Test that an assertion failure generates STINT_ASSERT_FAILURE
