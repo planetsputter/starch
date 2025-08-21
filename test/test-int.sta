@@ -2,8 +2,6 @@
 ;
 ; Test interrupts
 
-.include "sys.sta"
-
 ; Memory map
 ; 0x0000 - 0x1000: reserved
 ; 0x1000 - 0x2000: IO
@@ -105,10 +103,12 @@ push8 $STINT_BAD_FRAME_ACCESS
 call :set_int_addr
 pop8
 pop64
+; Prepare random address which overlaps stack frame
 push64 $IO_URAND_ADDR
 loadpop64
 push64 16
 modu64
+; Attempt to access stack frame data
 loadsfp8
 halt 1
 :after_loadsfp8
@@ -441,8 +441,8 @@ push8 $STINT_ASSERT_FAILURE ; addr64, int8
 call :set_int_addr
 pop8
 pop64
-push64 $ASSERT_ADDR         ; $ASSERT_ADDR
-push8 0                     ; $ASSERT_ADDR, 0_8
+push64 $IO_ASSERT_ADDR         ; $IO_ASSERT_ADDR
+push8 0                     ; $IO_ASSERT_ADDR, 0_8
 storepop8                   ; Generates assertion failure before pop
 halt 1                      ; Should not get here
 :after_assert1              ; Should get here instead
@@ -454,8 +454,8 @@ push8 $STINT_ASSERT_FAILURE ; addr64, int8
 call :set_int_addr
 pop8
 pop64
-push64 $ASSERT_ADDR         ; $ASSERT_ADDR
-push16 0                    ; $ASSERT_ADDR, 0_16
+push64 $IO_ASSERT_ADDR         ; $IO_ASSERT_ADDR
+push16 0                    ; $IO_ASSERT_ADDR, 0_16
 storepop16                  ; Generates assertion failure before pop
 halt 1                      ; Should not get here
 :after_assert2              ; Should get here instead
@@ -467,8 +467,8 @@ push8 $STINT_ASSERT_FAILURE ; addr64, int8
 call :set_int_addr
 pop8
 pop64
-push64 $ASSERT_ADDR         ; $ASSERT_ADDR
-push32 0                    ; $ASSERT_ADDR, 0_32
+push64 $IO_ASSERT_ADDR         ; $IO_ASSERT_ADDR
+push32 0                    ; $IO_ASSERT_ADDR, 0_32
 storepop32                  ; Generates assertion failure before pop
 halt 1                      ; Should not get here
 :after_assert3              ; Should get here instead
@@ -480,8 +480,8 @@ push8 $STINT_ASSERT_FAILURE ; addr64, int8
 call :set_int_addr
 pop8
 pop64
-push64 $ASSERT_ADDR         ; $ASSERT_ADDR
-push64 0                    ; $ASSERT_ADDR, 0_64
+push64 $IO_ASSERT_ADDR         ; $IO_ASSERT_ADDR
+push64 0                    ; $IO_ASSERT_ADDR, 0_64
 storepop64                  ; Generates assertion failure before pop
 halt 1                      ; Should not get here
 :after_assert4              ; Should get here instead

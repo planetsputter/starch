@@ -30,7 +30,6 @@ void core_destroy(struct core *core)
 	core->stdin_buff = NULL;
 }
 
-// @todo: Could move to utility library
 // Read buflen random bytes into the buffer at buf.
 // Returns zero on success, negative on failure.
 static int core_get_random(void *buf, int buflen)

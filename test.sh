@@ -27,7 +27,8 @@ $STASM allops.sta
 echo disassembling all opcodes
 $DISTASM a.stb -o dis.sta
 echo checking for symmetric dis/assembly
-cmp allops.sta dis.sta
+$STASM dis.sta -o b.stb
+cmp a.stb b.stb
 
 # Check assembly of pseudo-ops
 echo assembling pseudo-ops

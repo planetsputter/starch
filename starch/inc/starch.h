@@ -381,6 +381,9 @@ enum {
 	STINT_NUM_INTS,
 };
 
+// Returns a string name for the given interrupt number
+const char *name_for_stint(int);
+
 //
 // Core memory map
 //
@@ -388,6 +391,7 @@ enum {
 	// Page 0 (0x0000-0x0fff) is reserved to help detect unintentional NULL pointer dereferences
 
 	// Page 1 (0x1000-0x1fff) is IO memory which performs various special functions
+	BEGIN_IO_ADDR  = 0x1000,
 	IO_STDIN_ADDR  = 0x1000,
 	IO_STDOUT_ADDR = 0x1001,
 	IO_FLUSH_ADDR  = 0x1002,
@@ -401,6 +405,3 @@ enum {
 	// Page 3 is the start of program code
 	INIT_PC_VAL    = 0x3000, // Initial PC
 };
-
-// Returns a string name for the given interrupt number
-const char *name_for_stint(int);

@@ -25,11 +25,15 @@ struct autosym autosyms[] = {
 	{ "STINT_BAD_ADDR", STINT_BAD_ADDR },
 	{ "STINT_NUM_INTS", STINT_NUM_INTS },
 	// IO addresses
+	{ "BEGIN_IO_ADDR", BEGIN_IO_ADDR },
 	{ "IO_STDIN_ADDR", IO_STDIN_ADDR },
 	{ "IO_STDOUT_ADDR", IO_STDOUT_ADDR },
 	{ "IO_FLUSH_ADDR", IO_FLUSH_ADDR },
 	{ "IO_URAND_ADDR", IO_URAND_ADDR },
 	{ "IO_ASSERT_ADDR", IO_ASSERT_ADDR },
+	// Other addresses
+	{ "BEGIN_INT_ADDR", BEGIN_INT_ADDR },
+	{ "INIT_PC_VAL", INIT_PC_VAL },
 };
 static struct autosym *get_autosym(const char *name)
 {

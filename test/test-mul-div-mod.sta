@@ -1,7 +1,5 @@
 ; test-mul-div-mod.sta
 
-.include "sys.sta"
-
 ; Memory map
 ; 0x0000 - 0x1000: reserved
 ; 0x1000 - 0x2000: IO
@@ -23,6 +21,7 @@
 ;
 .section $STATIC_ADDR
 
+:rep64_data
 .data64 0 ; rep64
 
 ;
@@ -36,7 +35,7 @@ setsp  $STACK_BOTTOM
 setslp $STACK_LIMIT
 
 :begin
-push64 $STATIC_ADDR
+push64 :rep64_data
 loadpop64        ; rep64
 dup64            ; rep64, rep64
 push64 $MAX_REPS ; rep64, rep64, $MAX_REPS
@@ -48,7 +47,7 @@ call :test_mul32_div32_mod32
 call :test_mul64_div64_mod64
 push64 1         ; rep64, 1_64
 add64            ; rep64 + 1_64
-push64 $STATIC_ADDR
+push64 :rep64_data
 storerpop64
 pop64
 rjmpi8 :begin
@@ -61,14 +60,14 @@ halt 0
 :test_mul8_div8_mod8
 
 ; Test that mul8 has a one identity
-push64 $URAND_ADDR
+push64 $IO_URAND_ADDR
 loadpop8    ; a8
 dup8        ; a8, a8
 dup8        ; a8, a8, a8
 push8 1     ; a8, a8, a8, 1_8
 mul8        ; a8, a8, a8 * 1_8
 ceq8        ; a8, a8 == a8 * 1_8
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop8  ; assert(a8 == a8 * 1_8)
 pop8        ; a8
 
@@ -78,7 +77,7 @@ push8 0     ; a8, a8, 0_8
 mul8        ; a8, a8 * 0_8
 push8 0     ; a8, a8 * 0_8, 0_8
 ceq8        ; a8, a8 * 0_8 == 0_8
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop8  ; assert(a8 * 0_8 == 0_8)
 pop8        ; a8
 
@@ -88,7 +87,7 @@ dup8        ; a8, a8, a8
 push8 1     ; a8, a8, a8, 1_8
 divu8       ; a8, a8, au8 / 1_8
 ceq8        ; a8, a8 == au8 / 1_8
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop8  ; assert(a8 == au8 / 1_8)
 pop8        ; a8
 
@@ -98,7 +97,7 @@ dup8        ; a8, a8, a8
 push8 1     ; a8, a8, a8, 1_8
 divi8       ; a8, a8, ai8 / 1_8
 ceq8        ; a8, a8 == ai8 / 1_8
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop8  ; assert(a8 == ai8 / 1_8)
 pop8        ; a8
 
@@ -108,7 +107,7 @@ push8 1     ; a8, a8, 1_8
 modu8       ; a8, au8 % 1_8
 push8 0     ; a8, au8 % 1_8, 0
 ceq8        ; a8, au8 % 1_8 == 0
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop8  ; assert(au8 % 1_8 == 0)
 pop8        ; a8
 
@@ -118,12 +117,12 @@ push8 1     ; a8, a8, 1_8
 modi8       ; a8, ai8 % 1_8
 push8 0     ; a8, ai8 % 1_8, 0
 ceq8        ; a8, ai8 % 1_8 == 0
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop8  ; assert(ai8 % 1_8 == 0)
 pop8        ; a8
 
 ; Test that mul8 is commutative
-push64 $URAND_ADDR
+push64 $IO_URAND_ADDR
 loadpop8    ; a8, b8
 push64 -1
 loadpopsfp8 ; a8, b8, a8
@@ -136,7 +135,7 @@ push64 -1
 loadpopsfp8 ; a8, b8, a8 * b8, b8, a8
 mul8        ; a8, b8, a8 * b8, b8 * a8
 ceq8        ; a8, b8, a8 * b8 == b8 * a8
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop8  ; assert(a8 * b8 == b8 * a8)
 pop8        ; a8, b8
 
@@ -166,7 +165,7 @@ loadpopsfp8 ; a8, b8, a8, au8 / bu8 * b8, a8, b8
 modu8       ; a8, b8, a8, au8 / bu8 * b8, au8 % bu8
 add8        ; a8, b8, a8, au8 / bu8 * b8 + au8 % bu8
 ceq8        ; a8, b8, a8 == au8 / bu8 * b8 + au8 % bu8
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop8  ; assert(a8 == au8 / bu8 * b8 + au8 % bu8)
 pop8        ; a8, b8
 
@@ -187,7 +186,7 @@ loadpopsfp8 ; a8, b8, a8, ai8 / bi8 * b8, a8, b8
 modi8       ; a8, b8, a8, ai8 / bi8 * b8, ai8 % bi8
 add8        ; a8, b8, a8, ai8 / bi8 * b8 + ai8 % bi8
 ceq8        ; a8, b8, a8 == ai8 / bi8 * b8 + ai8 % bi8
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop8  ; assert(a8 == ai8 / bi8 * b8 + ai8 % bi8)
 pop8        ; a8, b8
 
@@ -209,7 +208,7 @@ loadpopsfp8 ; a8, b8, a8, au8 / bu8 * b8, b8, a8
 modru8      ; a8, b8, a8, au8 / bu8 * b8, au8 % bu8
 add8        ; a8, b8, a8, au8 / bu8 * b8 + au8 % bu8
 ceq8        ; a8, b8, a8 == au8 / bu8 * b8 + au8 % bu8
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop8  ; assert(a8 == au8 / bu8 * b8 + au8 % bu8)
 pop8        ; a8, b8
 
@@ -231,7 +230,7 @@ loadpopsfp8 ; a8, b8, a8, ai8 / bi8 * b8, b8, a8
 modri8      ; a8, b8, a8, ai8 / bi8 * b8, ai8 % bi8
 add8        ; a8, b8, a8, ai8 / bi8 * b8 + ai8 % bi8
 ceq8        ; a8, b8, a8 == ai8 / bi8 * b8 + ai8 % bi8
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop8  ; assert(a8 == ai8 / bi8 * b8 + ai8 % bi8)
 pop8        ; a8, b8
 
@@ -243,14 +242,14 @@ ret ; test_mul8_div8_mod8
 :test_mul16_div16_mod16
 
 ; Test that mul16 has a one identity
-push64 $URAND_ADDR
+push64 $IO_URAND_ADDR
 loadpop16    ; a16
 dup16        ; a16, a16
 dup16        ; a16, a16, a16
 push16 1     ; a16, a16, a16, 1_16
 mul16        ; a16, a16, a16 * 1_16
 ceq16        ; a16, a16 == a16 * 1_16
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop16  ; assert(a16 == a16 * 1_16)
 pop16        ; a16
 
@@ -260,7 +259,7 @@ push16 0     ; a16, a16, 0_16
 mul16        ; a16, a16 * 0_16
 push16 0     ; a16, a16 * 0_16, 0_16
 ceq16        ; a16, a16 * 0_16 == 0_16
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop16  ; assert(a16 * 0_16 == 0_16)
 pop16        ; a16
 
@@ -270,7 +269,7 @@ dup16        ; a16, a16, a16
 push16 1     ; a16, a16, a16, 1_16
 divu16       ; a16, a16, au16 / 1_16
 ceq16        ; a16, a16 == au16 / 1_16
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop16  ; assert(a16 == au16 / 1_16)
 pop16        ; a16
 
@@ -280,7 +279,7 @@ dup16        ; a16, a16, a16
 push16 1     ; a16, a16, a16, 1_16
 divi16       ; a16, a16, ai16 / 1_16
 ceq16        ; a16, a16 == ai16 / 1_16
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop16  ; assert(a16 == ai16 / 1_16)
 pop16        ; a16
 
@@ -290,7 +289,7 @@ push16 1     ; a16, a16, 1_16
 modu16       ; a16, au16 % 1_16
 push16 0     ; a16, au16 % 1_16, 0
 ceq16        ; a16, au16 % 1_16 == 0
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop16  ; assert(au16 % 1_16 == 0)
 pop16        ; a16
 
@@ -300,12 +299,12 @@ push16 1     ; a16, a16, 1_16
 modi16       ; a16, ai16 % 1_16
 push16 0     ; a16, ai16 % 1_16, 0
 ceq16        ; a16, ai16 % 1_16 == 0
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop16  ; assert(ai16 % 1_16 == 0)
 pop16        ; a16
 
 ; Test that mul16 is commutative
-push64 $URAND_ADDR
+push64 $IO_URAND_ADDR
 loadpop16    ; a16, b16
 push64 -2
 loadpopsfp16 ; a16, b16, a16
@@ -318,7 +317,7 @@ push64 -2
 loadpopsfp16 ; a16, b16, a16 * b16, b16, a16
 mul16        ; a16, b16, a16 * b16, b16 * a16
 ceq16        ; a16, b16, a16 * b16 == b16 * a16
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop16  ; assert(a16 * b16 == b16 * a16)
 pop16        ; a16, b16
 
@@ -348,7 +347,7 @@ loadpopsfp16 ; a16, b16, a16, au16 / bu16 * b16, a16, b16
 modu16       ; a16, b16, a16, au16 / bu16 * b16, au16 % bu16
 add16        ; a16, b16, a16, au16 / bu16 * b16 + au16 % bu16
 ceq16        ; a16, b16, a16 == au16 / bu16 * b16 + au16 % bu16
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop16  ; assert(a16 == au16 / bu16 * b16 + au16 % bu16)
 pop16        ; a16, b16
 
@@ -369,7 +368,7 @@ loadpopsfp16 ; a16, b16, a16, ai16 / bi16 * b16, a16, b16
 modi16       ; a16, b16, a16, ai16 / bi16 * b16, ai16 % bi16
 add16        ; a16, b16, a16, ai16 / bi16 * b16 + ai16 % bi16
 ceq16        ; a16, b16, a16 == ai16 / bi16 * b16 + ai16 % bi16
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop16  ; assert(a16 == ai16 / bi16 * b16 + ai16 % bi16)
 pop16        ; a16, b16
 
@@ -391,7 +390,7 @@ loadpopsfp16 ; a16, b16, a16, au16 / bu16 * b16, b16, a16
 modru16      ; a16, b16, a16, au16 / bu16 * b16, au16 % bu16
 add16        ; a16, b16, a16, au16 / bu16 * b16 + au16 % bu16
 ceq16        ; a16, b16, a16 == au16 / bu16 * b16 + au16 % bu16
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop16  ; assert(a16 == au16 / bu16 * b16 + au16 % bu16)
 pop16        ; a16, b16
 
@@ -413,7 +412,7 @@ loadpopsfp16 ; a16, b16, a16, ai16 / bi16 * b16, b16, a16
 modri16      ; a16, b16, a16, ai16 / bi16 * b16, ai16 % bi16
 add16        ; a16, b16, a16, ai16 / bi16 * b16 + ai16 % bi16
 ceq16        ; a16, b16, a16 == ai16 / bi16 * b16 + ai16 % bi16
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop16  ; assert(a16 == ai16 / bi16 * b16 + ai16 % bi16)
 pop16        ; a16, b16
 
@@ -425,14 +424,14 @@ ret ; test_mul16_div16_mod16
 :test_mul32_div32_mod32
 
 ; Test that mul32 has a one identity
-push64 $URAND_ADDR
+push64 $IO_URAND_ADDR
 loadpop32    ; a32
 dup32        ; a32, a32
 dup32        ; a32, a32, a32
 push32 1     ; a32, a32, a32, 1_32
 mul32        ; a32, a32, a32 * 1_32
 ceq32        ; a32, a32 == a32 * 1_32
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop32  ; assert(a32 == a32 * 1_32)
 pop32        ; a32
 
@@ -442,7 +441,7 @@ push32 0     ; a32, a32, 0_32
 mul32        ; a32, a32 * 0_32
 push32 0     ; a32, a32 * 0_32, 0_32
 ceq32        ; a32, a32 * 0_32 == 0_32
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop32  ; assert(a32 * 0_32 == 0_32)
 pop32        ; a32
 
@@ -452,7 +451,7 @@ dup32        ; a32, a32, a32
 push32 1     ; a32, a32, a32, 1_32
 divu32       ; a32, a32, au32 / 1_32
 ceq32        ; a32, a32 == au32 / 1_32
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop32  ; assert(a32 == au32 / 1_32)
 pop32        ; a32
 
@@ -462,7 +461,7 @@ dup32        ; a32, a32, a32
 push32 1     ; a32, a32, a32, 1_32
 divi32       ; a32, a32, ai32 / 1_32
 ceq32        ; a32, a32 == ai32 / 1_32
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop32  ; assert(a32 == ai32 / 1_32)
 pop32        ; a32
 
@@ -472,7 +471,7 @@ push32 1     ; a32, a32, 1_32
 modu32       ; a32, au32 % 1_32
 push32 0     ; a32, au32 % 1_32, 0
 ceq32        ; a32, au32 % 1_32 == 0
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop32  ; assert(au32 % 1_32 == 0)
 pop32        ; a32
 
@@ -482,12 +481,12 @@ push32 1     ; a32, a32, 1_32
 modi32       ; a32, ai32 % 1_32
 push32 0     ; a32, ai32 % 1_32, 0
 ceq32        ; a32, ai32 % 1_32 == 0
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop32  ; assert(ai32 % 1_32 == 0)
 pop32        ; a32
 
 ; Test that mul32 is commutative
-push64 $URAND_ADDR
+push64 $IO_URAND_ADDR
 loadpop32    ; a32, b32
 push64 -4
 loadpopsfp32 ; a32, b32, a32
@@ -500,7 +499,7 @@ push64 -4
 loadpopsfp32 ; a32, b32, a32 * b32, b32, a32
 mul32        ; a32, b32, a32 * b32, b32 * a32
 ceq32        ; a32, b32, a32 * b32 == b32 * a32
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop32  ; assert(a32 * b32 == b32 * a32)
 pop32        ; a32, b32
 
@@ -530,7 +529,7 @@ loadpopsfp32 ; a32, b32, a32, au32 / bu32 * b32, a32, b32
 modu32       ; a32, b32, a32, au32 / bu32 * b32, au32 % bu32
 add32        ; a32, b32, a32, au32 / bu32 * b32 + au32 % bu32
 ceq32        ; a32, b32, a32 == au32 / bu32 * b32 + au32 % bu32
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop32  ; assert(a32 == au32 / bu32 * b32 + au32 % bu32)
 pop32        ; a32, b32
 
@@ -551,7 +550,7 @@ loadpopsfp32 ; a32, b32, a32, ai32 / bi32 * b32, a32, b32
 modi32       ; a32, b32, a32, ai32 / bi32 * b32, ai32 % bi32
 add32        ; a32, b32, a32, ai32 / bi32 * b32 + ai32 % bi32
 ceq32        ; a32, b32, a32 == ai32 / bi32 * b32 + ai32 % bi32
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop32  ; assert(a32 == ai32 / bi32 * b32 + ai32 % bi32)
 pop32        ; a32, b32
 
@@ -573,7 +572,7 @@ loadpopsfp32 ; a32, b32, a32, au32 / bu32 * b32, b32, a32
 modru32      ; a32, b32, a32, au32 / bu32 * b32, au32 % bu32
 add32        ; a32, b32, a32, au32 / bu32 * b32 + au32 % bu32
 ceq32        ; a32, b32, a32 == au32 / bu32 * b32 + au32 % bu32
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop32  ; assert(a32 == au32 / bu32 * b32 + au32 % bu32)
 pop32        ; a32, b32
 
@@ -595,7 +594,7 @@ loadpopsfp32 ; a32, b32, a32, ai32 / bi32 * b32, b32, a32
 modri32      ; a32, b32, a32, ai32 / bi32 * b32, ai32 % bi32
 add32        ; a32, b32, a32, ai32 / bi32 * b32 + ai32 % bi32
 ceq32        ; a32, b32, a32 == ai32 / bi32 * b32 + ai32 % bi32
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop32  ; assert(a32 == ai32 / bi32 * b32 + ai32 % bi32)
 pop32        ; a32, b32
 
@@ -607,14 +606,14 @@ ret ; test_mul32_div32_mod32
 :test_mul64_div64_mod64
 
 ; Test that mul64 has a one identity
-push64 $URAND_ADDR
+push64 $IO_URAND_ADDR
 loadpop64    ; a64
 dup64        ; a64, a64
 dup64        ; a64, a64, a64
 push64 1     ; a64, a64, a64, 1_64
 mul64        ; a64, a64, a64 * 1_64
 ceq64        ; a64, a64 == a64 * 1_64
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop64  ; assert(a64 == a64 * 1_64)
 pop64        ; a64
 
@@ -624,7 +623,7 @@ push64 0     ; a64, a64, 0_64
 mul64        ; a64, a64 * 0_64
 push64 0     ; a64, a64 * 0_64, 0_64
 ceq64        ; a64, a64 * 0_64 == 0_64
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop64  ; assert(a64 * 0_64 == 0_64)
 pop64        ; a64
 
@@ -634,7 +633,7 @@ dup64        ; a64, a64, a64
 push64 1     ; a64, a64, a64, 1_64
 divu64       ; a64, a64, au64 / 1_64
 ceq64        ; a64, a64 == au64 / 1_64
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop64  ; assert(a64 == au64 / 1_64)
 pop64        ; a64
 
@@ -644,7 +643,7 @@ dup64        ; a64, a64, a64
 push64 1     ; a64, a64, a64, 1_64
 divi64       ; a64, a64, ai64 / 1_64
 ceq64        ; a64, a64 == ai64 / 1_64
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop64  ; assert(a64 == ai64 / 1_64)
 pop64        ; a64
 
@@ -654,7 +653,7 @@ push64 1     ; a64, a64, 1_64
 modu64       ; a64, au64 % 1_64
 push64 0     ; a64, au64 % 1_64, 0
 ceq64        ; a64, au64 % 1_64 == 0
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop64  ; assert(au64 % 1_64 == 0)
 pop64        ; a64
 
@@ -664,12 +663,12 @@ push64 1     ; a64, a64, 1_64
 modi64       ; a64, ai64 % 1_64
 push64 0     ; a64, ai64 % 1_64, 0
 ceq64        ; a64, ai64 % 1_64 == 0
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop64  ; assert(ai64 % 1_64 == 0)
 pop64        ; a64
 
 ; Test that mul64 is commutative
-push64 $URAND_ADDR
+push64 $IO_URAND_ADDR
 loadpop64    ; a64, b64
 push64 -8
 loadpopsfp64 ; a64, b64, a64
@@ -682,7 +681,7 @@ push64 -8
 loadpopsfp64 ; a64, b64, a64 * b64, b64, a64
 mul64        ; a64, b64, a64 * b64, b64 * a64
 ceq64        ; a64, b64, a64 * b64 == b64 * a64
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop64  ; assert(a64 * b64 == b64 * a64)
 pop64        ; a64, b64
 
@@ -712,7 +711,7 @@ loadpopsfp64 ; a64, b64, a64, au64 / bu64 * b64, a64, b64
 modu64       ; a64, b64, a64, au64 / bu64 * b64, au64 % bu64
 add64        ; a64, b64, a64, au64 / bu64 * b64 + au64 % bu64
 ceq64        ; a64, b64, a64 == au64 / bu64 * b64 + au64 % bu64
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop64  ; assert(a64 == au64 / bu64 * b64 + au64 % bu64)
 pop64        ; a64, b64
 
@@ -733,7 +732,7 @@ loadpopsfp64 ; a64, b64, a64, ai64 / bi64 * b64, a64, b64
 modi64       ; a64, b64, a64, ai64 / bi64 * b64, ai64 % bi64
 add64        ; a64, b64, a64, ai64 / bi64 * b64 + ai64 % bi64
 ceq64        ; a64, b64, a64 == ai64 / bi64 * b64 + ai64 % bi64
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop64  ; assert(a64 == ai64 / bi64 * b64 + ai64 % bi64)
 pop64        ; a64, b64
 
@@ -755,7 +754,7 @@ loadpopsfp64 ; a64, b64, a64, au64 / bu64 * b64, b64, a64
 modru64      ; a64, b64, a64, au64 / bu64 * b64, au64 % bu64
 add64        ; a64, b64, a64, au64 / bu64 * b64 + au64 % bu64
 ceq64        ; a64, b64, a64 == au64 / bu64 * b64 + au64 % bu64
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop64  ; assert(a64 == au64 / bu64 * b64 + au64 % bu64)
 pop64        ; a64, b64
 
@@ -777,7 +776,7 @@ loadpopsfp64 ; a64, b64, a64, ai64 / bi64 * b64, b64, a64
 modri64      ; a64, b64, a64, ai64 / bi64 * b64, ai64 % bi64
 add64        ; a64, b64, a64, ai64 / bi64 * b64 + ai64 % bi64
 ceq64        ; a64, b64, a64 == ai64 / bi64 * b64 + ai64 % bi64
-push64 $ASSERT_ADDR
+push64 $IO_ASSERT_ADDR
 storerpop64  ; assert(a64 == ai64 / bi64 * b64 + ai64 % bi64)
 pop64        ; a64, b64
 
