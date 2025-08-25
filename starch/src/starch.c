@@ -4,7 +4,7 @@
 
 #include "starch.h"
 
-static const char *names[256] = {
+static const char *op_names[] = {
 	[op_invalid] = "invalid",
 
 	//
@@ -324,14 +324,17 @@ static const char *names[256] = {
 
 const char *name_for_opcode(int opcode)
 {
-	return names[opcode];
+	if (opcode < 0 || (size_t)opcode >= sizeof(op_names) / sizeof(*op_names)) {
+		return NULL;
+	}
+	return op_names[opcode];
 }
 
 int opcode_for_name(const char *name)
 {
 	// @todo: would be more efficient to have a list sorted by name and do a binary search
-	for (size_t i = 0; i < sizeof(names) / sizeof(*names); i++) {
-		if (names[i] && strcmp(name, names[i]) == 0) return i;
+	for (size_t i = 0; i < sizeof(op_names) / sizeof(*op_names); i++) {
+		if (op_names[i] && strcmp(name, op_names[i]) == 0) return i;
 	}
 	return -1;
 }
@@ -821,25 +824,30 @@ int imm_type_for_opcode(int opcode)
 	return ret;
 }
 
+const char *stint_names[] = {
+	[STINT_NONE] = "STINT_NONE",
+	[STINT_INVALID_INST] = "STINT_INVALID_INST",
+	[STINT_ASSERT_FAILURE] = "STINT_ASSERT_FAILURE",
+	[STINT_DIV_BY_ZERO] = "STINT_DIV_BY_ZERO",
+	[STINT_BAD_IO_ACCESS] = "STINT_BAD_IO_ACCESS",
+	[STINT_BAD_FRAME_ACCESS] = "STINT_BAD_FRAME_ACCESS",
+	[STINT_BAD_STACK_ACCESS] = "STINT_BAD_STACK_ACCESS",
+	[STINT_BAD_ADDR] = "STINT_BAD_ADDR",
+};
+
 const char *name_for_stint(int stint)
 {
-	switch (stint) {
-	case STINT_NONE:
-		return "STINT_NONE";
-	case STINT_INVALID_INST:
-		return "STINT_INVALID_INST";
-	case STINT_ASSERT_FAILURE:
-		return "STINT_ASSERT_FAILURE";
-	case STINT_DIV_BY_ZERO:
-		return "STINT_DIV_BY_ZERO";
-	case STINT_BAD_IO_ACCESS:
-		return "STINT_BAD_IO_ACCESS";
-	case STINT_BAD_FRAME_ACCESS:
-		return "STINT_BAD_FRAME_ACCESS";
-	case STINT_BAD_STACK_ACCESS:
-		return "STINT_BAD_STACK_ACCESS";
-	case STINT_BAD_ADDR:
-		return "STINT_BAD_ADDR";
+	if (stint < 0 || (size_t)stint >= sizeof(stint_names) / sizeof(*stint_names)) {
+		return NULL;
 	}
-	return "STINT_UNKNOWN";
+	return stint_names[stint];
+}
+
+int stint_for_name(const char *name)
+{
+	// @todo: would be more efficient to have a list sorted by name and do a binary search
+	for (size_t i = 0; i < sizeof(stint_names) / sizeof(*stint_names); i++) {
+		if (stint_names[i] && strcmp(name, stint_names[i]) == 0) return i;
+	}
+	return -1;
 }

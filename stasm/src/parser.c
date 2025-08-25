@@ -8,22 +8,14 @@
 #include "bstr.h"
 #include "parser.h"
 #include "starch.h"
+#include "lits.h"
 
-// Automatic symbols, besides instruction opcodes
+// Automatic symbols, besides instruction opcodes and interrupt numbers
 struct autosym {
 	const char *name;
 	uint64_t val;
 };
 struct autosym autosyms[] = {
-	// Interrupt numbers
-	{ "STINT_INVALID_INST", STINT_INVALID_INST },
-	{ "STINT_ASSERT_FAILURE", STINT_ASSERT_FAILURE },
-	{ "STINT_DIV_BY_ZERO", STINT_DIV_BY_ZERO },
-	{ "STINT_BAD_IO_ACCESS", STINT_BAD_IO_ACCESS },
-	{ "STINT_BAD_FRAME_ACCESS", STINT_BAD_FRAME_ACCESS },
-	{ "STINT_BAD_STACK_ACCESS", STINT_BAD_STACK_ACCESS },
-	{ "STINT_BAD_ADDR", STINT_BAD_ADDR },
-	{ "STINT_NUM_INTS", STINT_NUM_INTS },
 	// IO addresses
 	{ "BEGIN_IO_ADDR", BEGIN_IO_ADDR },
 	{ "IO_STDIN_ADDR", IO_STDIN_ADDR },
@@ -48,136 +40,6 @@ static struct autosym *get_autosym(const char *name)
 }
 
 // Returns the nibble value of the given hexzdecimal character
-static char nibble_for_hex(char hex)
-{
-	if (hex >= 'a') return hex - 'a' + 10;
-	if (hex >= 'A') return hex - 'A' + 10;
-	return hex - '0';
-}
-
-// Parse a potentially escaped character literal from the given string, setting *val.
-// Returns a pointer to the next character, or NULL if the escape sequence is invalid.
-// The goal is for the format of the escape sequences to be identical to those in the C language.
-static const char *parse_char_lit(const char *str, char *val)
-{
-	char tc = 0; // Temporary character
-	if (*str == '\\') {
-		switch (*++str) {
-		case 'a': tc = '\a'; break;
-		case 'b': tc = '\b'; break;
-		case 'f': tc = '\f'; break;
-		case 'n': tc = '\n'; break;
-		case 'r': tc = '\r'; break;
-		case 't': tc = '\t'; break;
-		case 'v': tc = '\v'; break;
-		case '\\': tc = '\\'; break;
-		case '\'': tc = '\''; break;
-		case '\"': tc = '\"'; break;
-		case '?': tc = '\?'; break;
-		case 'x': // Allow hexadecimal notation as in '\x00'
-			if (!isxdigit(*++str)) return NULL;
-			do { // Hexadecimal escape sequences are of arbitrary length
-				tc = (tc << 4) | nibble_for_hex(*str);
-			} while (isxdigit(*++str));
-			break;
-		default:
-			if (*str < '0' || *str > '7') return NULL; // Invalid escape sequence
-			// Octal escape sequences have a maximum of three characters
-			tc = *str - '0';
-			str++;
-			if (*str < '0' || *str > '7') {
-				str--;
-				break;
-			}
-			tc = (tc << 3) + *str - '0';
-			str++;
-			if (*str < '0' || *str > '7') {
-				str--;
-				break;
-			}
-			tc = (tc << 3) + *str - '0';
-		}
-		str++;
-	}
-	else if (*str == '\0' || *str == '\n') { // Disallowed characters
-		return NULL;
-	}
-	else {
-		tc = *str++;
-	}
-	*val = tc;
-	return str;
-}
-
-// Parse an entire string of potentially escaped characters, appending unescaped values to the given B-string destination.
-// Destination string will have characters appended until end of string or first invalid escape sequence.
-// Returns whether the string literal is valid.
-static bool parse_string_lit(const char *str, char **bdest)
-{
-	char cval;
-	for (; *str; ) {
-		str = parse_char_lit(str, &cval);
-		if (str) { // Valid unescape
-			*bdest = bstr_append(*bdest, cval);
-		}
-		else {
-			break;
-		}
-	}
-	return str != NULL;
-}
-
-// Parse an integer literal. Returns whether the conversion was successful.
-static bool parse_int(const char *s, int64_t *val)
-{
-	if (*s == '\0') return false; // Empty string
-
-	// Allow character notation such as 'c', '\n'
-	long long temp_val = 0;
-	if (*s == '\'') {
-		s++;
-		char cval;
-		const char *end = parse_char_lit(s, &cval);
-		if (end == NULL || *end != '\'' || *(end + 1) != '\0') {
-			return false;
-		}
-		*val = cval;
-		return true;
-	}
-
-	bool neg;
-	if (*s == '-') {
-		s++;
-		if (*s == '\0') return false; // "-"
-		neg = true;
-	}
-	else {
-		neg = false;
-	}
-
-	// @todo: handle overflow
-	if (*s == '0' && *(s + 1) == 'x') { // Hexadecimal literal
-		s += 2;
-		if (*s == '\0') return false; // "0x"
-		for (; isxdigit(*s); s++) {
-			// Compute value of hexadecimal digit
-			int val = *s >= 'a' ? *s - 'a' + 10 : *s >= 'A' ? *s - 'A' + 10 : *s - '0';
-			temp_val = temp_val * 0x10 + val;
-		}
-	}
-	else { // Decimal literal
-		for (; isdigit(*s); s++) {
-			temp_val = temp_val * 10 + *s - '0';
-		}
-	}
-
-	// Expect end of string
-	if (*s != '\0') return false;
-
-	*val = neg ? -temp_val : temp_val;
-	return true;
-}
-
 // Write the 64-bit unsigned value to eight bytes in little-endian order
 static void u64_to_little8(uint64_t val, uint8_t *data)
 {
@@ -221,9 +83,9 @@ void parser_event_destroy(struct parser_event *pe)
 {
 	switch (pe->type) {
 	case PET_INST:
-		if (pe->inst.imm_label) {
-			bstr_free(pe->inst.imm_label);
-			pe->inst.imm_label = NULL;
+		if (pe->inst.imm) {
+			bstr_free(pe->inst.imm);
+			pe->inst.imm = NULL;
 		}
 		break;
 
@@ -249,14 +111,10 @@ int parser_event_print(const struct parser_event *pe, FILE *outfile)
 	case PET_INST: {
 		const char *name = name_for_opcode(pe->inst.opcode);
 		fprintf(outfile, "%s", name ? name : "unknown_opcode");
-		if (pe->inst.imm_label) {
-			fprintf(outfile, " %s\n", pe->inst.imm_label);
+		if (pe->inst.imm) {
+			fprintf(outfile, " %s\n", pe->inst.imm);
 		}
 		else {
-			int sdt = imm_type_for_opcode(pe->inst.opcode);
-			if (sdt != SDT_VOID) {
-				fprintf(outfile, " 0x%lx", little8_to_u64(pe->inst.imm));
-			}
 			fprintf(outfile, "\n");
 		}
 	}	break;
@@ -311,13 +169,6 @@ void parser_destroy(struct parser *parser)
 	smap_destroy(&parser->defs);
 }
 
-enum { // Parser syntax states
-	PSS_DEFAULT,
-	PSS_QUOTED,
-	PSS_ESCAPED,
-	PSS_COMMENT,
-};
-
 enum { // Parser token states
 	PTS_DEFAULT,
 	PTS_IMM, // Immediate for instruction or raw data
@@ -330,14 +181,16 @@ enum { // Parser token states
 	PTS_INCLUDE,
 };
 
+// Finishes any in-progress token, updating parser->event.
+// Returns zero on success.
 static int parser_finish_token(struct parser *parser)
 {
 	if (!parser->token) return 0; // Nothing to finish
 
-	// Perform symbolic substitution on non-quoted tokens
+	// Perform symbolic substitution
 	int ret = 0;
 	char *symbol = NULL;
-	if (parser->ss != PSS_QUOTED && parser->token[0] == '$') {
+	if (parser->token[0] == '$') {
 		if (parser->token[1] == '\0') { // Check for empty symbol name
 			fprintf(stderr, "error: empty symbol name in \"%s\" line %d char %d\n",
 				parser->filename, parser->tline, parser->tch);
@@ -348,14 +201,16 @@ static int parser_finish_token(struct parser *parser)
 
 			if (!symbol) {
 				// Check for automatic opcode symbols
-				char symbuf[32];
+				enum { MAX_OPCODE_NAME_LEN = 32 };
+				char symbuf[MAX_OPCODE_NAME_LEN + 1];
 				if (strncmp(parser->token + 1, "OP_", 3) == 0) {
 					// Verify all letters are uppercase and length is below limit
 					char *s;
 					for (s = parser->token + 4; isupper(*s) || isdigit(*s); s++);
-					if (*s == '\0' && (s - parser->token - 4) < 32) { // All letters are uppercase
-						// Convert to lowercase
-						strncpy(symbuf, parser->token + 4, sizeof(symbuf));
+					if (*s == '\0' && (s - parser->token - 4) <= MAX_OPCODE_NAME_LEN) {
+						// All letters are uppercase. Convert to lowercase.
+						strncpy(symbuf, parser->token + 4, MAX_OPCODE_NAME_LEN);
+						symbuf[MAX_OPCODE_NAME_LEN] = '\0';
 						for (s = symbuf; *s != '\0'; s++) {
 							*s = tolower(*s);
 						}
@@ -368,34 +223,34 @@ static int parser_finish_token(struct parser *parser)
 					}
 				}
 				else {
-					// Look up other automatic symbols
-					struct autosym *as = get_autosym(parser->token + 1);
-					if (as) {
-						sprintf(symbuf, "%lu", as->val);
+					// Check for named interrupt numbers
+					int stint = stint_for_name(parser->token + 1);
+					if (stint >= 0) { // Interrupt name
+						sprintf(symbuf, "%d", stint);
 						symbol = bstr_dup(symbuf);
 					}
+					else {
+						// Look up other automatic symbols
+						struct autosym *as = get_autosym(parser->token + 1);
+						if (as) {
+							sprintf(symbuf, "%lu", as->val);
+							symbol = bstr_dup(symbuf);
+						}
+					}
 				}
-				if (symbol) {
+				if (symbol) { // Found a matching autosymbol
 					smap_insert(&parser->defs, bstr_dup(parser->token + 1), symbol);
 				}
-			}
-
-			if (!symbol) {
-				fprintf(stderr, "error: undefined symbol \"%s\" in \"%s\" line %d char %d\n",
-					parser->token + 1, parser->filename, parser->tline, parser->tch);
-				ret = 1;
+				else {
+					fprintf(stderr, "error: undefined symbol \"%s\" in \"%s\" line %d char %d\n",
+						parser->token + 1, parser->filename, parser->tline, parser->tch);
+					ret = 1;
+				}
 			}
 		}
 	}
 	else {
 		symbol = parser->token;
-	}
-
-	if (parser->ss == PSS_QUOTED && (parser->ts != PTS_DEF_VAL && parser->ts != PTS_INCLUDE)) {
-		// Currently quoted tokens are used only for symbol values and include files
-		fprintf(stderr, "error: unexpected quoted string in \"%s\" line %d char %d\n",
-			parser->filename, parser->tline, parser->tch);
-		ret = 1;
 	}
 
 	if (ret == 0) switch (parser->ts) {
@@ -404,6 +259,7 @@ static int parser_finish_token(struct parser *parser)
 	//
 	case PTS_DEFAULT: {
 		if (parser->token[0] == '.') { // '.' introduces an assembler command
+			// Symbolic substitution cannot be used for assembler commands
 			if (strcmp(parser->token + 1, "define") == 0) {
 				parser->ts = PTS_DEF_KEY;
 			}
@@ -438,10 +294,9 @@ static int parser_finish_token(struct parser *parser)
 					parser->token, parser->filename, parser->tline, parser->tch);
 				ret = 1;
 			}
-			break;
 		}
-		if (parser->token[0] == ':') { // ':' introduces a label
-			if (parser->token[1] == '\0') {
+		else if (symbol[0] == ':') { // ':' introduces a label
+			if (symbol[1] == '\0') {
 				fprintf(stderr, "error: empty label in \"%s\" line %d char %d\n",
 					parser->filename, parser->tline, parser->tch);
 				ret = 1;
@@ -449,61 +304,71 @@ static int parser_finish_token(struct parser *parser)
 			else {
 				// Emit label event
 				parser->event.type = PET_LABEL;
-				parser->event.label = parser->token;
-				parser->token = NULL;
+				if (symbol == parser->token) { // No lookup was performed
+					parser->event.label = parser->token;
+					parser->token = NULL;
+				}
+				else { // Lookup was performed
+					parser->event.label = bstr_dup(symbol);
+				}
 			}
 			parser->ts = PTS_EOL; // Expect end of line
-			break;
 		}
-
-		// Look up opcode
-		int opcode = opcode_for_name(symbol);
-		if (opcode < 0) {
-			// Instruction is not an exact match for any opcode. Check for pseudo-ops.
-			// @todo: Add pseudo-ops to a table.
-			if (strcmp(symbol, "push8") == 0) {
-				parser->event.inst.opcode = op_push8as8;
-			}
-			else if (strcmp(symbol, "push16") == 0) {
-				parser->event.inst.opcode = op_push16as16;
-			}
-			else if (strcmp(symbol, "push32") == 0) {
-				parser->event.inst.opcode = op_push32as32;
-			}
-			else if (strcmp(symbol, "push64") == 0) {
-				parser->event.inst.opcode = op_push64as64;
+		else if (symbol[0] == '"') { // Introduces a quoted string
+			// Quoted strings are not valid for the first word in a statement
+			fprintf(stderr, "error: unexpected quoted string in \"%s\" line %d char %d\n",
+				parser->filename, parser->tline, parser->tch);
+			ret = 1;
+		}
+		else { // Everything else must be an instruction
+			int opcode = opcode_for_name(symbol);
+			if (opcode < 0) {
+				// Instruction is not an exact match for any opcode. Check for pseudo-ops.
+				// @todo: Add pseudo-ops to a table.
+				if (strcmp(symbol, "push8") == 0) {
+					opcode = op_push8as8;
+				}
+				else if (strcmp(symbol, "push16") == 0) {
+					opcode = op_push16as16;
+				}
+				else if (strcmp(symbol, "push32") == 0) {
+					opcode = op_push32as32;
+				}
+				else if (strcmp(symbol, "push64") == 0) {
+					opcode = op_push64as64;
+				}
+				else {
+					fprintf(stderr, "error: unrecognized opcode \"%s\" in \"%s\" line %d char %d\n",
+						symbol, parser->filename, parser->tline, parser->tch);
+					ret = 1;
+					break;
+				}
+				// Note that immediate value to follow is for a pseudo-op
+				parser->ts = PTS_PIMM;
 			}
 			else {
-				fprintf(stderr, "error: unrecognized opcode \"%s\" in \"%s\" line %d char %d\n",
-					symbol, parser->filename, parser->tline, parser->tch);
-				ret = 1;
-				break;
+				// Look up immediate type for opcode
+				int sdt = imm_type_for_opcode(opcode);
+				if (sdt < 0) {
+					fprintf(stderr, "error: failed to look up immediate type for opcode %s in \"%s\" line %d char %d\n",
+						symbol, parser->filename, parser->tline, parser->tch);
+					ret = 1;
+					break;
+				}
+				if (sdt == SDT_VOID) {
+					// Opcode has no immediates
+					parser->ts = PTS_EOL;
+				}
+				else {
+					// Regular immediate follows
+					parser->ts = PTS_IMM;
+				}
 			}
-			parser->ts = PTS_PIMM;
+			// Begin the instruction event
+			parser->event.inst.opcode = opcode;
 			parser->event.type = PET_INST;
-			break;
 		}
 
-		// Look up immediate count for opcode
-		int sdt = imm_type_for_opcode(opcode);
-		if (sdt < 0) {
-			fprintf(stderr, "error: failed to look up immediate type for opcode %s in \"%s\" line %d char %d\n",
-				symbol, parser->filename, parser->tline, parser->tch);
-			ret = 1;
-			break;
-		}
-		if (sdt == SDT_VOID) {
-			// Opcode has no immediates
-			parser->ts = PTS_EOL;
-		}
-		else {
-			// Look up immediate type for opcode
-			parser->ts = PTS_IMM;
-		}
-
-		// Begin the instruction event
-		parser->event.type = PET_INST;
-		parser->event.inst.opcode = opcode;
 	}	break;
 
 	//
@@ -511,28 +376,38 @@ static int parser_finish_token(struct parser *parser)
 	//
 	case PTS_IMM:
 	case PTS_PIMM: {
-		int64_t immval; // Immediate value
-		if (symbol[0] == ':') { // Immediate is label
+		// Parser event type will be either PET_INST or PET_DATA.
+		// Token state will be PTS_PIMM if opcode was a pseudo-op.
+		// Token state will not be PTS_PIMM if event type is PET_DATA.
+
+		if (symbol[0] == '"') { // Immediate is string literal
+			if (parser->event.type != PET_INST) {
+				// @todo: Possibly support string literal immediates for data64 event type,
+				// though this could be confusing because data would be pointer to string elsewhere
+				fprintf(stderr, "error: unsupported statement type for string literal in \"%s\" line %d char %d\n",
+					parser->filename, parser->tline, parser->tch);
+				ret = 1;
+				break;
+			}
+		}
+		else if (symbol[0] == ':') { // Immediate is label
 			if (symbol[1] == '\0') { // Empty label
 				fprintf(stderr, "error: empty label in \"%s\" line %d char %d\n",
 					parser->filename, parser->tline, parser->tch);
 				ret = 1;
 				break;
 			}
-			// @todo: Allow labels to be used for raw data
-			if (parser->event.type == PET_DATA) {
-				fprintf(stderr, "error: labels not supported for raw data in \"%s\" line %d char %d\n",
+			if (parser->event.type != PET_INST) {
+				// @todo: Allow labels to be used for raw data
+				fprintf(stderr, "error: unsupported statement type for label in \"%s\" line %d char %d\n",
 					parser->filename, parser->tline, parser->tch);
 				ret = 1;
 				break;
 			}
-			// Emit instruction event with label
-			parser->event.inst.imm_label = parser->token;
-			parser->token = NULL;
-			immval = 0;
 		}
 		else {
-			// Parse immediate literal
+			// Parse immediate literal as an integer value
+			int64_t immval = 0;
 			bool success = parse_int(symbol, &immval);
 			if (!success) {
 				fprintf(stderr, "error: failed to parse integer literal \"%s\" in \"%s\" line %d char %d\n",
@@ -540,111 +415,110 @@ static int parser_finish_token(struct parser *parser)
 				ret = 1;
 				break;
 			}
-		}
 
-		// Look up immediate type and size
-		int opcode = 0;
-		int sdt;
-		if (parser->event.type == PET_DATA) {
-			// Raw data size determines immediate data type
-			// @todo: Could make cleaner with a function to look up data type for size
-			if (parser->event.data.len == 1) {
-				sdt = SDT_A8;
+			if (parser->ts == PTS_PIMM) {
+				// Compact pseudo-ops where possible
+				int opcode = parser->event.inst.opcode; // Opcode
+				int min_len = min_bytes_for_val(immval);
+				switch (opcode) {
+				case op_push8as8:
+					// Already as compact as possible
+					break;
+				case op_push16as16:
+					if (min_len < 2) {
+						if (immval < 0) opcode = op_push8asi16;
+						else opcode = op_push8asu16;
+					}
+					break;
+				case op_push32as32:
+					if (min_len < 2) {
+						if (immval < 0) opcode = op_push8asi32;
+						else opcode = op_push8asu32;
+					}
+					else if (min_len < 3) {
+						if (immval < 0) opcode = op_push16asi32;
+						else opcode = op_push16asu32;
+					}
+					break;
+				case op_push64as64:
+					if (min_len < 2) {
+						if (immval < 0) opcode = op_push8asi64;
+						else opcode = op_push8asu64;
+					}
+					else if (min_len < 3) {
+						if (immval < 0) opcode = op_push16asi64;
+						else opcode = op_push16asu64;
+					}
+					else if (min_len < 5) {
+						if (immval < 0) opcode = op_push32asi64;
+						else opcode = op_push32asu64;
+					}
+					break;
+				default:
+					fprintf(stderr, "error: invalid opcode for pseudo-op in \"%s\" line %d char %d\n",
+							parser->filename, parser->tline, parser->tch);
+					ret = 1;
+				}
+				if (ret) break;
+				parser->event.inst.opcode = opcode;
 			}
-			else if (parser->event.data.len == 2) {
-				sdt = SDT_A16;
-			}
-			else if (parser->event.data.len == 4) {
-				sdt = SDT_A32;
-			}
-			else if (parser->event.data.len == 8) {
-				sdt = SDT_A64;
-			}
-			else {
-				fprintf(stderr, "error: bad raw data size in \"%s\" line %d char %d\n",
-					parser->filename, parser->tline, parser->tch);
-				ret = 1;
-				break;
-			}
-		}
-		else { // Look up data type based on opcode
-			opcode = parser->event.inst.opcode;
-			sdt = imm_type_for_opcode(opcode);
-		}
-		int dt_size = sdt_size(sdt);
 
-		// Check literal immediate bounds
-		if (dt_size < 8 && symbol[0] != ':') {
-			int64_t minval, maxval;
-			sdt_min_max(sdt, &minval, &maxval);
-			if (immval < minval || immval > maxval) {
-				fprintf(stderr, "error: literal \"%s\" is out of bounds for type in \"%s\" line %d char %d\n",
-						symbol, parser->filename, parser->tline, parser->tch);
-				ret = 1;
-				break;
-			}
-		}
-
-		int imm_len = dt_size;
-		if (parser->ts == PTS_PIMM && symbol[0] != ':') {
-			// Compact pseudo-ops where possible
-			int min_len = min_bytes_for_val(immval);
-			switch (opcode) {
-			case op_push8as8:
-				// Already as compact as possible
-				break;
-			case op_push16as16:
-				if (min_len < 2) {
-					imm_len = 1;
-					if (immval < 0) opcode = op_push8asi16;
-					else opcode = op_push8asu16;
+			// Look up immediate type and size
+			int sdt;
+			if (parser->event.type == PET_DATA) {
+				// Raw data size determines immediate data type
+				// @todo: Could make cleaner with a function to look up data type for size
+				if (parser->event.data.len == 1) {
+					sdt = SDT_A8;
 				}
-				break;
-			case op_push32as32:
-				if (min_len < 2) {
-					imm_len = 1;
-					if (immval < 0) opcode = op_push8asi32;
-					else opcode = op_push8asu32;
+				else if (parser->event.data.len == 2) {
+					sdt = SDT_A16;
 				}
-				else if (min_len < 3) {
-					imm_len = 2;
-					if (immval < 0) opcode = op_push16asi32;
-					else opcode = op_push16asu32;
+				else if (parser->event.data.len == 4) {
+					sdt = SDT_A32;
 				}
-				break;
-			case op_push64as64:
-				if (min_len < 2) {
-					imm_len = 1;
-					if (immval < 0) opcode = op_push8asi64;
-					else opcode = op_push8asu64;
+				else if (parser->event.data.len == 8) {
+					sdt = SDT_A64;
 				}
-				else if (min_len < 3) {
-					imm_len = 2;
-					if (immval < 0) opcode = op_push16asi64;
-					else opcode = op_push16asu64;
-				}
-				else if (min_len < 5) {
-					imm_len = 4;
-					if (immval < 0) opcode = op_push32asi64;
-					else opcode = op_push32asu64;
-				}
-				break;
-			default:
-				fprintf(stderr, "error: invalid opcode for pseudo-op in \"%s\" line %d char %d\n",
+				else {
+					fprintf(stderr, "error: bad raw data size in \"%s\" line %d char %d\n",
 						parser->filename, parser->tline, parser->tch);
-				ret = 1;
+					ret = 1;
+					break;
+				}
 			}
-			if (ret) break;
-			parser->event.inst.opcode = opcode;
-		}
+			else { // Look up data type based on opcode
+				sdt = imm_type_for_opcode(parser->event.inst.opcode);
+			}
+			int dt_size = sdt_size(sdt);
 
-		// Transform literal value to byte array
-		if (parser->event.type == PET_DATA) {
-			u64_to_little8((uint64_t)immval, parser->event.data.raw);
+			// Check numeric literal immediate bounds
+			if (dt_size < 8) {
+				int64_t minval, maxval;
+				sdt_min_max(sdt, &minval, &maxval);
+				if (immval < minval || immval > maxval) {
+					fprintf(stderr, "error: literal \"%s\" is out of bounds for type in \"%s\" line %d char %d\n",
+							symbol, parser->filename, parser->tline, parser->tch);
+					ret = 1;
+					break;
+				}
+			}
+
+			// Transform literal value to byte array
+			// @todo: Make these cases more similar
+			if (parser->event.type == PET_DATA) {
+				u64_to_little8((uint64_t)immval, parser->event.data.raw);
+			}
 		}
-		else {
-			u64_to_little8((uint64_t)immval, parser->event.inst.imm);
-			parser->event.inst.imm_len = imm_len;
+		if (parser->event.type == PET_INST) {
+			// Emit instruction event with immediate
+			if (symbol == parser->token) { // No lookup was performed
+				parser->event.inst.imm = parser->token;
+				parser->token = NULL;
+			}
+			else { // Lookup was performed
+				parser->event.inst.imm = bstr_dup(symbol);
+			}
 		}
 
 		parser->ts = PTS_EOL; // Expect end of line
@@ -711,7 +585,7 @@ static int parser_finish_token(struct parser *parser)
 	//
 	case PTS_INCLUDE:
 		// Require include file name to be quoted
-		if (parser->ss != PSS_QUOTED) {
+		if (symbol[0] != '"') {
 			fprintf(stderr, "error: expected quoted filename in \"%s\" line %d char %d\n",
 				parser->filename, parser->tline, parser->tch);
 			ret = 1;
@@ -738,6 +612,7 @@ static int parser_finish_token(struct parser *parser)
 	return ret;
 }
 
+// Finishes the current line. Returns zero on success.
 static int parser_finish_line(struct parser *parser, struct parser_event *pe)
 {
 	if (parser->ts == PTS_EOL) { // Expected EOL
@@ -755,6 +630,13 @@ static int parser_finish_line(struct parser *parser, struct parser_event *pe)
 	}
 	return 0;
 }
+
+enum { // Parser syntax states
+	PSS_DEFAULT,
+	PSS_QUOTED,
+	PSS_ESCAPED,
+	PSS_COMMENT,
+};
 
 int parser_parse_byte(struct parser *parser, byte b, struct parser_event *pe)
 {
@@ -781,6 +663,12 @@ int parser_parse_byte(struct parser *parser, byte b, struct parser_event *pe)
 		return ret;
 	}
 
+	if (c == '\0') { // Null characters are not permitted in source for various reasons
+		fprintf(stderr, "error: null character in \"%s\" line %d char %d\n",
+			parser->filename, parser->line, parser->ch);
+		return 1;
+	}
+
 	// Process the decoded character
 	switch (parser->ss) {
 	case PSS_DEFAULT:
@@ -788,21 +676,12 @@ int parser_parse_byte(struct parser *parser, byte b, struct parser_event *pe)
 			ret = parser_finish_token(parser); // First finish any adjacent token
 			if (ret) break;
 			// Start new token
-			parser->token = bstr_alloc();
+			parser->token = bstr_dup((const char*)enc);
 			parser->tline = parser->line;
 			parser->tch = parser->ch;
 			parser->ss = PSS_QUOTED;
 		}
-		else if (isalnum(c) || c == '$' || c == '.' || c == '-' || c == '_' || c == '\'' ||
-			c == '\\' || c == ':' || c >= 0x80) { // These continue or start a token
-			if (parser->token == NULL) { // Start a new token
-				parser->token = bstr_alloc();
-				parser->tline = parser->line;
-				parser->tch = parser->ch;
-			}
-			parser->token = bstr_cat(parser->token, (const char*)enc);
-		}
-		else { // Anything else finishes a token
+		else if (isspace(c) || c == ';') { // These finish a token
 			ret = parser_finish_token(parser);
 			if (ret) break;
 			if (c == ';') { // Comments are introduced by ';'
@@ -812,44 +691,46 @@ int parser_parse_byte(struct parser *parser, byte b, struct parser_event *pe)
 			else if (c == '\n') { // Line end
 				ret = parser_finish_line(parser, pe);
 			}
-			else if (!isspace(c)) { // Everything else gets its own single-character token
+		}
+		else { // Anything else continues or starts a token
+			if (parser->token == NULL) { // Start a new token
 				parser->token = bstr_alloc();
 				parser->tline = parser->line;
 				parser->tch = parser->ch;
-				parser->token = bstr_cat(parser->token, (const char *)enc);
-				ret = parser_finish_token(parser);
 			}
+			parser->token = bstr_cat(parser->token, (const char*)enc);
 		}
 		break;
 
-	case PSS_QUOTED: // Character in quoted string
-		if (c == '"') { // Unescaped '"' ends quoted token
-			// Parse any escape sequences in parser->token
+	case PSS_QUOTED: // Character in string literal
+	case PSS_ESCAPED: // Escaped character in string literal
+		// Add character to token
+		parser->token = bstr_cat(parser->token, (const char*)enc);
+		if (c == '\n') { // Not even escaped newlines are allowed
+			fprintf(stderr, "error: newline in string literal in \"%s\" line %d char %d\n",
+				parser->filename, parser->tline, parser->tch);
+			ret = 1;
+		}
+		else if (parser->ss == PSS_ESCAPED) { // Escaped characters are not processed further
+			parser->ss = PSS_QUOTED;
+		}
+		else if (c == '"') { // Unescaped '"' ends quoted token
+			// Validate any escape sequences in string literal
 			char *unesc_token = bstr_alloc();
 			bool result = parse_string_lit(parser->token, &unesc_token);
+			bstr_free(unesc_token);
 			if (!result) {
 				fprintf(stderr, "error: invalid string literal in \"%s\" line %d char %d\n",
 					parser->filename, parser->tline, parser->tch);
 				ret = 1;
 				break;
 			}
-			bstr_free(parser->token);
-			parser->token = unesc_token;
 			ret = parser_finish_token(parser); // Finish token
 			parser->ss = PSS_DEFAULT;
 		}
-		else { // All else gets added to token
-			parser->token = bstr_cat(parser->token, (const char*)enc);
-			if (c == '\\') { // Backslash begins escape sequence
-				parser->ss = PSS_ESCAPED;
-			}
+		else if (c == '\\') { // Backslash begins escape sequence
+			parser->ss = PSS_ESCAPED;
 		}
-		break;
-
-	case PSS_ESCAPED: // Escaped character in quoted string
-		// Add character to current token
-		parser->token = bstr_cat(parser->token, (const char*)enc);
-		parser->ss = PSS_QUOTED;
 		break;
 
 	case PSS_COMMENT:

@@ -93,7 +93,7 @@ The Starch assembler supports several assembler commands which aid the developer
 
 ## Symbols
 
-As noted above, the `.define` assembler command can be used to define a symbolic constant. These constants are arbitrary text words which will be substituted into the input when used later preceded by a dollar sign ('$'). Symbolic constants can be used to define constant values as well as opcodes. Symbolic constants cannot be used to define label names. This may change in the future.
+As noted above, the `.define` assembler command can be used to define a symbolic constant. These constants are arbitrary text words which will be substituted into the input when used later preceded by a dollar sign ('$'). Symbolic constants can be used to define constant values as well as opcodes and labels.
 
 The following example defines and uses a symbolic constant:
 ```

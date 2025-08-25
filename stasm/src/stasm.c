@@ -5,6 +5,7 @@
 
 #include "bstr.h"
 #include "carg.h"
+#include "lits.h"
 #include "parser.h"
 #include "starch.h"
 #include "stub.h"
@@ -78,7 +79,9 @@ static void u64_to_little8(uint64_t val, uint8_t *data)
 	data[7] = val >> 56;
 }
 
+//
 // Include file link
+//
 struct inc_link {
 	FILE *file;
 	struct parser parser;
@@ -101,7 +104,9 @@ void inc_link_destroy(struct inc_link *link)
 	fclose(link->file);
 }
 
+//
 // Records the use of an undefined label
+//
 struct label_usage {
 	long foffset; // Offset of instruction in file
 	uint64_t addr; // Address of usage
@@ -137,8 +142,9 @@ static int apply_label_usage(FILE *outfile, struct label_usage *lu, uint64_t lab
 	// Get the immediate type
 	int sdt = imm_type_for_opcode(buff[0]);
 	if (sdt < 0) {
-		fprintf(stderr, "error: failed to get immediate type for opcode 0x%02x\n",
-			buff[0]);
+		const char *opname = name_for_opcode(buff[0]);
+		fprintf(stderr, "error: failed to get immediate type for opcode 0x%02x (%s)\n",
+			buff[0], opname ? opname : "unknown");
 		return 1;
 	}
 
@@ -204,7 +210,9 @@ static int apply_label_usage(FILE *outfile, struct label_usage *lu, uint64_t lab
 	return 0;
 }
 
+//
 // Label record
+//
 struct label_rec {
 	char *label; // B-string
 	uint64_t addr; // Only relevant if usages is NULL
@@ -324,7 +332,8 @@ int main(int argc, const char *argv[])
 	struct inc_link *inc_chain = (struct inc_link*)malloc(sizeof(struct inc_link));
 	inc_link_init(inc_chain, arg_src ? bstr_dup(arg_src) : NULL, infile);
 
-	// Initialize label definition list. @todo: Make a binary search tree for efficient lookup.
+	// Initialize label definition list.
+	// @todo: Make a binary search tree for efficient lookup.
 	struct label_rec *label_recs = NULL;
 
 	// Set up assembler state
@@ -418,75 +427,117 @@ int main(int argc, const char *argv[])
 
 			// Prepare bytes to write to output file
 			uint8_t buff[9]; // Maximum instruction length is 9
-			if (pe.inst.imm_len > sizeof(buff)) {
-				fprintf(stderr, "error: immediate length too long at %d bytes\n", pe.inst.imm_len);
-				error = 1;
-				break;
-			}
 			buff[0] = pe.inst.opcode;
 			memset(buff + 1, 0, sizeof(buff) - 1);
 
+			// Get the immediate type
+			int sdt = imm_type_for_opcode(pe.inst.opcode);
+			if (sdt < 0) {
+				const char *opname = name_for_opcode(pe.inst.opcode);
+				fprintf(stderr, "error: failed to get immediate types for opcode 0x%02x (%s)\n",
+					pe.inst.opcode, opname ? opname : "unknown");
+				error = 1;
+				break;
+			}
+			// Get the immediate size
+			int imm_bytes = sdt_size(sdt);
+
+			// Initialize potential label usage
 			struct label_usage *lu = NULL;
 			struct label_rec *rec = NULL;
 
-			if (pe.inst.imm_label == NULL) { // Numeric immediate
-				memcpy(buff + 1, pe.inst.imm, pe.inst.imm_len);
+			if (pe.inst.imm != NULL) { // There is an immediate value
+				if (sdt == SDT_VOID || imm_bytes == 0) { // Internal error
+					const char *opname = name_for_opcode(pe.inst.opcode);
+					fprintf(stderr, "error: unexpected immediate value for opcode 0x%02x (%s)\n",
+						pe.inst.opcode, opname ? opname : "unknown");
+					error = 1;
+					break;
+				}
+				if (pe.inst.imm[0] == '"') { // Quoted string immediate
+					// @todo: Support for operations that accept 64-bit values
+					const char *opname = name_for_opcode(pe.inst.opcode);
+					fprintf(stderr, "error: string literals not supported for opcode 0x%02x (%s)\n",
+						pe.inst.opcode, opname ? opname : "unknown");
+					error = 1;
+					break;
+				}
+				if (pe.inst.imm[0] == ':') { // Label immediate
+					// Get current file offset
+					long current_fo = ftell(outfile);
+					if (current_fo < 0) {
+						fprintf(stderr, "error: failed to get offset with error %d\n", errno);
+						error = 1;
+						break;
+					}
+					// Compute current address
+					uint64_t curr_addr = curr_sec.addr + current_fo - curr_sec_fo;
+
+					// Create a usage record for this label
+					lu = (struct label_usage*)malloc(sizeof(struct label_usage));
+					label_usage_init(lu, current_fo, curr_addr);
+
+					// Look up the label record
+					rec = get_rec_for_label(label_recs, pe.inst.imm);
+					if (rec == NULL) {
+						// Label has not yet been used or defined. Add new label record to list.
+						struct label_rec *next = (struct label_rec*)malloc(sizeof(struct label_rec));
+						label_rec_init(next, pe.inst.imm, 0, lu);
+						lu = NULL;
+						pe.inst.imm = NULL;
+						next->prev = label_recs;
+						label_recs = next;
+					}
+					else if (rec->usages) {
+						// Label has been used before but is not defined. Add label usage to list.
+						lu->prev = rec->usages;
+						rec->usages = lu;
+						lu = NULL;
+					}
+					// Otherwise the label is already defined
+				}
+				else { // Numeric literal
+					// Parse numeric literal
+					int64_t immval = 0;
+					bool success = parse_int(pe.inst.imm, &immval);
+					if (!success) {
+						fprintf(stderr, "error: failed to parse integer literal \"%s\" in \"%s\" line %d char %d\n",
+							pe.inst.imm, inc_chain->parser.filename, inc_chain->parser.tline, inc_chain->parser.tch);
+						error = 1;
+						break;
+					}
+
+					// Check numeric literal immediate bounds
+					if (imm_bytes < 8) {
+						int64_t minval, maxval;
+						sdt_min_max(sdt, &minval, &maxval);
+						if (immval < minval || immval > maxval) {
+							fprintf(stderr, "error: literal \"%s\" is out of bounds for type in \"%s\" line %d char %d\n",
+									pe.inst.imm, inc_chain->parser.filename, inc_chain->parser.tline, inc_chain->parser.tch);
+							error = 1;
+							break;
+						}
+					}
+
+					u64_to_little8((uint64_t)immval, buff + 1);
+				}
+
 			}
-			else { // Label immediate
-				// Get the immediate type
-				int sdt = imm_type_for_opcode(pe.inst.opcode);
-				if (sdt < 0) {
-					fprintf(stderr, "error: failed to get immediate types for opcode 0x%02x\n",
-						pe.inst.opcode);
-					error = 1;
-					break;
-				}
-				// Get the immediate size
-				int imm_bytes = sdt_size(sdt);
-				if (imm_bytes != pe.inst.imm_len) {
-					fprintf(stderr, "error: immediate length mismatch\n");
-					error = 1;
-					break;
-				}
-
-				// Get current file offset
-				long current_fo = ftell(outfile);
-				if (current_fo < 0) {
-					fprintf(stderr, "error: failed to get offset with error %d\n", errno);
-					error = 1;
-					break;
-				}
-				// Compute current address
-				uint64_t curr_addr = curr_sec.addr + current_fo - curr_sec_fo;
-
-				// Create a usage record for this label
-				lu = (struct label_usage*)malloc(sizeof(struct label_usage));
-				label_usage_init(lu, current_fo, curr_addr);
-
-				// Look up the label record
-				rec = get_rec_for_label(label_recs, pe.inst.imm_label);
-				if (rec == NULL) {
-					// Label has not yet been used. Add new label record to list.
-					struct label_rec *next = (struct label_rec*)malloc(sizeof(struct label_rec));
-					label_rec_init(next, pe.inst.imm_label, 0, lu);
-					lu = NULL;
-					pe.inst.imm_label = NULL;
-					next->prev = label_recs;
-					label_recs = next;
-				}
-				else if (rec->usages) {
-					// Label has been used before but is not defined. Add label usage to list.
-					lu->prev = rec->usages;
-					rec->usages = lu;
-					lu = NULL;
-				}
-				// Otherwise the label is already defined
+			else if (sdt != SDT_VOID || imm_bytes != 0) { // Internal error
+				const char *opname = name_for_opcode(pe.inst.opcode);
+				fprintf(stderr, "error: expected immediate value for opcode 0x%02x (%s)\n",
+					pe.inst.opcode, opname ? opname : "unknown");
+				error = 1;
+				break;
 			}
 
 			// Write instruction to output file
-			size_t written = fwrite(buff, 1, pe.inst.imm_len + 1, outfile);
-			if (written != (size_t)pe.inst.imm_len + 1) {
+			size_t written = fwrite(buff, 1, imm_bytes + 1, outfile);
+			if (written != (size_t)imm_bytes + 1) {
 				fprintf(stderr, "error: failed to write to output file %s, errno %d\n", arg_output, errno);
+				if (lu) {
+					free(lu);
+				}
 				error = 1;
 				break;
 			}

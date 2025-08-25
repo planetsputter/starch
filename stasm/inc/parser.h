@@ -25,13 +25,11 @@ struct parser_event {
 	enum parser_event_type type;
 	union {
 		struct { // For PET_INST
-			uint8_t opcode; // Starch opcode, or negative for empty
-			uint8_t imm_len; // Length of immediate data
-			uint8_t imm[8]; // Immediate data
-			char *imm_label; // B-string, immediate label or NULL
+			int opcode; // Starch opcode
+			char *imm; // B-string immediate value, or NULL for none
 		} inst;
 		struct { // For PET_DATA
-			uint8_t len;
+			int len;
 			uint8_t raw[8];
 		} data;
 		struct { // For PET_SECTION

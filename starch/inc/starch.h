@@ -381,8 +381,12 @@ enum {
 	STINT_NUM_INTS,
 };
 
-// Returns a string name for the given interrupt number
+// Returns the name of the given interrupt number, or NULL for an invalid interrupt number
 const char *name_for_stint(int);
+
+// Returns the interrupt number for the given interrupt name (e.g. "STINT_NONE")
+// or negative on failure.
+int stint_for_name(const char*);
 
 //
 // Core memory map
