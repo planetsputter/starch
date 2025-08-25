@@ -1,5 +1,5 @@
-README.md
-=========
+Starch (Stack Architecture)
+===========================
 
 Starch is a theoretical stack-based computer architecture.
 
@@ -21,3 +21,8 @@ How to Build
 ------------
 
 Simply run `./build.py`.
+
+Name
+----
+
+Starch probably stands for "Stack Architecture" but might also stand for "Smart Things and Really Cool Hacks".
