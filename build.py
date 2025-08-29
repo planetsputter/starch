@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 
 import argparse, glob, multiprocessing, pathlib, re, shlex, shutil, subprocess, sys
 

@@ -248,7 +248,7 @@ int stub_init(FILE *file, int maxnsec)
 	if (fflush(file) || ftruncate(fileno(file), 0)) {
 		return STUB_ERROR_WRITE_FAILURE;
 	}
-	FILE *reopened_file = freopen(NULL, "wb+", file);
+	FILE *reopened_file = freopen(NULL, "w+b", file);
 	if (!reopened_file) {
 		return STUB_ERROR_WRITE_FAILURE;
 	}
@@ -314,6 +314,12 @@ int stub_save_section(FILE *file, int index, struct stub_sec *sec)
 	uint8_t temp_array[STUB_SECTION_HEADER_SIZE];
 	if (index == 0) {
 		prev_efo = STUB_HEADER_SIZE + 8 + STUB_SECTION_HEADER_SIZE * maxnsec;
+
+		// @todo: We should already be here after getting section counts.
+		// Why is this necessary on Mac OSX?
+		if (fseek(file, STUB_HEADER_SIZE + 8, SEEK_SET)) {
+			return STUB_ERROR_SEEK_ERROR;
+		}
 	}
 	else {
 		// Seek to eight bytes before the header for the given section
@@ -341,6 +347,11 @@ int stub_save_section(FILE *file, int index, struct stub_sec *sec)
 	u64_to_little8(prev_efo, temp_array + 9);
 	// The efo of the current section is the orginal file position
 	u64_to_little8((uint64_t)fpos, temp_array + 17);
+
+	// @todo: We should already be here. Why is this necessary on Mac OSX?
+	if (fseek(file, STUB_HEADER_SIZE + 8 + STUB_SECTION_HEADER_SIZE * index, SEEK_SET)) {
+		return STUB_ERROR_SEEK_ERROR;
+	}
 
 	// Write the section header
 	size_t bc = fwrite(temp_array, 1, STUB_SECTION_HEADER_SIZE, file);

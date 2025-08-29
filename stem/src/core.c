@@ -32,15 +32,37 @@ void core_destroy(struct core *core)
 
 // Read buflen random bytes into the buffer at buf.
 // Returns zero on success, negative on failure.
-static int core_get_random(void *buf, int buflen)
+static int core_get_random(void *buf, size_t buflen)
 {
-	int count;
-	for (count = 0; count < buflen; ) {
-		int ret = getrandom((uint8_t*)buf + count, buflen - count, 0);
-		if (ret < 0) {
+	int ret;
+
+	static int inited;
+	if (!inited) {
+		// Initialize the random number generator with entropy
+		enum { ENTROPY_SIZE = 128 };
+		char entropy[ENTROPY_SIZE];
+		ret = getentropy(entropy, ENTROPY_SIZE);
+		if (ret != 0) {
 			return ret;
 		}
-		count += ret;
+		initstate(0, entropy, ENTROPY_SIZE);
+		inited = 1;
+	}
+
+	size_t i = 0;
+	if (buflen >= sizeof(long)) {
+		// Copy random data one long int at a time
+		for (; i <= buflen - sizeof(long); i += sizeof(long)) {
+			*(long*)((uint8_t*)buf + i) = random();
+		}
+	}
+	if (i < buflen) {
+		// Copy any remaining needed data a byte at a time
+		long r = random();
+		do {
+			*((uint8_t*)buf + i++) = r;
+			r >>= 8;
+		} while (i < buflen);
 	}
 	return 0;
 }

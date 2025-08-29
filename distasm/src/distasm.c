@@ -1,5 +1,7 @@
 // distasm.c
 
+#include <inttypes.h>
+
 #include "starch.h"
 #include "carg.h"
 #include "stub.h"
@@ -41,8 +43,9 @@ struct carg_desc arg_descs[] = {
 };
 
 bool non_help_arg = false;
-void detect_non_help_arg(struct carg_desc *desc, const char*)
+void detect_non_help_arg(struct carg_desc *desc, const char *arg)
 {
+	(void)arg;
 	if (desc->value != &arg_help) {
 		non_help_arg = true;
 	}
@@ -128,7 +131,7 @@ int main(int argc, const char *argv[])
 		}
 
 		// Print section description
-		ret = fprintf(outfile, ".section 0x%lx\n", sec.addr);
+		ret = fprintf(outfile, ".section %#"PRIx64"\n", sec.addr);
 		if (ret < 0) {
 			fprintf(stderr, "error: failed to write to \"%s\"\n", arg_output ? arg_output : "stdout");
 			ret = 1;
@@ -204,22 +207,22 @@ int main(int argc, const char *argv[])
 			case SDT_U32:
 			case SDT_A64:
 			case SDT_U64:
-				ret = fprintf(outfile, " 0x%lx", (uint64_t)val);
+				ret = fprintf(outfile, " %#"PRIx64, (uint64_t)val);
 				break;
 			case SDT_I8:
 				val = (int8_t)val;
-				ret = fprintf(outfile, " %s0x%lx", val < 0 ? "-" : "", val < 0 ? -val : val);
+				ret = fprintf(outfile, " %s%#"PRIx64, val < 0 ? "-" : "", val < 0 ? -val : val);
 				break;
 			case SDT_I16:
 				val = (int16_t)val;
-				ret = fprintf(outfile, " %s0x%lx", val < 0 ? "-" : "", val < 0 ? -val : val);
+				ret = fprintf(outfile, " %s%#"PRIx64, val < 0 ? "-" : "", val < 0 ? -val : val);
 				break;
 			case SDT_I32:
 				val = (int32_t)val;
-				ret = fprintf(outfile, " %s0x%lx", val < 0 ? "-" : "", val < 0 ? -val : val);
+				ret = fprintf(outfile, " %s%#"PRIx64, val < 0 ? "-" : "", val < 0 ? -val : val);
 				break;
 			case SDT_I64:
-				ret = fprintf(outfile, " %s0x%lx", val < 0 ? "-" : "", val < 0 ? -val : val);
+				ret = fprintf(outfile, " %s%#"PRIx64, val < 0 ? "-" : "", val < 0 ? -val : val);
 				break;
 			}
 			if (ret >= 0) {

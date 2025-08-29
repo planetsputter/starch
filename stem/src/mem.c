@@ -403,7 +403,7 @@ static int print_hex_iter_func(struct mem_node *node, struct iter_params *params
 		}
 
 		// Print row address
-		ret = fprintf(hex_file, "%016lx:", addr);
+		ret = fprintf(hex_file, "%016"PRIx64":", addr);
 		if (ret < 0) break;
 		// Print row data
 		for (i = 0; i < 16; i++) {

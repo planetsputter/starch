@@ -56,8 +56,9 @@ struct carg_desc arg_descs[] = {
 };
 
 bool non_help_arg = false;
-void detect_non_help_arg(struct carg_desc *desc, const char*)
+void detect_non_help_arg(struct carg_desc *desc, const char *arg)
 {
+	(void)arg;
 	if (desc->value != &arg_help) {
 		non_help_arg = true;
 	}

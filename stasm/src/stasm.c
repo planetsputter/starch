@@ -58,8 +58,9 @@ struct carg_desc arg_descs[] = {
 };
 
 bool non_help_arg = false;
-void detect_non_help_arg(struct carg_desc *desc, const char*)
+void detect_non_help_arg(struct carg_desc *desc, const char *arg)
 {
+	(void)arg;
 	if (desc->value != &arg_help) {
 		non_help_arg = true;
 	}
@@ -308,7 +309,7 @@ int main(int argc, const char *argv[])
 	}
 
 	// Open output file
-	FILE *outfile = fopen(arg_output, "wb");
+	FILE *outfile = fopen(arg_output, "w+b");
 	if (!outfile) {
 		if (infile != stdin) {
 			fclose(infile);

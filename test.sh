@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/usr/bin/env bash
 
 # Run trap on error, even within functions.
 # Expansion of undefined variables is an error.

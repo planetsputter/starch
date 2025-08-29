@@ -15,7 +15,7 @@ struct autosym {
 	const char *name;
 	uint64_t val;
 };
-struct autosym autosyms[] = {
+static struct autosym autosyms[] = {
 	// IO addresses
 	{ "BEGIN_IO_ADDR", BEGIN_IO_ADDR },
 	{ "IO_STDIN_ADDR", IO_STDIN_ADDR },
@@ -39,7 +39,7 @@ static struct autosym *get_autosym(const char *name)
 	return ret;
 }
 
-// Returns the nibble value of the given hexzdecimal character
+// Returns the nibble value of the given hexadecimal character
 // Write the 64-bit unsigned value to eight bytes in little-endian order
 static void u64_to_little8(uint64_t val, uint8_t *data)
 {
@@ -119,10 +119,10 @@ int parser_event_print(const struct parser_event *pe, FILE *outfile)
 		}
 	}	break;
 	case PET_DATA:
-		fprintf(outfile, ".data%d 0x%lx\n", pe->data.len, little8_to_u64(pe->data.raw));
+		fprintf(outfile, ".data%d %#"PRIx64"\n", pe->data.len, little8_to_u64(pe->data.raw));
 		break;
 	case PET_SECTION:
-		fprintf(outfile, ".section 0x%lx\n", pe->sec.addr);
+		fprintf(outfile, ".section %#"PRIx64"\n", pe->sec.addr);
 		break;
 	case PET_INCLUDE:
 		fprintf(outfile, ".include \"%s\"\n", pe->filename);
@@ -233,7 +233,7 @@ static int parser_finish_token(struct parser *parser)
 						// Look up other automatic symbols
 						struct autosym *as = get_autosym(parser->token + 1);
 						if (as) {
-							sprintf(symbuf, "%lu", as->val);
+							sprintf(symbuf, "%#"PRIx64, as->val);
 							symbol = bstr_dup(symbuf);
 						}
 					}
