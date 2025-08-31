@@ -95,11 +95,11 @@ int main()
 	smap_destroy(&smap);
 	assert(smap.root == NULL);
 	assert(smap_get(&smap, "testkey") == NULL);
-	smap_init(&smap, bstr_free);
+	smap_init(&smap, bfree);
 
 	// Test with B-string
 	assert(smap_get(&smap, "testkey") == NULL);
-	smap_insert(&smap, bstr_dup("testkey"), bstr_dup("testval"));
+	smap_insert(&smap, bstrdup("testkey"), bstrdup("testval"));
 	assert(strcmp(smap_get(&smap, "testkey"), "testval") == 0);
 	smap_destroy(&smap);
 	assert(smap_get(&smap, "testkey") == NULL);

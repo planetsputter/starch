@@ -4,53 +4,57 @@
 
 #include <stdlib.h>
 
+// B-string allocation increment
 enum { BSTR_ALLOC_INC = 64 };
 
 struct bstr_hdr {
-	int size, len;
+	size_t size, len;
 };
 
-char *bstr_alloc(void)
+bchar *balloc(void)
 {
+	// Allocate a B-string with the minimum allocation size
 	struct bstr_hdr *h = malloc(sizeof(struct bstr_hdr) + BSTR_ALLOC_INC);
 	h->size = BSTR_ALLOC_INC;
 	h->len = 0;
-	char *s = (char*)(h + 1);
+	bchar *s = (bchar*)(h + 1);
 	s[0] = '\0';
 	return s;
 }
 
-char *bstr_dup(const char *cstr)
+bchar *bstrdup(const char *cstr)
 {
-	return bstr_cat(bstr_alloc(), cstr);
+	return bstrcat(balloc(), cstr);
 }
 
-void bstr_free(char *s)
+void bfree(bchar *s)
 {
 	if (s) {
 		free(s - sizeof(struct bstr_hdr));
 	}
 }
 
-int bstr_len(char *s)
+size_t bstrlen(bchar *s)
 {
-	return ((struct bstr_hdr*)(s - sizeof(struct bstr_hdr)))->len;
+	return ((struct bstr_hdr*)s - 1)->len;
 }
 
+// Increase the size of the B-string beginning with the given header by the minimum increment.
+// Returns a pointer to the header of the possibly reallocated B-string.
 static struct bstr_hdr *bstr_inc_size(struct bstr_hdr *h)
 {
 	h->size += BSTR_ALLOC_INC;
 	return (struct bstr_hdr*)realloc(h, sizeof(struct bstr_hdr) + h->size);
 }
 
-char *bstr_cat(char *dest, const char *src)
+bchar *bstrcat(bchar *dest, const char *src)
 {
-	struct bstr_hdr *h = (struct bstr_hdr*)(dest - sizeof(struct bstr_hdr));
-	int i;
-	for (i = h->len; 1; i++, src++) {
+	struct bstr_hdr *h = (struct bstr_hdr*)dest - 1;
+	size_t i;
+	for (i = h->len; ; i++, src++) {
 		if (i >= h->size) {
 			h = bstr_inc_size(h);
-			dest = (char*)(h + 1);
+			dest = (bchar*)(h + 1);
 		}
 		dest[i] = *src;
 		if (*src == '\0') break;
@@ -59,13 +63,13 @@ char *bstr_cat(char *dest, const char *src)
 	return dest;
 }
 
-char *bstr_append(char *dest, char c)
+bchar *bstr_append(bchar *dest, char c)
 {
-	struct bstr_hdr *h = (struct bstr_hdr*)(dest - sizeof(struct bstr_hdr));
+	struct bstr_hdr *h = (struct bstr_hdr*)dest - 1;
 	dest[h->len++] = c;
 	if (h->len >= h->size) {
 		h = bstr_inc_size(h);
-		dest = (char*)(h + 1);
+		dest = (bchar*)(h + 1);
 	}
 	dest[h->len] = '\0';
 	return dest;

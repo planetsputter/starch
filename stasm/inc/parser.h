@@ -26,7 +26,7 @@ struct parser_event {
 	union {
 		struct { // For PET_INST
 			int opcode; // Starch opcode
-			char *imm; // B-string immediate value, or NULL for none
+			bchar *imm; // B-string immediate value, or NULL for none
 		} inst;
 		struct { // For PET_DATA
 			int len;
@@ -36,8 +36,8 @@ struct parser_event {
 			uint64_t addr;
 			uint8_t flags;
 		} sec;
-		char *filename; // B-string, for PET_INCLUDE
-		char *label; // B-string, for PET_LABEL
+		bchar *filename; // B-string, for PET_INCLUDE
+		bchar *label; // B-string, for PET_LABEL
 	};
 };
 
@@ -52,7 +52,7 @@ int parser_event_print(const struct parser_event*, FILE*);
 
 // Structure for parsing a starch assembly file
 struct parser {
-	char *filename; // B-string filename, for error messages
+	bchar *filename; // B-string filename, for error messages
 	struct utf8_decoder decoder;
 	uint8_t ss, ts; // Syntax state, token state
 	int line, ch, tline, tch; // Current and token line and char
@@ -63,7 +63,7 @@ struct parser {
 };
 
 // Initializes the parser, taking ownership of the given B-string filename
-void parser_init(struct parser*, char *filename);
+void parser_init(struct parser*, bchar *filename);
 
 // Destroys the parser
 void parser_destroy(struct parser*);

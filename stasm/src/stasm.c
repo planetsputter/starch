@@ -91,7 +91,7 @@ struct inc_link {
 
 // Initializes the given link, taking ownership of the given filename B-string.
 // Also takes ownership of the given file, closing it when the object is destroyed.
-void inc_link_init(struct inc_link *link, char *filename, FILE *file)
+void inc_link_init(struct inc_link *link, bchar *filename, FILE *file)
 {
 	link->file = file;
 	parser_init(&link->parser, filename);
@@ -215,7 +215,7 @@ static int apply_label_usage(FILE *outfile, struct label_usage *lu, uint64_t lab
 // Label record
 //
 struct label_rec {
-	char *label; // B-string
+	bchar *label; // B-string
 	uint64_t addr; // Only relevant if usages is NULL
 	// Track usages until label is defined. Label is defined if this is NULL.
 	struct label_usage *usages;
@@ -223,7 +223,7 @@ struct label_rec {
 };
 
 // Initializes the given label record, taking ownership of the given label B-string
-static void label_rec_init(struct label_rec *rec, char *label, uint64_t addr, struct label_usage *usages)
+static void label_rec_init(struct label_rec *rec, bchar *label, uint64_t addr, struct label_usage *usages)
 {
 	rec->label = label;
 	rec->addr = addr;
@@ -234,7 +234,7 @@ static void label_rec_init(struct label_rec *rec, char *label, uint64_t addr, st
 // Destroys the given label record
 static void label_rec_destroy(struct label_rec *rec)
 {
-	bstr_free(rec->label);
+	bfree(rec->label);
 	rec->label = NULL;
 	for (struct label_usage *usage = rec->usages; usage; ) {
 		struct label_usage *prev = usage->prev;
@@ -331,7 +331,7 @@ int main(int argc, const char *argv[])
 
 	// Create include chain
 	struct inc_link *inc_chain = (struct inc_link*)malloc(sizeof(struct inc_link));
-	inc_link_init(inc_chain, arg_src ? bstr_dup(arg_src) : NULL, infile);
+	inc_link_init(inc_chain, arg_src ? bstrdup(arg_src) : NULL, infile);
 
 	// Initialize label definition list.
 	// @todo: Make a binary search tree for efficient lookup.

@@ -84,18 +84,18 @@ void parser_event_destroy(struct parser_event *pe)
 	switch (pe->type) {
 	case PET_INST:
 		if (pe->inst.imm) {
-			bstr_free(pe->inst.imm);
+			bfree(pe->inst.imm);
 			pe->inst.imm = NULL;
 		}
 		break;
 
 	case PET_INCLUDE:
-		bstr_free(pe->filename);
+		bfree(pe->filename);
 		pe->filename = NULL;
 		break;
 	
 	case PET_LABEL:
-		bstr_free(pe->label);
+		bfree(pe->label);
 		pe->label = NULL;
 		break;
 
@@ -136,34 +136,34 @@ int parser_event_print(const struct parser_event *pe, FILE *outfile)
 	return ferror(outfile);
 }
 
-void parser_init(struct parser *parser, char *filename)
+void parser_init(struct parser *parser, bchar *filename)
 {
 	memset(parser, 0, sizeof(struct parser));
 	if (filename) {
 		parser->filename = filename;
 	}
 	else {
-		parser->filename = bstr_dup("stdin");
+		parser->filename = bstrdup("stdin");
 	}
 	utf8_decoder_init(&parser->decoder);
 	parser->line = 1;
 	parser->ch = 1;
 	parser_event_init(&parser->event);
-	smap_init(&parser->defs, bstr_free);
+	smap_init(&parser->defs, bfree);
 }
 
 void parser_destroy(struct parser *parser)
 {
 	if (parser->filename) {
-		bstr_free(parser->filename);
+		bfree(parser->filename);
 		parser->filename = NULL;
 	}
 	if (parser->token) {
-		bstr_free(parser->token);
+		bfree(parser->token);
 		parser->token = NULL;
 	}
 	if (parser->defkey) {
-		bstr_free(parser->defkey);
+		bfree(parser->defkey);
 		parser->defkey = NULL;
 	}
 	smap_destroy(&parser->defs);
@@ -218,7 +218,7 @@ static int parser_finish_token(struct parser *parser)
 						int opcode = opcode_for_name(symbuf);
 						if (opcode >= 0) {
 							sprintf(symbuf, "%d", opcode);
-							symbol = bstr_dup(symbuf);
+							symbol = bstrdup(symbuf);
 						}
 					}
 				}
@@ -227,19 +227,19 @@ static int parser_finish_token(struct parser *parser)
 					int stint = stint_for_name(parser->token + 1);
 					if (stint >= 0) { // Interrupt name
 						sprintf(symbuf, "%d", stint);
-						symbol = bstr_dup(symbuf);
+						symbol = bstrdup(symbuf);
 					}
 					else {
 						// Look up other automatic symbols
 						struct autosym *as = get_autosym(parser->token + 1);
 						if (as) {
 							sprintf(symbuf, "%#"PRIx64, as->val);
-							symbol = bstr_dup(symbuf);
+							symbol = bstrdup(symbuf);
 						}
 					}
 				}
 				if (symbol) { // Found a matching autosymbol
-					smap_insert(&parser->defs, bstr_dup(parser->token + 1), symbol);
+					smap_insert(&parser->defs, bstrdup(parser->token + 1), symbol);
 				}
 				else {
 					fprintf(stderr, "error: undefined symbol \"%s\" in \"%s\" line %d char %d\n",
@@ -309,7 +309,7 @@ static int parser_finish_token(struct parser *parser)
 					parser->token = NULL;
 				}
 				else { // Lookup was performed
-					parser->event.label = bstr_dup(symbol);
+					parser->event.label = bstrdup(symbol);
 				}
 			}
 			parser->ts = PTS_EOL; // Expect end of line
@@ -517,7 +517,7 @@ static int parser_finish_token(struct parser *parser)
 				parser->token = NULL;
 			}
 			else { // Lookup was performed
-				parser->event.inst.imm = bstr_dup(symbol);
+				parser->event.inst.imm = bstrdup(symbol);
 			}
 		}
 
@@ -542,7 +542,7 @@ static int parser_finish_token(struct parser *parser)
 			parser->token = NULL;
 		}
 		else { // Lookup was performed
-			parser->defkey = bstr_dup(symbol);
+			parser->defkey = bstrdup(symbol);
 		}
 		parser->ts = PTS_DEF_VAL;
 		break;
@@ -551,7 +551,7 @@ static int parser_finish_token(struct parser *parser)
 			parser->token = NULL;
 		}
 		else { // Lookup was performed
-			symbol = bstr_dup(symbol);
+			symbol = bstrdup(symbol);
 		}
 		// smap takes ownership of the strings
 		smap_insert(&parser->defs, parser->defkey, symbol);
@@ -606,7 +606,7 @@ static int parser_finish_token(struct parser *parser)
 	}
 
 	if (parser->token) {
-		bstr_free(parser->token);
+		bfree(parser->token);
 		parser->token = NULL;
 	}
 	return ret;
@@ -676,7 +676,7 @@ int parser_parse_byte(struct parser *parser, byte b, struct parser_event *pe)
 			ret = parser_finish_token(parser); // First finish any adjacent token
 			if (ret) break;
 			// Start new token
-			parser->token = bstr_dup((const char*)enc);
+			parser->token = bstrdup((const char*)enc);
 			parser->tline = parser->line;
 			parser->tch = parser->ch;
 			parser->ss = PSS_QUOTED;
@@ -694,18 +694,18 @@ int parser_parse_byte(struct parser *parser, byte b, struct parser_event *pe)
 		}
 		else { // Anything else continues or starts a token
 			if (parser->token == NULL) { // Start a new token
-				parser->token = bstr_alloc();
+				parser->token = balloc();
 				parser->tline = parser->line;
 				parser->tch = parser->ch;
 			}
-			parser->token = bstr_cat(parser->token, (const char*)enc);
+			parser->token = bstrcat(parser->token, (const char*)enc);
 		}
 		break;
 
 	case PSS_QUOTED: // Character in string literal
 	case PSS_ESCAPED: // Escaped character in string literal
 		// Add character to token
-		parser->token = bstr_cat(parser->token, (const char*)enc);
+		parser->token = bstrcat(parser->token, (const char*)enc);
 		if (c == '\n') { // Not even escaped newlines are allowed
 			fprintf(stderr, "error: newline in string literal in \"%s\" line %d char %d\n",
 				parser->filename, parser->tline, parser->tch);
@@ -716,9 +716,9 @@ int parser_parse_byte(struct parser *parser, byte b, struct parser_event *pe)
 		}
 		else if (c == '"') { // Unescaped '"' ends quoted token
 			// Validate any escape sequences in string literal
-			char *unesc_token = bstr_alloc();
+			char *unesc_token = balloc();
 			bool result = parse_string_lit(parser->token, &unesc_token);
-			bstr_free(unesc_token);
+			bfree(unesc_token);
 			if (!result) {
 				fprintf(stderr, "error: invalid string literal in \"%s\" line %d char %d\n",
 					parser->filename, parser->tline, parser->tch);

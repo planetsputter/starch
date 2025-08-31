@@ -5,7 +5,6 @@
 #include <ctype.h>
 #include <stddef.h>
 
-#include "bstr.h"
 #include "lits.h"
 
 static char nibble_for_hex(char hex)
@@ -66,7 +65,7 @@ const char *parse_char_lit(const char *str, char *val)
 	return str;
 }
 
-bool parse_string_lit(const char *str, char **bdest)
+bool parse_string_lit(const char *str, bchar **dest)
 {
 	// Literal must start with '"'
 	if (*str++ != '"') return false;
@@ -75,7 +74,7 @@ bool parse_string_lit(const char *str, char **bdest)
 	for (; *str && *str != '"'; ) {
 		str = parse_char_lit(str, &cval);
 		if (str) { // Valid unescape
-			*bdest = bstr_append(*bdest, cval);
+			*dest = bstr_append(*dest, cval);
 		}
 		else {
 			break;
