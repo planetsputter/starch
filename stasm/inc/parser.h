@@ -18,6 +18,7 @@ enum parser_event_type {
 	PET_SECTION, // Begin new section
 	PET_INCLUDE, // Include a file
 	PET_LABEL, // A label
+	PET_STRINGS, // Emit string data
 };
 
 // Structure representing an event emitted by the parser

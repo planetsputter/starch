@@ -28,13 +28,14 @@ Example:
 
 ### Statements
 
-Statements consist of an opcode or pseudo-op followed by an optional argument. Whether or not the argument is present depends on the opcode. The argument may be an integer literal or a label usage. The label usage must start with a colon (':'). Typical C-style syntax for integer literals is supported.
+Statements consist of an opcode or pseudo-op followed by an optional argument. Whether or not the argument is present depends on the opcode. The argument may be an integer or string literal or a label usage, again depending on the opcode. The label usage must start with a colon (':'). Typical C-style syntax for integer literals is supported.
 
 Example:
 ```
 push8asu64 0
 push16asu64 0x100
 add64
+push64as64 "string literal"
 call :some_function
 ```
 For a full list of Starch opcodes, see [../../starch/doc/starch-desc.md](../../starch/doc/starch-desc.md).
@@ -90,6 +91,7 @@ The Starch assembler supports several assembler commands which aid the developer
 | .data16 \<value\> | Inserts the given value into the output as a 16-bit integer. |
 | .data32 \<value\> | Inserts the given value into the output as a 32-bit integer. |
 | .data64 \<value\> | Inserts the given value into the output as a 64-bit integer. |
+| .strings | Inserts data for all unemitted string literals at the current position. If string literals are used, this command must be appear in the assembly source after all string literal usages. |
 
 ## Symbols
 

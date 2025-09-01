@@ -215,7 +215,8 @@ static int apply_label_usage(FILE *outfile, struct label_usage *lu, uint64_t lab
 // Label record
 //
 struct label_rec {
-	bchar *label; // B-string
+	bool string_lit; // Whether this label is a string literal
+	bchar *label; // B-string, either label or string literal contents
 	uint64_t addr; // Only relevant if usages is NULL
 	// Track usages until label is defined. Label is defined if this is NULL.
 	struct label_usage *usages;
@@ -223,8 +224,9 @@ struct label_rec {
 };
 
 // Initializes the given label record, taking ownership of the given label B-string
-static void label_rec_init(struct label_rec *rec, bchar *label, uint64_t addr, struct label_usage *usages)
+static void label_rec_init(struct label_rec *rec, bool string_lit, bchar *label, uint64_t addr, struct label_usage *usages)
 {
+	rec->string_lit = string_lit;
 	rec->label = label;
 	rec->addr = addr;
 	rec->usages = usages;
@@ -244,11 +246,11 @@ static void label_rec_destroy(struct label_rec *rec)
 	rec->usages = NULL;
 }
 
-// Look up the label record for the given label name
-static struct label_rec *get_rec_for_label(struct label_rec *rec, const char *label)
+// Look up the label record for the given B-string label name or string literal
+static struct label_rec *get_rec_for_label(struct label_rec *rec, bool string_lit, const bchar *label)
 {
 	for (; rec; rec = rec->prev) {
-		if (strcmp(rec->label, label) == 0) {
+		if (rec->string_lit == string_lit && bstrcmpb(rec->label, label) == 0) {
 			return rec;
 		}
 	}
@@ -331,7 +333,7 @@ int main(int argc, const char *argv[])
 
 	// Create include chain
 	struct inc_link *inc_chain = (struct inc_link*)malloc(sizeof(struct inc_link));
-	inc_link_init(inc_chain, arg_src ? bstrdup(arg_src) : NULL, infile);
+	inc_link_init(inc_chain, arg_src ? bstrdupc(arg_src) : NULL, infile);
 
 	// Initialize label definition list.
 	// @todo: Make a binary search tree for efficient lookup.
@@ -455,15 +457,7 @@ int main(int argc, const char *argv[])
 					error = 1;
 					break;
 				}
-				if (pe.inst.imm[0] == '"') { // Quoted string immediate
-					// @todo: Support for operations that accept 64-bit values
-					const char *opname = name_for_opcode(pe.inst.opcode);
-					fprintf(stderr, "error: string literals not supported for opcode 0x%02x (%s)\n",
-						pe.inst.opcode, opname ? opname : "unknown");
-					error = 1;
-					break;
-				}
-				if (pe.inst.imm[0] == ':') { // Label immediate
+				if (pe.inst.imm[0] == ':' || pe.inst.imm[0] == '"') { // Label or string literal immediate
 					// Get current file offset
 					long current_fo = ftell(outfile);
 					if (current_fo < 0) {
@@ -479,11 +473,25 @@ int main(int argc, const char *argv[])
 					label_usage_init(lu, current_fo, curr_addr);
 
 					// Look up the label record
-					rec = get_rec_for_label(label_recs, pe.inst.imm);
+					bool string_lit = pe.inst.imm[0] == '"';
+					if (string_lit) {
+						// Parse and store string literal contents, not representation
+						bchar *contents = balloc();
+						bool parse_ret = parse_string_lit(pe.inst.imm, &contents);
+						if (!parse_ret) { // Internal error, this should have been checked by parser
+							bfree(contents);
+							fprintf(stderr, "error: failed to parse string literal\n");
+							error = 1;
+							break;
+						}
+						bfree(pe.inst.imm);
+						pe.inst.imm = contents;
+					}
+					rec = get_rec_for_label(label_recs, string_lit, pe.inst.imm);
 					if (rec == NULL) {
 						// Label has not yet been used or defined. Add new label record to list.
 						struct label_rec *next = (struct label_rec*)malloc(sizeof(struct label_rec));
-						label_rec_init(next, pe.inst.imm, 0, lu);
+						label_rec_init(next, string_lit, pe.inst.imm, 0, lu);
 						lu = NULL;
 						pe.inst.imm = NULL;
 						next->prev = label_recs;
@@ -522,7 +530,6 @@ int main(int argc, const char *argv[])
 
 					u64_to_little8((uint64_t)immval, buff + 1);
 				}
-
 			}
 			else if (sdt != SDT_VOID || imm_bytes != 0) { // Internal error
 				const char *opname = name_for_opcode(pe.inst.opcode);
@@ -615,11 +622,11 @@ int main(int argc, const char *argv[])
 			uint64_t addr = fpos - curr_sec_fo + curr_sec.addr;
 
 			// Look up any existing label record
-			struct label_rec *rec = get_rec_for_label(label_recs, pe.label);
+			struct label_rec *rec = get_rec_for_label(label_recs, false, pe.label);
 			if (!rec) {
 				// Label has not been used before. Add new label record to list.
 				struct label_rec *next = (struct label_rec*)malloc(sizeof(struct label_rec));
-				label_rec_init(next, pe.label, addr, NULL);
+				label_rec_init(next, false, pe.label, addr, NULL);
 				pe.label = NULL;
 				next->prev = label_recs;
 				label_recs = next;
@@ -648,12 +655,87 @@ int main(int argc, const char *argv[])
 				rec->usages = lu;
 
 				// Seek back to the original position
-				error = fseek(outfile, fpos, SEEK_SET);
-				if (error) {
+				int seek_error = fseek(outfile, fpos, SEEK_SET);
+				if (seek_error) {
 					fprintf(stderr, "error: failed to seek in output file \"%s\", errno %d\n", arg_output, errno);
+					if (error == 0) error = seek_error;
 				}
 			}
 		}	break;
+
+		//
+		// Emit strings
+		//
+		case PET_STRINGS:
+			if (sec_count == 0) {
+				fprintf(stderr, "error: expected section definition before .strings\n");
+				error = 1;
+				break;
+			}
+
+			// Emit all string literal data at the current position
+			struct label_rec **pnext = &label_recs;
+			for (struct label_rec *rec = label_recs; rec && error == 0;) {
+				if (!rec->string_lit) { // This is not a string literal, skip it
+					pnext = &rec->prev;
+					rec = rec->prev;
+					continue;
+				}
+
+				if (!rec->usages) { // Internal error
+					fprintf(stderr, "error: string literal without usage\n");
+					error = 1;
+					break;
+				}
+
+				// Note current file offset
+				long fpos = ftell(outfile);
+				if (fpos < 0) {
+					fprintf(stderr, "error: failed to seek in output file \"%s\", errno %d\n", arg_output, errno);
+					error = 1;
+					break;
+				}
+				// Compute string content address
+				uint64_t addr = fpos - curr_sec_fo + curr_sec.addr;
+
+				// Write the string literal contents to the file
+				size_t write_len = bstrlen(rec->label) + 1;
+				size_t bc = fwrite(rec->label, 1, write_len, outfile);
+				if (bc != write_len) {
+					fprintf(stderr, "error: failed to write to output file, errno %d\n", errno);
+					error = 1;
+					break;
+				}
+
+				// Apply all usages of the string literal
+				rec->addr = addr; // Address is now known
+				struct label_usage *lu;
+				for (lu = rec->usages; lu;) {
+					error = apply_label_usage(outfile, lu, addr);
+					if (error) break;
+
+					// Delete and move on to the next usage
+					struct label_usage *prev = lu->prev;
+					free(lu);
+					lu = prev;
+				}
+				rec->usages = lu;
+
+				// Seek to after the string contents
+				int seek_error = fseek(outfile, fpos + write_len, SEEK_SET);
+				if (seek_error) {
+					fprintf(stderr, "error: failed to seek in output file \"%s\", errno %d\n", arg_output, errno);
+					if (error == 0) error = seek_error;
+				}
+
+				// Remove the string literal record from the list of label records
+				*pnext = rec->prev;
+				label_rec_destroy(rec);
+				free(rec);
+				rec = *pnext;
+			}
+
+			break;
 
 		default: // Invalid event type
 			fprintf(stderr, "error: invalid parser event type %d\n", pe.type);
@@ -665,6 +747,7 @@ int main(int argc, const char *argv[])
 	}
 
 	if (sec_count) {
+		// Save the last section of the stub file
 		int save_error = stub_save_section(outfile, sec_count - 1, &curr_sec);
 		if (save_error) {
 			fprintf(stderr, "error: failed to save section %d to \"%s\"\n", sec_count - 1, arg_output);
@@ -681,7 +764,12 @@ int main(int argc, const char *argv[])
 		// It's not worth printing these errors if another error already occurred, because
 		// the other error may have halted assembly before the labels were defined.
 		if (error == 0 && label_recs->usages) {
-			fprintf(stderr, "error: use of undefined label \"%s\"\n", label_recs->label);
+			if (label_recs->string_lit) {
+				fprintf(stderr, "error: use of undefined string literal\n");
+			}
+			else {
+				fprintf(stderr, "error: use of undefined label \"%s\"\n", label_recs->label);
+			}
 			undefined_label = true;
 		}
 		struct label_rec *prev = label_recs->prev;

@@ -130,6 +130,9 @@ int parser_event_print(const struct parser_event *pe, FILE *outfile)
 	case PET_LABEL:
 		fprintf(outfile, "%s\n", pe->label);
 		break;
+	case PET_STRINGS:
+		fprintf(outfile, ".strings\n");
+		break;
 	default:
 		fprintf(outfile, "unknown_parser_event\n");
 	}
@@ -143,7 +146,7 @@ void parser_init(struct parser *parser, bchar *filename)
 		parser->filename = filename;
 	}
 	else {
-		parser->filename = bstrdup("stdin");
+		parser->filename = bstrdupc("stdin");
 	}
 	utf8_decoder_init(&parser->decoder);
 	parser->line = 1;
@@ -177,7 +180,6 @@ enum { // Parser token states
 	PTS_DEF_KEY,
 	PTS_DEF_VAL,
 	PTS_SEC_ADDR,
-	PTS_SEC_FLAGS,
 	PTS_INCLUDE,
 };
 
@@ -189,7 +191,7 @@ static int parser_finish_token(struct parser *parser)
 
 	// Perform symbolic substitution
 	int ret = 0;
-	char *symbol = NULL;
+	bchar *symbol = NULL;
 	if (parser->token[0] == '$') {
 		if (parser->token[1] == '\0') { // Check for empty symbol name
 			fprintf(stderr, "error: empty symbol name in \"%s\" line %d char %d\n",
@@ -218,7 +220,7 @@ static int parser_finish_token(struct parser *parser)
 						int opcode = opcode_for_name(symbuf);
 						if (opcode >= 0) {
 							sprintf(symbuf, "%d", opcode);
-							symbol = bstrdup(symbuf);
+							symbol = bstrdupc(symbuf);
 						}
 					}
 				}
@@ -227,19 +229,19 @@ static int parser_finish_token(struct parser *parser)
 					int stint = stint_for_name(parser->token + 1);
 					if (stint >= 0) { // Interrupt name
 						sprintf(symbuf, "%d", stint);
-						symbol = bstrdup(symbuf);
+						symbol = bstrdupc(symbuf);
 					}
 					else {
 						// Look up other automatic symbols
 						struct autosym *as = get_autosym(parser->token + 1);
 						if (as) {
 							sprintf(symbuf, "%#"PRIx64, as->val);
-							symbol = bstrdup(symbuf);
+							symbol = bstrdupc(symbuf);
 						}
 					}
 				}
 				if (symbol) { // Found a matching autosymbol
-					smap_insert(&parser->defs, bstrdup(parser->token + 1), symbol);
+					smap_insert(&parser->defs, bstrdupc(parser->token + 1), symbol);
 				}
 				else {
 					fprintf(stderr, "error: undefined symbol \"%s\" in \"%s\" line %d char %d\n",
@@ -289,6 +291,10 @@ static int parser_finish_token(struct parser *parser)
 				parser->event.data.len = 8;
 				parser->ts = PTS_IMM;
 			}
+			else if (strcmp(parser->token + 1, "strings") == 0) {
+				parser->event.type = PET_STRINGS;
+				parser->ts = PTS_EOL;
+			}
 			else {
 				fprintf(stderr, "error: unrecognized assembler command \"%s\" in \"%s\" line %d char %d\n",
 					parser->token, parser->filename, parser->tline, parser->tch);
@@ -309,7 +315,7 @@ static int parser_finish_token(struct parser *parser)
 					parser->token = NULL;
 				}
 				else { // Lookup was performed
-					parser->event.label = bstrdup(symbol);
+					parser->event.label = bstrdupb(symbol);
 				}
 			}
 			parser->ts = PTS_EOL; // Expect end of line
@@ -386,6 +392,16 @@ static int parser_finish_token(struct parser *parser)
 				// though this could be confusing because data would be pointer to string elsewhere
 				fprintf(stderr, "error: unsupported statement type for string literal in \"%s\" line %d char %d\n",
 					parser->filename, parser->tline, parser->tch);
+				ret = 1;
+				break;
+			}
+
+			// String literals can only be used for opcodes that accept 64-bit immediate values
+			int sdt = imm_type_for_opcode(parser->event.inst.opcode);
+			int dt_size = sdt_size(sdt);
+			if (dt_size != 8) {
+				fprintf(stderr, "error: opcode %s cannot accept a string literal immediate value\n",
+					name_for_opcode(parser->event.inst.opcode));
 				ret = 1;
 				break;
 			}
@@ -517,7 +533,7 @@ static int parser_finish_token(struct parser *parser)
 				parser->token = NULL;
 			}
 			else { // Lookup was performed
-				parser->event.inst.imm = bstrdup(symbol);
+				parser->event.inst.imm = bstrdupb(symbol);
 			}
 		}
 
@@ -542,7 +558,7 @@ static int parser_finish_token(struct parser *parser)
 			parser->token = NULL;
 		}
 		else { // Lookup was performed
-			parser->defkey = bstrdup(symbol);
+			parser->defkey = bstrdupb(symbol);
 		}
 		parser->ts = PTS_DEF_VAL;
 		break;
@@ -551,7 +567,7 @@ static int parser_finish_token(struct parser *parser)
 			parser->token = NULL;
 		}
 		else { // Lookup was performed
-			symbol = bstrdup(symbol);
+			symbol = bstrdupb(symbol);
 		}
 		// smap takes ownership of the strings
 		smap_insert(&parser->defs, parser->defkey, symbol);
@@ -676,7 +692,7 @@ int parser_parse_byte(struct parser *parser, byte b, struct parser_event *pe)
 			ret = parser_finish_token(parser); // First finish any adjacent token
 			if (ret) break;
 			// Start new token
-			parser->token = bstrdup((const char*)enc);
+			parser->token = bstrdupc((const char*)enc);
 			parser->tline = parser->line;
 			parser->tch = parser->ch;
 			parser->ss = PSS_QUOTED;
@@ -698,14 +714,14 @@ int parser_parse_byte(struct parser *parser, byte b, struct parser_event *pe)
 				parser->tline = parser->line;
 				parser->tch = parser->ch;
 			}
-			parser->token = bstrcat(parser->token, (const char*)enc);
+			parser->token = bstrcatc(parser->token, (const char*)enc);
 		}
 		break;
 
 	case PSS_QUOTED: // Character in string literal
 	case PSS_ESCAPED: // Escaped character in string literal
 		// Add character to token
-		parser->token = bstrcat(parser->token, (const char*)enc);
+		parser->token = bstrcatc(parser->token, (const char*)enc);
 		if (c == '\n') { // Not even escaped newlines are allowed
 			fprintf(stderr, "error: newline in string literal in \"%s\" line %d char %d\n",
 				parser->filename, parser->tline, parser->tch);
@@ -716,7 +732,7 @@ int parser_parse_byte(struct parser *parser, byte b, struct parser_event *pe)
 		}
 		else if (c == '"') { // Unescaped '"' ends quoted token
 			// Validate any escape sequences in string literal
-			char *unesc_token = balloc();
+			bchar *unesc_token = balloc();
 			bool result = parse_string_lit(parser->token, &unesc_token);
 			bfree(unesc_token);
 			if (!result) {

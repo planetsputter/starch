@@ -99,7 +99,7 @@ int main()
 
 	// Test with B-string
 	assert(smap_get(&smap, "testkey") == NULL);
-	smap_insert(&smap, bstrdup("testkey"), bstrdup("testval"));
+	smap_insert(&smap, bstrdupc("testkey"), bstrdupc("testval"));
 	assert(strcmp(smap_get(&smap, "testkey"), "testval") == 0);
 	smap_destroy(&smap);
 	assert(smap_get(&smap, "testkey") == NULL);
