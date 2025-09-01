@@ -121,4 +121,4 @@ Once used, an auto-symbol must not be defined manually. An auto-symbol may be de
 Example Files
 -------------
 
-For examples of Starch assembler input files, review the files with extention ".sta" in the test directory of the repository.
+For examples of Starch assembler input files, review the files with extention ".sta" in the test directory of the repository. See also the files in the examples directory.
