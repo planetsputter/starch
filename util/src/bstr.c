@@ -9,15 +9,29 @@
 enum { BSTR_ALLOC_INC = 64 };
 
 struct bstr_hdr {
-	size_t size; // Size of allocation excluding header size
 	size_t len; // Length of string
 };
+
+// Returns the total size of the allocation for the given string length including header size
+static size_t bstr_alloc_size_for_len(size_t len)
+{
+	return sizeof(struct bstr_hdr) + (len / BSTR_ALLOC_INC + 1) * BSTR_ALLOC_INC;
+}
+
+// Returns the B-string header and string contents potentially reallocated for the given string length
+static struct bstr_hdr *bstr_realloc_for_len(struct bstr_hdr *h, size_t len)
+{
+	size_t new_size = bstr_alloc_size_for_len(len);
+	if (h == NULL || new_size != bstr_alloc_size_for_len(h->len)) {
+		h = (struct bstr_hdr*)realloc(h, new_size);
+	}
+	return h;
+}
 
 bchar *balloc(void)
 {
 	// Allocate a B-string with the minimum allocation size
-	struct bstr_hdr *h = malloc(sizeof(struct bstr_hdr) + BSTR_ALLOC_INC);
-	h->size = BSTR_ALLOC_INC;
+	struct bstr_hdr *h = bstr_realloc_for_len(NULL, 0);
 	h->len = 0;
 	bchar *s = (bchar*)(h + 1);
 	s[0] = '\0';
@@ -46,25 +60,16 @@ size_t bstrlen(const bchar *s)
 	return ((const struct bstr_hdr*)s - 1)->len;
 }
 
-// Increase the size of the B-string beginning with the given header by the minimum increment.
-// Returns a pointer to the header of the possibly reallocated B-string.
-static struct bstr_hdr *bstr_inc_size(struct bstr_hdr *h)
-{
-	h->size += BSTR_ALLOC_INC;
-	return (struct bstr_hdr*)realloc(h, sizeof(struct bstr_hdr) + h->size);
-}
-
 bchar *bstrcatc(bchar *dest, const char *src)
 {
 	struct bstr_hdr *h = (struct bstr_hdr*)dest - 1;
 	size_t i;
-	for (i = h->len; ; i++, src++) {
-		if (i >= h->size) {
-			h = bstr_inc_size(h);
-			dest = (bchar*)(h + 1);
-		}
+	for (i = h->len; ; src++) {
 		dest[i] = *src;
 		if (*src == '\0') break;
+		i++;
+		h = bstr_realloc_for_len(h, i);
+		dest = (bchar*)(h + 1);
 	}
 	h->len = i;
 	return dest;
@@ -75,11 +80,10 @@ bchar *bstrcatb(bchar *dest, const bchar *src)
 	// Reallocate dest B-string to accomodate extra content
 	size_t srclen = bstrlen(src);
 	struct bstr_hdr *h = (struct bstr_hdr*)dest - 1;
-	h->size = (h->len + srclen + BSTR_ALLOC_INC) / BSTR_ALLOC_INC * BSTR_ALLOC_INC;
-	h = (struct bstr_hdr*)realloc(h, sizeof(struct bstr_hdr) + h->size);
+	h = bstr_realloc_for_len(h, h->len + srclen);
+	dest = (bchar*)(h + 1);
 
 	// Copy src contents after dest contents
-	dest = (bchar*)(h + 1);
 	memcpy(dest + h->len, src, srclen + 1);
 	h->len += srclen; // Increase dest length
 	return dest;
@@ -89,10 +93,8 @@ bchar *bstr_append(bchar *dest, char c)
 {
 	struct bstr_hdr *h = (struct bstr_hdr*)dest - 1;
 	dest[h->len++] = c;
-	if (h->len >= h->size) {
-		h = bstr_inc_size(h);
-		dest = (bchar*)(h + 1);
-	}
+	h = bstr_realloc_for_len(h, h->len);
+	dest = (bchar*)(h + 1);
 	dest[h->len] = '\0';
 	return dest;
 }
