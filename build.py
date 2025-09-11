@@ -17,6 +17,15 @@ def change_ext(path, ext):
 	if slashpos > dotpos or dotpos < 0: return path + '.' + ext
 	return path[0:dotpos] + '.' + ext
 
+# Returns the name of the library at the given path, such as would be passed with '-l' to the linker
+def get_lib_name(path):
+	path = path[path.rfind('/') + 1:] # Strip parent directory
+	dotpos = path.rfind('.')
+	if dotpos < 0: dotpos = len(path)
+	path = path[0:dotpos] # Strip extension
+	if path[0:3] == 'lib': path = path[3:] # Strip leading 'lib'
+	return path
+
 # Process a build configuration file
 def process_cfg(filename):
 	# Make the build directory
@@ -32,6 +41,7 @@ def process_cfg(filename):
 		'compiler': None,
 		'src': None,
 		'deps': None,
+		'libs': None,
 		'type': None,
 		'cflags': None,
 		'lflags': None
@@ -45,6 +55,7 @@ def process_cfg(filename):
 		compiler = ctx['compiler']
 		src = ctx['src']
 		deps = ctx['deps']
+		libs = ctx['libs']
 		target_type = ctx['type']
 		cflags = ctx['cflags']
 		lflags = ctx['lflags']
@@ -58,9 +69,8 @@ def process_cfg(filename):
 		if lflags == None: lflags = ''
 
 		# Generate dependencies for all source files
-		srcs = shell_unescape(src)
 		sources = []
-		for s in srcs: sources += glob.glob(s, recursive=True)
+		for s in shell_unescape(src): sources += glob.glob(s, recursive=True) # Allow globs
 		objs = []
 		for source in sources:
 			# Make the directory in which to build the object file
@@ -78,6 +88,16 @@ def process_cfg(filename):
 			mf.write(result.stdout.decode('utf-8'))
 			# Write the build rule to the makefile
 			mf.write('\t%s -c $< -o $@ %s\n' % (compiler, cflags))
+
+		# Listed libs are dependencies which also generate extra linker flags
+		if libs:
+			libraries = []
+			for l in shell_unescape(libs): libraries += glob.glob(l, recursive=True) # Allow globs
+			for lib in libraries:
+				libpath = pathlib.Path(lib)
+				# Include parent directory in library search path
+				lflags += ' -L%s -l%s' % (str(libpath.parents[0]), get_lib_name(libpath.name))
+			mf.write('%s:%s\n' % (target, libs))
 
 		# List user-provided dependencies
 		if deps: mf.write('%s:%s\n' % (target, deps))
@@ -146,7 +166,7 @@ if __name__ == '__main__':
 	try:
 		cfg_targets = process_cfg(args.file)
 	except Exception as e:
-		print('an error occurred processing %s: %s' % (args.file, e))
+		print('%s: an error occurred processing %s: %s' % (parser.prog, args.file, e))
 		exit(1)
 
 	# Build each specified target
@@ -159,5 +179,5 @@ if __name__ == '__main__':
 			completed = subprocess.run(('make', '-j', str(args.jobs), '-f', '.build/makefile', *args.targets))
 			completed.check_returncode();
 	except Exception as e:
-		print('error: %s' % str(e))
+		print('%s: error: %s' % (parser.prog, str(e)))
 		exit(1)
