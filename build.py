@@ -33,7 +33,8 @@ def process_cfg(filename):
 		'src': None,
 		'deps': None,
 		'type': None,
-		'flags': None
+		'cflags': None,
+		'lflags': None
 	}
 	# Keep a list of targets
 	targets = []
@@ -45,14 +46,16 @@ def process_cfg(filename):
 		src = ctx['src']
 		deps = ctx['deps']
 		target_type = ctx['type']
-		flags = ctx['flags']
+		cflags = ctx['cflags']
+		lflags = ctx['lflags']
 		if not target: raise Exception('no target specified')
 		if not compiler: raise Exception('no compiler specified for target %s' % target)
 		if not src: raise Exception('no src specified for target %s' % target)
 		if not target_type: raise Exception('no type specified for target %s' % target)
 		if not target_type in ('bin', 'lib', 'so'):
 			raise Exception('invalid target type %s for target %s' % (target_type, target))
-		if flags == None: flags = ''
+		if cflags == None: cflags = ''
+		if lflags == None: lflags = ''
 
 		# Generate dependencies for all source files
 		srcs = shell_unescape(src)
@@ -62,11 +65,11 @@ def process_cfg(filename):
 		for source in sources:
 			# Make the directory in which to build the object file
 			obj = change_ext('.build/obj/%s' % source, 'o')
-			objs.append(str(obj))
+			objs.append(obj)
 			objpath = pathlib.Path(obj)
 			objpath.parents[0].mkdir(parents=True,exist_ok=True)
 			# Have the compiler generate the dependencies
-			args = (compiler, '-c', source, '-M', '-MM', '-MF', '-', '-MQ', obj, *shell_unescape(flags))
+			args = (compiler, '-c', source, '-M', '-MM', '-MF', '-', '-MQ', obj, *shell_unescape(cflags))
 			result = subprocess.run(args, capture_output=True)
 			if result.returncode:
 				raise Exception('unable to generate dependency list for %s:\n%s\n%s'\
@@ -74,7 +77,7 @@ def process_cfg(filename):
 			# Write the dependencies to the makefile
 			mf.write(result.stdout.decode('utf-8'))
 			# Write the build rule to the makefile
-			mf.write('\t%s -c $< -o $@ %s\n' % (compiler, flags))
+			mf.write('\t%s -c $< -o $@ %s\n' % (compiler, cflags))
 
 		# List user-provided dependencies
 		if deps: mf.write('%s:%s\n' % (target, deps))
@@ -83,7 +86,7 @@ def process_cfg(filename):
 		obj_esc = shell_escape(objs)
 		mf.write('%s: %s\n' % (target, obj_esc))
 		if target_type == 'bin':
-			mf.write('\t%s -o $@ %s %s\n' % (compiler, obj_esc, flags))
+			mf.write('\t%s -o $@ %s %s\n' % (compiler, obj_esc, lflags))
 		elif target_type == 'lib':
 			mf.write('\trm $@\n')
 			mf.write('\tar -crs $@ %s\n' % obj_esc)
