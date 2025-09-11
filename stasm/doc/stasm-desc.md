@@ -49,6 +49,7 @@ For instance, the following code utilizes the `push64` pseudo-op and evaluates t
 push64 0
 push64 0x100
 add64
+push64 "string literal"
 call :some_function
 ```
 
@@ -95,7 +96,7 @@ The Starch assembler supports several assembler commands which aid the developer
 
 ## Symbols
 
-As noted above, the `.define` assembler command can be used to define a symbolic constant. These constants are arbitrary text words which will be substituted into the input when used later preceded by a dollar sign ('$'). Symbolic constants can be used to define constant values as well as opcodes and labels.
+As noted above, the `.define` assembler command can be used to define a symbolic constant. These constants are arbitrary text words which will be substituted into the input when used later preceded by a dollar sign ('$'). Symbolic constants can be used to define constant integer values as well as opcodes, labels, and string literals.
 
 The following example defines and uses a symbolic constant:
 ```
@@ -116,7 +117,7 @@ push8 $OP_HALT              ; Pushes the value of the "halt" opcode as an 8-bit 
 push64 $IO_STDOUT_ADDR      ; Pushes the stdout IO address as a 64-bit integer
 ```
 
-Once used, an auto-symbol must not be defined manually. An auto-symbol may be defined manually before its first usage.
+Once used, an auto-symbol must not be defined manually. An auto-symbol may be defined manually before its first usage, in which case the defined value will be used instead of the automatic value.
 
 Example Files
 -------------
