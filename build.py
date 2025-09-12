@@ -2,35 +2,46 @@
 
 import argparse, glob, multiprocessing, pathlib, re, shlex, shutil, subprocess, sys
 
-# Returns a shell line representing the given list of arguments
-def shell_escape(args):
+# Returns a shell line representing the given list of arguments, or single string argument
+def sh_esc(args):
+	if isinstance(args, str): args = [args]
 	return ' '.join(shlex.quote(x) for x in args)
 
 # Returns the list of arguments described by the given shell line
-def shell_unescape(line):
+def sh_unesc(line):
 	return shlex.split(line)
 
 # Changes the extension of the given path
 def change_ext(path, ext):
 	dotpos = path.rfind('.')
 	slashpos = path.rfind('/')
-	if slashpos > dotpos or dotpos < 0: return path + '.' + ext
+	if slashpos >= dotpos: dotpos = len(path)
 	return path[0:dotpos] + '.' + ext
 
 # Returns the name of the library at the given path, such as would be passed with '-l' to the linker
 def get_lib_name(path):
-	path = path[path.rfind('/') + 1:] # Strip parent directory
 	dotpos = path.rfind('.')
-	if dotpos < 0: dotpos = len(path)
-	path = path[0:dotpos] # Strip extension
-	if path[0:3] == 'lib': path = path[3:] # Strip leading 'lib'
-	return path
+	slashpos = path.rfind('/')
+	if slashpos >= dotpos: dotpos = len(path)
+	if path[slashpos + 1:].startswith('lib'): slashpos += 3
+	return path[slashpos + 1:dotpos]
+
+# Returns the string representing a single argument for a makefile rule
+def mk_esc_rule(rule):
+	return rule.replace('$', '$$').replace(' ', '\\ ')
+
+# Returns the string representing a single argument escaped for the shell and then for a makefile recipe
+def mk_esc_recipe(rec):
+	return sh_esc(rec).replace('$', '$$')
+
+# Writes a dependency rule to the given makefile, escaping the target and each dependency
+def mf_write_rule(mf, target, deps):
+	mf.write('%s:%s\n' % (mk_esc_rule(target), ' '.join([mk_esc_rule(d) for d in deps])))
 
 # Process a build configuration file
 def process_cfg(filename):
 	# Make the build directory
-	build_dir = pathlib.Path('.build')
-	build_dir.mkdir(exist_ok=True)
+	pathlib.Path('.build').mkdir(exist_ok=True)
 
 	# Open the makefile
 	mf = open('.build/makefile', 'w')
@@ -41,7 +52,6 @@ def process_cfg(filename):
 		'compiler': None,
 		'src': None,
 		'inc': None,
-		'deps': None,
 		'libs': None,
 		'type': None,
 		'cflags': None,
@@ -56,7 +66,6 @@ def process_cfg(filename):
 		compiler = ctx['compiler']
 		src = ctx['src']
 		inc = ctx['inc']
-		deps = ctx['deps']
 		libs = ctx['libs']
 		target_type = ctx['type']
 		cflags = ctx['cflags']
@@ -70,54 +79,61 @@ def process_cfg(filename):
 		if cflags == None: cflags = ''
 		if lflags == None: lflags = ''
 
-		# Add inc directories to cflags
+		cflist = sh_unesc(cflags) # Escape cflags to list
+		lflist = sh_unesc(lflags) # Escape lflags to list
+
+		# Add inc directories to cflags list
 		if inc:
 			incdirs = []
-			for d in shell_unescape(inc): incdirs += glob.glob(d, recursive=True) # Allow globs
-			for d in incdirs: cflags += ' -I%s' % d # Include directory in header search path
+			for d in sh_unesc(inc): incdirs += glob.glob(d, recursive=True) # Allow globs
+			cflist += ['-I%s' % d for d in incdirs] # Include directory in header search path
 
 		# Generate dependencies for all source files
 		sources = []
-		for s in shell_unescape(src): sources += glob.glob(s, recursive=True) # Allow globs
+		for s in sh_unesc(src): sources += glob.glob(s, recursive=True) # Allow globs
 		objs = []
 		for source in sources:
 			# Make the directory in which to build the object file
+			# @todo: Need to prevent path traversal
 			obj = change_ext('.build/obj/%s' % source, 'o')
 			objs.append(obj)
-			objpath = pathlib.Path(obj)
-			objpath.parents[0].mkdir(parents=True,exist_ok=True)
-			# Have the compiler generate the dependencies
-			args = (compiler, '-c', source, '-M', '-MM', '-MF', '-', '-MQ', obj, *shell_unescape(cflags))
+			pathlib.Path(obj).parents[0].mkdir(parents=True, exist_ok=True)
+			# Have the compiler generate the dependency rules
+			args = (compiler, '-c', source, '-M', '-MM', '-MF', '-', '-MQ', obj, *cflist)
 			result = subprocess.run(args, capture_output=True)
 			if result.returncode:
 				raise Exception('unable to generate dependency list for %s:\n%s\n%s'\
-					% (source, shell_escape(args), result.stderr.decode('utf-8')))
+					% (sh_esc(source), sh_esc(args), result.stderr.decode('utf-8')))
 			# Write the dependencies to the makefile
 			mf.write(result.stdout.decode('utf-8'))
-			# Write the build rule to the makefile
-			mf.write('\t%s -c $< -o $@ %s\n' % (compiler, cflags))
+			# Write the build recipe to the makefile
+			mf.write('\t%s -c %s -o %s %s\n' % (mk_esc_recipe(compiler), \
+				mk_esc_recipe(source),
+				mk_esc_recipe(obj),
+				mk_esc_recipe(cflist)))
 
 		# Listed libs are dependencies which also generate extra linker flags
 		if libs:
 			libraries = []
-			for l in shell_unescape(libs): libraries += glob.glob(l, recursive=True) # Allow globs
-			for lib in libraries:
-				libpath = pathlib.Path(lib)
-				# Include parent directory in library search path
-				lflags += ' -L%s -l%s' % (str(libpath.parents[0]), get_lib_name(libpath.name))
-			mf.write('%s:%s\n' % (target, libs))
+			for l in sh_unesc(libs): libraries += glob.glob(l, recursive=True) # Allow globs
+			# Generate extra linker flags
+			lflist += ['-L%s' % str(pathlib.Path(l).parents[0]) for l in libraries]
+			lflist += ['-l%s' % get_lib_name(pathlib.Path(l).name) for l in libraries]
+			# Write extra dependency rule
+			mf_write_rule(mf, target, libraries)
 
-		# List user-provided dependencies
-		if deps: mf.write('%s:%s\n' % (target, deps))
+		# Write the target object dependencies rule to the makefile
+		mf_write_rule(mf, target, objs)
 
-		# Write the target rule to the makefile
-		obj_esc = shell_escape(objs)
-		mf.write('%s: %s\n' % (target, obj_esc))
+		# Write the recipe to create the target
 		if target_type == 'bin':
-			mf.write('\t%s -o $@ %s %s\n' % (compiler, obj_esc, lflags))
+			mf.write('\t%s -o %s %s %s\n' % (mk_esc_recipe(compiler), \
+				mk_esc_recipe(target), \
+				mk_esc_recipe(objs), \
+				mk_esc_recipe(lflist)))
 		elif target_type == 'lib':
-			mf.write('\trm $@\n')
-			mf.write('\tar -crs $@ %s\n' % obj_esc)
+			mf.write('\trm %s\n' % mk_esc_recipe(target))
+			mf.write('\tar -crs %s %s\n' % (mk_esc_recipe(target), mk_esc_recipe(objs)))
 		elif target_type == 'so':
 			raise Exception('unimplemented')
 		targets.append(target)
@@ -134,10 +150,10 @@ def process_cfg(filename):
 		if re.match(comment_regex, line) or re.match(empty_regex, line): continue
 
 		# Process line as a key-value pair
-		colidx = line.find(':')
-		if colidx <= 0: raise Exception('invalid line: %s' % line)
-		key = line[0:colidx]
-		value = line[colidx + 1:]
+		colpos = line.find(':')
+		if colpos <= 0: raise Exception('invalid line: %s' % line)
+		key = line[0:colpos]
+		value = line[colpos + 1:]
 		if not key in ctx: raise Exception('invalid key "%s" in line: %s' % (key, line))
 		if key == 'target':
 			if ctx['target']:
