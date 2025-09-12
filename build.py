@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import argparse, glob, multiprocessing, pathlib, re, shlex, shutil, subprocess, sys
+import glob, multiprocessing, pathlib, re, shlex, subprocess, sys
 
 # Returns a shell line representing the given list of arguments, or single string argument
 def sh_esc(args):
@@ -46,6 +46,9 @@ def process_cfg(filename):
 	# Open the makefile
 	mf = open('.build/makefile', 'w')
 
+	# Generate phony targets, specify 'all' as first target
+	mf.write('.PHONY:clean all\nall:\nclean:\n\trm -rf .build\n')
+
 	# Parameters from file
 	ctx = {
 		'target': None,
@@ -70,27 +73,21 @@ def process_cfg(filename):
 		target_type = ctx['type']
 		cflags = ctx['cflags']
 		lflags = ctx['lflags']
-		if not target: raise Exception('no target specified')
-		if not compiler: raise Exception('no compiler specified for target %s' % target)
 		if not src: raise Exception('no src specified for target %s' % target)
-		if not target_type: raise Exception('no type specified for target %s' % target)
 		if not target_type in ('bin', 'lib', 'so'):
 			raise Exception('invalid target type %s for target %s' % (target_type, target))
-		if cflags == None: cflags = ''
-		if lflags == None: lflags = ''
-
-		cflist = sh_unesc(cflags) # Escape cflags to list
-		lflist = sh_unesc(lflags) # Escape lflags to list
+		if cflags == None: cflags = []
+		if lflags == None: lflags = []
 
 		# Add inc directories to cflags list
 		if inc:
 			incdirs = []
-			for d in sh_unesc(inc): incdirs += glob.glob(d, recursive=True) # Allow globs
-			cflist += ['-I%s' % d for d in incdirs] # Include directory in header search path
+			for d in inc: incdirs += glob.glob(d, recursive=True) # Allow globs
+			cflags += ['-I%s' % d for d in incdirs] # Include directory in header search path
 
 		# Generate dependencies for all source files
 		sources = []
-		for s in sh_unesc(src): sources += glob.glob(s, recursive=True) # Allow globs
+		for s in src: sources += glob.glob(s, recursive=True) # Allow globs
 		objs = []
 		for source in sources:
 			# Make the directory in which to build the object file
@@ -99,7 +96,7 @@ def process_cfg(filename):
 			objs.append(obj)
 			pathlib.Path(obj).parents[0].mkdir(parents=True, exist_ok=True)
 			# Have the compiler generate the dependency rules
-			args = (compiler, '-c', source, '-M', '-MM', '-MF', '-', '-MQ', obj, *cflist)
+			args = (compiler, '-c', source, '-M', '-MM', '-MF', '-', '-MQ', obj, *cflags)
 			result = subprocess.run(args, capture_output=True)
 			if result.returncode:
 				raise Exception('unable to generate dependency list for %s:\n%s\n%s'\
@@ -110,15 +107,15 @@ def process_cfg(filename):
 			mf.write('\t%s -c %s -o %s %s\n' % (mk_esc_recipe(compiler), \
 				mk_esc_recipe(source),
 				mk_esc_recipe(obj),
-				mk_esc_recipe(cflist)))
+				mk_esc_recipe(cflags)))
 
 		# Listed libs are dependencies which also generate extra linker flags
 		if libs:
 			libraries = []
-			for l in sh_unesc(libs): libraries += glob.glob(l, recursive=True) # Allow globs
+			for l in libs: libraries += glob.glob(l, recursive=True) # Allow globs
 			# Generate extra linker flags
-			lflist += ['-L%s' % str(pathlib.Path(l).parents[0]) for l in libraries]
-			lflist += ['-l%s' % get_lib_name(pathlib.Path(l).name) for l in libraries]
+			lflags += ['-L%s' % str(pathlib.Path(l).parents[0]) for l in libraries]
+			lflags += ['-l%s' % get_lib_name(pathlib.Path(l).name) for l in libraries]
 			# Write extra dependency rule
 			mf_write_rule(mf, target, libraries)
 
@@ -130,7 +127,7 @@ def process_cfg(filename):
 			mf.write('\t%s -o %s %s %s\n' % (mk_esc_recipe(compiler), \
 				mk_esc_recipe(target), \
 				mk_esc_recipe(objs), \
-				mk_esc_recipe(lflist)))
+				mk_esc_recipe(lflags)))
 		elif target_type == 'lib':
 			mf.write('\trm %s\n' % mk_esc_recipe(target))
 			mf.write('\tar -crs %s %s\n' % (mk_esc_recipe(target), mk_esc_recipe(objs)))
@@ -142,66 +139,79 @@ def process_cfg(filename):
 	comment_regex = '^\\s*#'
 	empty_regex = '^\\s*$'
 	file = open(filename)
+	lineno = 1
 	for line in file:
-		# Strip trailing newline, if any
-		if len(line) > 0 and line[-1] == '\n': line = line[:-1]
+		try: # Attempt to parse the line
+			# Strip trailing newline, if any
+			if len(line) > 0 and line[-1] == '\n': line = line[:-1]
 
-		# Skip comments and empty lines
-		if re.match(comment_regex, line) or re.match(empty_regex, line): continue
+			# Skip comments and empty lines
+			if re.match(comment_regex, line) or re.match(empty_regex, line):
+				lineno = lineno + 1
+				continue
 
-		# Process line as a key-value pair
-		colpos = line.find(':')
-		if colpos <= 0: raise Exception('invalid line: %s' % line)
-		key = line[0:colpos]
-		value = line[colpos + 1:]
-		if not key in ctx: raise Exception('invalid key "%s" in line: %s' % (key, line))
-		if key == 'target':
-			if ctx['target']:
-				process_target()
-				for e in ctx: ctx[e] = None # Clear context
-		elif not ctx['target']:
-			raise Exception('key without target: %s' % key)
-		ctx[key] = value
-	if ctx['target']: process_target()
-	return targets
+			# Process line as a key-value pair
+			colpos = line.find(':')
+			if colpos <= 0: raise Exception('invalid line')
+			# Parse key
+			key = line[0:colpos]
+			keys = sh_unesc(key) # To catch unmatched quotation, etc.
+			if len(keys) != 1 or not keys[0] in ctx: raise Exception('invalid key')
+			key = keys[0]
+			# Parse value
+			value = line[colpos + 1:]
+			values = sh_unesc(value)
+
+			# Each new 'target' key initiates processing of the previous target
+			if key == 'target':
+				if ctx['target']:
+					process_target()
+					for e in ctx: ctx[e] = None # Clear context
+			elif not ctx['target']:
+				raise Exception('key before target')
+
+			# Certain keys expect a single non-empty value
+			if key in ('target', 'type', 'compiler'):
+				if len(values) > 1: raise Exception('multiple %s values' % key)
+				elif len(values) == 0 or not values[0]: raise Exception('empty %s' % key)
+				ctx[key] = values[0]
+			else: # Others expect a list of values
+				ctx[key] = values
+			lineno = lineno + 1
+
+		except Exception as e: # Add detail to exception and re-throw
+			raise Exception('line %d: %s. line: %s' % (lineno, str(e), line))
+
+	if ctx['target']: process_target() # Process final target
+
+	# Update phony 'all' target
+	mf_write_rule(mf, 'all', targets)
 
 if __name__ == '__main__':
-	# Parse command-line arguments
-	parser = argparse.ArgumentParser(prog='build.py', description='Python build script')
-	parser.add_argument('targets', default='all', nargs='*', help='targets to build, \'all\', or \'clean\'')
-	parser.add_argument('-f', '--file', default='build.cfg', help='build config file')
-	parser.add_argument('-j', '--jobs', default=multiprocessing.cpu_count(), help='number of processors')
-	args = parser.parse_args()
-
-	# Ensure args.targets is an array
-	if type(args.targets) != type([]):
-		args.targets = [args.targets]
-
-	# "clean" is a virtual target
-	if 'clean' in args.targets:
-		args.targets.remove('clean')
-		if pathlib.Path('.build').exists():
-			shutil.rmtree('.build')
-	if len(args.targets) == 0:
-		exit(0)
-
-	# Process the config file, generating dependencies
-	cfg_targets = None
 	try:
-		cfg_targets = process_cfg(args.file)
-	except Exception as e:
-		print('%s: an error occurred processing %s: %s' % (parser.prog, args.file, e))
-		exit(1)
+		# Parse command line arguments.
+		# We pass all arguments to make except an optional initial -f <cfgfile> pair.
+		buildcfg = 'build.cfg' # Default value
+		args = sys.argv[1:] 
+		if len(args) > 0: 
+			if args[0] == '-f':
+				if len(args) < 2: raise Exception('expected value for argument \'-f\'')
+				buildcfg = args[1]
+				# Remove the -f <cfgfile> pair from the arguments for make
+				args = args[2:]
 
-	# Build each specified target
-	try:
-		if 'all' in args.targets:
-			args.targets.remove('all')
-			for cfg_target in cfg_targets:
-				if cfg_target not in args.targets: args.targets.append(cfg_target)
-		if args.targets:
-			completed = subprocess.run(('make', '-j', str(args.jobs), '-f', '.build/makefile', *args.targets))
-			completed.check_returncode();
+		# Specify -j argument to use all available processors unless -j already specified
+		if '-j' not in args: args = args + ['-j', str(multiprocessing.cpu_count())]
+
+		# Process the config file, generating a makefile with dependencies
+		try:
+			process_cfg(buildcfg)
+		except Exception as e:
+			raise Exception('failed to parse %s: %s' % (sh_esc(buildcfg), str(e)))
+
+		completed = subprocess.run(('make', '-f', '.build/makefile', *args))
+		completed.check_returncode();
+
 	except Exception as e:
-		print('%s: error: %s' % (parser.prog, str(e)))
+		print('%s: error: %s' % (sys.argv[0], str(e)), file=sys.stderr)
 		exit(1)
