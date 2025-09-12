@@ -40,6 +40,7 @@ def process_cfg(filename):
 		'target': None,
 		'compiler': None,
 		'src': None,
+		'inc': None,
 		'deps': None,
 		'libs': None,
 		'type': None,
@@ -54,6 +55,7 @@ def process_cfg(filename):
 		target = ctx['target']
 		compiler = ctx['compiler']
 		src = ctx['src']
+		inc = ctx['inc']
 		deps = ctx['deps']
 		libs = ctx['libs']
 		target_type = ctx['type']
@@ -67,6 +69,12 @@ def process_cfg(filename):
 			raise Exception('invalid target type %s for target %s' % (target_type, target))
 		if cflags == None: cflags = ''
 		if lflags == None: lflags = ''
+
+		# Add inc directories to cflags
+		if inc:
+			incdirs = []
+			for d in shell_unescape(inc): incdirs += glob.glob(d, recursive=True) # Allow globs
+			for d in incdirs: cflags += ' -I%s' % d # Include directory in header search path
 
 		# Generate dependencies for all source files
 		sources = []
