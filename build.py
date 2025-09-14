@@ -47,7 +47,7 @@ def mf_write_rule(mf, target, deps):
 
 # Process a build configuration file
 def process_cfg(filename):
-	# Make the build directory
+	# Make the build directory and object directory
 	pathlib.Path('.build').mkdir(exist_ok=True)
 	pathlib.Path('.build/obj').mkdir(exist_ok=True)
 
@@ -90,7 +90,9 @@ def process_cfg(filename):
 		target_type = ctx['type']
 		cflags = ctx['cflags']
 		lflags = ctx['lflags']
+		if not compiler: raise Exception('no compiler specified for target %s' % target)
 		if not src: raise Exception('no src specified for target %s' % target)
+		if not target_type: raise Exception('no target type specified for target %s' % target)
 		if not target_type in ('bin', 'lib', 'so'):
 			raise Exception('invalid target type %s for target %s' % (target_type, target))
 		if cflags == None: cflags = []
@@ -170,10 +172,8 @@ def process_cfg(filename):
 			colpos = line.find(':')
 			if colpos <= 0: raise Exception('invalid line')
 			# Parse key
-			key = line[0:colpos]
-			keys = sh_unesc(key) # To catch unmatched quotation, etc.
-			if len(keys) != 1 or not keys[0] in ctx: raise Exception('invalid key')
-			key = keys[0]
+			key = line[0:colpos].strip()
+			if not key in ctx: raise Exception('invalid key')
 			# Parse value
 			value = line[colpos + 1:]
 			values = sh_unesc(value)

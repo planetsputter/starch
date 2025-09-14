@@ -9,18 +9,23 @@ See [starch/doc/starch-desc.md](starch/doc/starch-desc.md) for a description of 
 Projects
 --------
 
- * [build.py](build.py) is a custom Python build script used by Starch.
- * [distasm](distasm) is a Starch disassembler.
+ * [build.py](build.py) is a general-purpose build script used by Starch. It invokes the compiler to generate dependencies for Starch build targets and then serves as a front-end for make. [build.py.md](build.py.md) documents the build script and its configuration file, [build.cfg](build.cfg).
+ * [distasm](distasm) is a Starch disassembler. It takes a stub binary file and produces Starch assembly describing it.
  * [starch](starch) contains code associated with the Starch instruction set.
- * [stasm](stasm) is a Starch assembler. See [stasm/doc/stasm-desc.md](stasm/doc/stasm-desc.md) for more details.
- * [stem](stem) is a Starch emulator.
+ * [stasm](stasm) is a Starch assembler. It takes a Starch assembly file and produces a stub binary containing Starch code suitable for emulation. See [stasm/doc/stasm-desc.md](stasm/doc/stasm-desc.md) for more details.
+ * [stem](stem) is a Starch emulator. It executes Starch code in a emulated environment on the host machine.
  * [stub](stub) is a custom binary file format used by Starch projects.
  * [util](util) is a collection of utilities used by Starch projects.
 
 How to Build
 ------------
 
-Simply run `./build.py`.
+Simply run `./build.py`. A parallel build will be run.
+
+How to Test
+-----------
+
+Run `./test.sh`.
 
 Name
 ----
