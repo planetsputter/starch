@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import glob, multiprocessing, pathlib, re, shlex, subprocess, sys
+import glob, hashlib, multiprocessing, pathlib, re, shlex, subprocess, sys
 
 # Returns a shell line representing the given list of arguments, or single string argument
 def sh_esc(args):
@@ -10,6 +10,13 @@ def sh_esc(args):
 # Returns the list of arguments described by the given shell line
 def sh_unesc(line):
 	return shlex.split(line)
+
+# Returns the basename of the given path, optionally including the extension
+def basename(path, withext=True):
+	dotpos = path.rfind('.')
+	slashpos = path.rfind('/')
+	if slashpos >= dotpos or withext: dotpos = len(path)
+	return path[slashpos + 1:dotpos]
 
 # Changes the extension of the given path
 def change_ext(path, ext):
@@ -42,12 +49,22 @@ def mf_write_rule(mf, target, deps):
 def process_cfg(filename):
 	# Make the build directory
 	pathlib.Path('.build').mkdir(exist_ok=True)
+	pathlib.Path('.build/obj').mkdir(exist_ok=True)
 
 	# Open the makefile
 	mf = open('.build/makefile', 'w')
 
-	# Generate phony targets, specify 'all' as first target
-	mf.write('.PHONY:clean all\nall:\nclean:\n\trm -rf .build\n')
+	# Generate phony targets, specify 'all' as first target.
+	# Automatically running the 'clean' target when the makefile is parsed allows us
+	# to avoid a race between 'clean' and other targets during a parallel build.
+	mf.write(
+		'.PHONY:clean all\n' +
+		'all:\n' +
+		'clean:\n' +
+		'\t@echo rm -f .build/obj/*.o\n' +
+		'ifneq ($(filter clean,$(MAKECMDGOALS)),)\n' +
+		'    $(shell rm -f .build/obj/*.o)\n' +
+		'endif\n')
 
 	# Parameters from file
 	ctx = {
@@ -90,21 +107,20 @@ def process_cfg(filename):
 		for s in src: sources += glob.glob(s, recursive=True) # Allow globs
 		objs = []
 		for source in sources:
-			# Make the directory in which to build the object file
-			# @todo: Need to prevent path traversal
-			obj = change_ext('.build/obj/%s' % source, 'o')
+			# Compute the name for the object file
+			obj = '.build/obj/%s-%s.o' % (basename(source, withext=False),
+				hashlib.sha256(source.encode('utf-8')).hexdigest()[0:16])
 			objs.append(obj)
-			pathlib.Path(obj).parents[0].mkdir(parents=True, exist_ok=True)
 			# Have the compiler generate the dependency rules
 			args = (compiler, '-c', source, '-M', '-MM', '-MF', '-', '-MQ', obj, *cflags)
 			result = subprocess.run(args, capture_output=True)
 			if result.returncode:
-				raise Exception('unable to generate dependency list for %s:\n%s\n%s'\
+				raise Exception('unable to generate dependency list for %s:\n%s\n%s'
 					% (sh_esc(source), sh_esc(args), result.stderr.decode('utf-8')))
 			# Write the dependencies to the makefile
 			mf.write(result.stdout.decode('utf-8'))
 			# Write the build recipe to the makefile
-			mf.write('\t%s -c %s -o %s %s\n' % (mk_esc_recipe(compiler), \
+			mf.write('\t%s -c %s -o %s %s\n' % (mk_esc_recipe(compiler),
 				mk_esc_recipe(source),
 				mk_esc_recipe(obj),
 				mk_esc_recipe(cflags)))
@@ -124,9 +140,9 @@ def process_cfg(filename):
 
 		# Write the recipe to create the target
 		if target_type == 'bin':
-			mf.write('\t%s -o %s %s %s\n' % (mk_esc_recipe(compiler), \
-				mk_esc_recipe(target), \
-				mk_esc_recipe(objs), \
+			mf.write('\t%s -o %s %s %s\n' % (mk_esc_recipe(compiler),
+				mk_esc_recipe(target),
+				mk_esc_recipe(objs),
 				mk_esc_recipe(lflags)))
 		elif target_type == 'lib':
 			mf.write('\trm %s\n' % mk_esc_recipe(target))
@@ -200,8 +216,8 @@ if __name__ == '__main__':
 				# Remove the -f <cfgfile> pair from the arguments for make
 				args = args[2:]
 
-		# Specify -j argument to use all available processors unless -j already specified
-		if '-j' not in args: args = args + ['-j', str(multiprocessing.cpu_count())]
+		# Specify '-j' argument to use all available processors unless '-j' is already specified
+		if '-j' not in args: args = ['-j', str(multiprocessing.cpu_count())] + args
 
 		# Process the config file, generating a makefile with dependencies
 		try:
