@@ -27,7 +27,7 @@ bool carg_print_error(enum carg_error error, const char *arg)
 {
 	int ret = fprintf(stderr, "error: %s", desc_for_arg_error(error));
 	if (ret < 0) {
-		return ret;
+		return false;
 	}
 	if (arg == NULL) {
 		ret = fprintf(stderr, "\n");
@@ -132,7 +132,7 @@ enum carg_error carg_parse_args(
 				continue;
 			}
 
-			if (arg[0] == '-' && arg[1] != '-') {
+			if (arg[0] == '-' && arg[1] != '-' && arg[1] != '\0') {
 				// This argument starts with '-' and will be processed as a sequence
 				// of single-character flags
 				for (const char *flag = arg + 1; *flag != '\0'; flag++) {

@@ -10,7 +10,7 @@
 
 enum {
 	MEM_PAGE_SIZE = 0x1000,
-	MEM_PAGE_MASK = 0xfff,
+	MEM_PAGE_MASK = (MEM_PAGE_SIZE - 1),
 };
 
 //

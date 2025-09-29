@@ -22,8 +22,8 @@ static void smap_node_delete(struct smap *smap, struct smap_node *node)
 {
 	if (!node) return;
 	if (smap->dealloc) {
-		smap->dealloc(node->key);
-		smap->dealloc(node->val);
+		if (node->key) smap->dealloc(node->key);
+		if (node->val) smap->dealloc(node->val);
 	}
 	if (node->prev) smap_node_delete(smap, node->prev);
 	if (node->next) smap_node_delete(smap, node->next);
@@ -167,7 +167,7 @@ static struct smap_node *smap_node_insert(struct smap *smap, struct smap_node *n
 	}
 	else {
 		// This node is a match
-		if (smap->dealloc) {
+		if (smap->dealloc && node->val) {
 			smap->dealloc(node->val);
 		}
 		node->val = val;

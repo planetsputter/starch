@@ -129,7 +129,7 @@ byte *utf8_encode_char(ucp c, byte *b, size_t len, int *error) {
 			*error = UTF8_ERROR_BYTE_OVERFLOW;
 		}
 		else {
-			*(b++) = (c & 0x7ff) >> 6 | 0xc0;
+			*(b++) = c >> 6 | 0xc0;
 			*(b++) = (c & 0x3f) | 0x80;
 		}
 	}
@@ -138,7 +138,7 @@ byte *utf8_encode_char(ucp c, byte *b, size_t len, int *error) {
 			*error = UTF8_ERROR_BYTE_OVERFLOW;
 		}
 		else {
-			*(b++) = (c & 0xffff) >> 12 | 0xe0;
+			*(b++) = c >> 12 | 0xe0;
 			*(b++) = (c & 0xfff) >> 6 | 0x80;
 			*(b++) = (c & 0x3f) | 0x80;
 		}
@@ -148,7 +148,7 @@ byte *utf8_encode_char(ucp c, byte *b, size_t len, int *error) {
 			*error = UTF8_ERROR_BYTE_OVERFLOW;
 		}
 		else {
-			*(b++) = (c & 0x1fffff) >> 18 | 0xf0;
+			*(b++) = c >> 18 | 0xf0;
 			*(b++) = (c & 0x3ffff) >> 12 | 0x80;
 			*(b++) = (c & 0xfff) >> 6 | 0x80;
 			*(b++) = (c & 0x3f) | 0x80;

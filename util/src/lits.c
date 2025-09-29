@@ -35,6 +35,7 @@ const char *parse_char_lit(const char *str, char *val)
 			do { // Hexadecimal escape sequences are of arbitrary length
 				tc = (tc << 4) | nibble_for_hex(*str);
 			} while (isxdigit(*++str));
+			str--;
 			break;
 		default:
 			if (*str < '0' || *str > '7') return NULL; // Invalid escape sequence
