@@ -48,8 +48,7 @@ def mf_write_rule(mf, target, deps):
 # Process a build configuration file
 def process_cfg(filename):
 	# Make the build directory and object directory
-	pathlib.Path('.build').mkdir(exist_ok=True)
-	pathlib.Path('.build/obj').mkdir(exist_ok=True)
+	pathlib.Path('.build/obj').mkdir(exist_ok=True, parents=True)
 
 	# Open the makefile
 	mf = open('.build/makefile', 'w')
@@ -101,12 +100,18 @@ def process_cfg(filename):
 		# Add inc directories to cflags list
 		if inc:
 			incdirs = []
-			for d in inc: incdirs += glob.glob(d, recursive=True) # Allow globs
+			for d in inc:
+				globs = glob.glob(d, recursive=True) # Allow globs
+				if globs: incdirs += globs
+				else: incdirs += [d] # Globs were not used
 			cflags += ['-I%s' % d for d in incdirs] # Include directory in header search path
 
 		# Generate dependencies for all source files
 		sources = []
-		for s in src: sources += glob.glob(s, recursive=True) # Allow globs
+		for s in src:
+			globs = glob.glob(s, recursive=True) # Allow globs
+			if globs: sources += globs
+			else: sources += [s] # Globs were not used
 		objs = []
 		for source in sources:
 			# Compute the name for the object file
@@ -130,7 +135,10 @@ def process_cfg(filename):
 		# Listed libs are dependencies which also generate extra linker flags
 		if libs:
 			libraries = []
-			for l in libs: libraries += glob.glob(l, recursive=True) # Allow globs
+			for l in libs:
+				globs = glob.glob(l, recursive=True) # Allow globs
+				if globs: libraries += globs
+				else: libraries += [l] # Globs were not used
 			# Generate extra linker flags
 			lflags += ['-L%s' % str(pathlib.Path(l).parents[0]) for l in libraries]
 			lflags += ['-l%s' % get_lib_name(pathlib.Path(l).name) for l in libraries]
@@ -147,8 +155,9 @@ def process_cfg(filename):
 				mk_esc_recipe(objs),
 				mk_esc_recipe(lflags)))
 		elif target_type == 'lib':
-			mf.write('\trm %s\n' % mk_esc_recipe(target))
-			mf.write('\tar -crs %s %s\n' % (mk_esc_recipe(target), mk_esc_recipe(objs)))
+			mf.write('\trm -f %s\n\tar -crs %s %s\n' % (mk_esc_recipe(target),
+				mk_esc_recipe(target),
+				mk_esc_recipe(objs)))
 		elif target_type == 'so':
 			raise Exception('unimplemented')
 		targets.append(target)
