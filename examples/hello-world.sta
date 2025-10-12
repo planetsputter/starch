@@ -14,7 +14,6 @@
 .define STATIC_ADDR  0x5000
 .define STACK_BOTTOM 0x5000
 .define STACK_LIMIT  0x4000
-.define MAX_REPS     16
 
 ;
 ; Instruction section
