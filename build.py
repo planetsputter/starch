@@ -163,8 +163,8 @@ def process_cfg(filename):
 		targets.append(target)
 
 	# Parse each line of the file
-	comment_regex = '^\\s*#'
-	empty_regex = '^\\s*$'
+	comment_regex = r'^\s*#'
+	empty_regex = r'^\s*$'
 	file = open(filename)
 	lineno = 1
 	for line in file:
