@@ -56,17 +56,15 @@ enum {
 	//
 	// Promotion operations
 	//
-	op_prom8u16,  // Promote top 1 byte to 2 byte unsigned
+	// Note: Some promotions can be accomplished by pushing bytes with value zero and are not included here
 	op_prom8u32,  // Promote top 1 byte to 4 byte unsigned
 	op_prom8u64,  // Promote top 1 byte to 8 byte unsigned
 	op_prom8i16,  // Promote top 1 byte to 2 byte signed
 	op_prom8i32,  // Promote top 1 byte to 4 byte signed
 	op_prom8i64,  // Promote top 1 byte to 8 byte signed
-	op_prom16u32, // Promote top 2 byte to 4 byte unsigned
 	op_prom16u64, // Promote top 2 byte to 8 byte unsigned
 	op_prom16i32, // Promote top 2 byte to 4 byte signed
 	op_prom16i64, // Promote top 2 byte to 8 byte signed
-	op_prom32u64, // Promote top 4 byte to 8 byte unsigned
 	op_prom32i64, // Promote top 4 byte to 8 byte signed
 
 	//
@@ -375,7 +373,6 @@ enum {
 	STINT_ASSERT_FAILURE, // IO assertion failed
 	STINT_DIV_BY_ZERO, // Division by zero
 	STINT_BAD_IO_ACCESS, // Access to unused IO memory
-	STINT_BAD_FRAME_ACCESS, // Access to protected stack frame data
 	STINT_BAD_STACK_ACCESS, // Stack access out of stack memory region
 	STINT_BAD_ADDR, // Address out of range
 	STINT_NUM_INTS,

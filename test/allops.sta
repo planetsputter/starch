@@ -28,17 +28,14 @@ set8
 set16
 set32
 set64
-prom8u16
 prom8u32
 prom8u64
 prom8i16
 prom8i32
 prom8i64
-prom16u32
 prom16u64
 prom16i32
 prom16i64
-prom32u64
 prom32i64
 dem64to16
 dem64to8
