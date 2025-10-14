@@ -11,7 +11,6 @@ def add_dict(d1, d2):
 		if key in d2: d2[key] = d2[key] + d1[key]
 		else: d2[key] = d1[key]
 
-
 # Prints a human-readable list of line counts with the given label
 def print_counts(counts, ext):
 	print(f'{counts['files']} {ext} files')
@@ -156,7 +155,7 @@ if __name__ == '__main__':
 		nargs='?', default='.')
 	args = argp.parse_args()
 
-	# Count all files in the current directory
+	# Count all source files in the target directory
 	count_path(pathlib.Path(args.target))
 
 	print_all_counts()
