@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import glob, hashlib, multiprocessing, pathlib, re, shlex, subprocess, sys
+import glob, hashlib, multiprocessing, os, pathlib, re, shlex, subprocess, sys
 
 # Returns a shell line representing the given list of arguments, or single string argument
 def sh_esc(args):
@@ -46,7 +46,7 @@ def mf_write_rule(mf, target, deps):
 	mf.write('%s:%s\n' % (mk_esc_rule(target), ' '.join([mk_esc_rule(d) for d in deps])))
 
 # Process a build configuration file
-def process_cfg(filename):
+def process_cfg(filename, buildcfg):
 	# Make the build directory and object directory
 	pathlib.Path('.build/obj').mkdir(exist_ok=True, parents=True)
 
@@ -61,8 +61,10 @@ def process_cfg(filename):
 		'all:\n' +
 		'clean:\n' +
 		'\t@echo rm -f .build/obj/*.o\n' +
+		'\t@echo rm -f .build/lastcfg\n' +
 		'ifneq ($(filter clean,$(MAKECMDGOALS)),)\n' +
 		'    $(shell rm -f .build/obj/*.o)\n' +
+		'    $(shell rm -f .build/lastcfg)\n' +
 		'endif\n')
 
 	# Parameters from file
@@ -182,18 +184,32 @@ def process_cfg(filename):
 			if colpos <= 0: raise Exception('invalid line')
 			# Parse key
 			key = line[0:colpos].strip()
-			if not key in ctx: raise Exception('invalid key')
 			# Parse value
-			value = line[colpos + 1:]
-			values = sh_unesc(value)
+			values = sh_unesc(line[colpos + 1:])
 
-			# Each new 'target' key initiates processing of the previous target
+			# See if the key has a "key[config]" format
+			config = None
+			lbpos = key.find('[')
+			rbpos = key.find(']')
+			if lbpos > 0 and rbpos == len(key) - 1:
+				config = key[lbpos + 1:rbpos].strip()
+				key = key[:lbpos].strip()
+
 			if key == 'target':
+				if config != None:
+					raise Exception('configuration cannot be specified for \'target\' key')
+				# Each new 'target' key initiates processing of the previous target
 				if ctx['target']:
 					process_target()
 					for e in ctx: ctx[e] = None # Clear context
+			elif not key in ctx:
+				raise Exception('invalid key \'%s\'' % key)
 			elif not ctx['target']:
 				raise Exception('key before target')
+
+			if config != None and config != buildcfg:
+				# This line is for a different configuration
+				continue
 
 			# Certain keys expect a single non-empty value
 			if key in ('target', 'type', 'compiler'):
@@ -216,26 +232,61 @@ if __name__ == '__main__':
 	try:
 		# Parse command line arguments.
 		# We pass all arguments to make except an optional initial -f <cfgfile> pair.
-		buildcfg = 'build.cfg' # Default value
+		cfgfile = 'build.cfg' # Default value
 		args = sys.argv[1:] 
 		if len(args) > 0: 
 			if args[0] == '-f':
 				if len(args) < 2: raise Exception('expected value for argument \'-f\'')
-				buildcfg = args[1]
+				cfgfile = args[1]
 				# Remove the -f <cfgfile> pair from the arguments for make
 				args = args[2:]
+
+		# Determine the current build configuration
+		buildcfg = os.getenv('BUILDCFG', default='release')
+
+		# Scan for a command line argument that assigns the BUILDCFG variable
+		# such as "BUILDCFG=debug". Make parses these and they will override
+		# an environment variable.
+		for arg in args:
+			equpos = arg.find('=')
+			if equpos > 0 and arg[:equpos] == 'BUILDCFG':
+				buildcfg = arg[equpos + 1:]
+
+		# Set our environment variable BUILDCFG so the make process will inherit it
+		os.putenv('BUILDCFG', buildcfg)
+
+		# Check what the last build configuration was
+		lastcfg = None
+		try:
+			file = open('.build/lastcfg')
+			lastcfg = file.readline().strip()
+			file.close()
+		except FileNotFoundError as e:
+			pass
+
+		# Warn if this config is different from the last and we are not cleaning.
+		# This can result in stale files if recipes change but dependencies don't.
+		if lastcfg != None and lastcfg != buildcfg and 'clean' not in args:
+			print('%s: warning: No clean since build for config \'%s\'. Now building for config \'%s\'.' %
+				(sys.argv[0], lastcfg, buildcfg), file=sys.stderr)
 
 		# Specify '-j' argument to use all available processors unless '-j' is already specified
 		if '-j' not in args: args = ['-j', str(multiprocessing.cpu_count())] + args
 
 		# Process the config file, generating a makefile with dependencies
 		try:
-			process_cfg(buildcfg)
+			process_cfg(cfgfile, buildcfg)
 		except Exception as e:
-			raise Exception('failed to parse %s: %s' % (sh_esc(buildcfg), str(e)))
+			raise Exception('failed to parse %s: %s' % (sh_esc(cfgfile), str(e)))
 
-		completed = subprocess.run(('make', '-f', '.build/makefile', *args))
-		completed.check_returncode();
+		result = subprocess.run(('make', '-f', '.build/makefile', *args))
+
+		# Record current build configuration
+		file = open('.build/lastcfg', 'w')
+		file.write(buildcfg)
+		file.close()
+
+		result.check_returncode();
 
 	except Exception as e:
 		print('%s: error: %s' % (sys.argv[0], str(e)), file=sys.stderr)

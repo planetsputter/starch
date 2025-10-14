@@ -15,6 +15,12 @@ All command-line arguments to build.py are passed to make, except an optional in
 
 If no '-f' argument is provided, the default 'build.cfg' configuration file is used.
 
+Each time build.py is run it builds a particular configuration of the product which is stored in the 'BUILDCFG' build variable. The default configuration is 'release'. The BUILDCFG variable can be set either by environment variable or by command line argument. For instance, the following two commands both have the effect of building the 'debug' configuration of the product rather than the 'release' configuration:
+```
+BUILDCFG=debug ./build.py
+./build.py BUILDCFG=debug
+```
+
 If no '-j' argument is provided to specify how many jobs to run in parallel, build.py will pass '-j &lt;number of cpus&gt;' to make, where '&lt;number of cpus&gt;' is the detected number of CPUs on the machine. This means a parallel build is the default, but a serial build can be forced by passing the '-j 1' argument pair to build.py.
 
 Configuration File Syntax
@@ -36,15 +42,20 @@ Key value pairs are used to assign values to keys to define targets and their pr
 key:value
   key2:value1 value2 "value with spaces" another\ value\ with\ spaces
 ```
+A key value pair may be made to apply only to a particular configuration by enclosing the name of the configuration in square brackets after the key name. For instance, the following line sets the 'cflags' key, but only for the 'debug' configuration:
+```
+cflags[debug]:-Wall -g
+```
+Key value pairs without a specified configuration apply to any configuration.
 
-Configuration Keys
-------------------
+Keys
+----
 ### target
 Each target definition begins with the 'target' key, defining the name of the file to be built.
 ```
 target:stasm/bin/stasm
 ```
-The 'target' key must precede all other keys associated with the specified target.
+The 'target' key must precede all other keys associated with the specified target. The list of targets is the same between all configurations, and a specific configuration cannot be specified in brackets for the 'target' key.
 
 ### type
 Each target must have a type specified with the 'type' key. Valid types are 'bin' for binary files and 'lib' for static library files.
@@ -99,6 +110,7 @@ target: stasm/bin/stasm
   compiler: gcc
   src: stasm/src/*.c
   inc: starch/inc stasm/inc util/inc stub/inc
-  cflags: -Wall -Wextra -g
+  cflags[release]: -Wall -Wextra -O2
+  cflags[debug]: -Wall -Wextra -g
   libs: util/lib/libutil.a stub/lib/libstub.a starch/lib/libstarch.a
 ```
