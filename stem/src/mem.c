@@ -7,6 +7,7 @@
 
 #include "mem.h"
 #include "starch.h"
+#include "util.h"
 
 enum {
 	MEM_PAGE_SIZE = 0x1000,
@@ -229,140 +230,62 @@ static struct mem_node *mem_get_page(struct mem *mem, uint64_t addr)
 
 int mem_write8(struct mem *mem, uint64_t addr, uint8_t data)
 {
-	if (addr >= mem->size) {
-		return STINT_BAD_ADDR;
-	}
-
-	struct mem_node *page = mem_get_page(mem, addr);
-	page->data[addr & MEM_PAGE_MASK] = data;
-	return 0;
+	return mem_write(mem, addr, 1, &data);
 }
 
 int mem_write16(struct mem *mem, uint64_t addr, uint16_t data)
 {
-	if (addr >= mem->size - 1) {
-		return STINT_BAD_ADDR;
-	}
-
-	struct mem_node *page = mem_get_page(mem, addr);
-	page->data[addr & MEM_PAGE_MASK] = data;
-	addr++;
-	if ((addr & MEM_PAGE_MASK) == 0) {
-		page = mem_get_page(mem, addr);
-	}
-	page->data[addr & MEM_PAGE_MASK] = data >> 8;
-	return 0;
+	uint8_t buf[2];
+	put_little16(data, buf);
+	return mem_write(mem, addr, 2, buf);
 }
 
 int mem_write32(struct mem *mem, uint64_t addr, uint32_t data)
 {
-	if (addr >= mem->size - 3) {
-		return STINT_BAD_ADDR;
-	}
-
-	struct mem_node *page = mem_get_page(mem, addr);
-	for (uint64_t last_addr = addr + 4; ;) {
-		page->data[addr & MEM_PAGE_MASK] = data;
-		data >>= 8;
-		addr++;
-		if (addr >= last_addr) break;
-		if ((addr & MEM_PAGE_MASK) == 0) {
-			page = mem_get_page(mem, addr);
-		}
-	}
-	return 0;
+	uint8_t buf[4];
+	put_little32(data, buf);
+	return mem_write(mem, addr, 4, buf);
 }
 
 int mem_write64(struct mem *mem, uint64_t addr, uint64_t data)
 {
-	if (addr >= mem->size - 7) {
-		return STINT_BAD_ADDR;
-	}
-
-	struct mem_node *page = mem_get_page(mem, addr);
-	for (uint64_t last_addr = addr + 8; ;) {
-		page->data[addr & MEM_PAGE_MASK] = data;
-		data >>= 8;
-		addr++;
-		if (addr >= last_addr) break;
-		if ((addr & MEM_PAGE_MASK) == 0) {
-			page = mem_get_page(mem, addr);
-		}
-	}
-	return 0;
+	uint8_t buf[8];
+	put_little64(data, buf);
+	return mem_write(mem, addr, 8, buf);
 }
 
 int mem_read8(struct mem *mem, uint64_t addr, uint8_t *data)
 {
-	if (addr >= mem->size) {
-		return STINT_BAD_ADDR;
-	}
-
-	struct mem_node *page = mem_get_page(mem, addr);
-	*data = page->data[addr & MEM_PAGE_MASK];
-	return 0;
+	return mem_read(mem, addr, 1, data);
 }
 
 int mem_read16(struct mem *mem, uint64_t addr, uint16_t *data)
 {
-	if (addr >= mem->size - 1) {
-		return STINT_BAD_ADDR;
-	}
-
-	struct mem_node *page = mem_get_page(mem, addr);
-	uint16_t temp = 0;
-	for (int i = 0; ;) {
-		temp |= page->data[addr & MEM_PAGE_MASK] << (8 * i);
-		if (++i >= 2) break;
-		if ((++addr & MEM_PAGE_MASK) == 0) {
-			page = mem_get_page(mem, addr);
-		}
-	}
-	*data = temp;
-	return 0;
+	uint8_t buf[2];
+	int ret = mem_read(mem, addr, 2, buf);
+	if (ret == 0) *data = get_little16(buf);
+	return ret;
 }
 
 int mem_read32(struct mem *mem, uint64_t addr, uint32_t *data)
 {
-	if (addr >= mem->size - 3) {
-		return STINT_BAD_ADDR;
-	}
-
-	struct mem_node *page = mem_get_page(mem, addr);
-	uint32_t temp = 0;
-	for (int i = 0; ;) {
-		temp |= page->data[addr & MEM_PAGE_MASK] << (8 * i);
-		if (++i >= 4) break;
-		if ((++addr & MEM_PAGE_MASK) == 0) {
-			page = mem_get_page(mem, addr);
-		}
-	}
-	*data = temp;
-	return 0;
+	uint8_t buf[4];
+	int ret = mem_read(mem, addr, 4, buf);
+	if (ret == 0) *data = get_little32(buf);
+	return ret;
 }
 
 int mem_read64(struct mem *mem, uint64_t addr, uint64_t *data)
 {
-	if (addr >= mem->size - 7) {
-		return STINT_BAD_ADDR;
-	}
-
-	struct mem_node *page = mem_get_page(mem, addr);
-	uint64_t temp = 0;
-	for (int i = 0; ;) {
-		temp |= (uint64_t)page->data[addr & MEM_PAGE_MASK] << (8 * i);
-		if (++i >= 8) break;
-		if ((++addr & MEM_PAGE_MASK) == 0) {
-			page = mem_get_page(mem, addr);
-		}
-	}
-	*data = temp;
-	return 0;
+	uint8_t buf[8];
+	int ret = mem_read(mem, addr, 8, buf);
+	if (ret == 0) *data = get_little64(buf);
+	return ret;
 }
 
 int mem_load_image(struct mem *mem, uint64_t addr, uint64_t size, FILE *image_file)
 {
-	uint64_t end_addr = addr + size;
+	const uint64_t end_addr = addr + size;
 	int ret;
 	struct mem_node *node = NULL;
 	for (; addr < end_addr && (ret = fgetc(image_file)) != EOF; addr++) {
@@ -372,6 +295,40 @@ int mem_load_image(struct mem *mem, uint64_t addr, uint64_t size, FILE *image_fi
 		node->data[addr & MEM_PAGE_MASK] = ret;
 	}
 	return feof(image_file) ? 1 : 0;
+}
+
+int mem_write(struct mem *mem, uint64_t addr, uint64_t size, const uint8_t *data)
+{
+	const uint64_t end_addr = addr + size;
+	if (end_addr > mem->size) {
+		return 1;
+	}
+
+	struct mem_node *node = NULL;
+	for (; addr < end_addr; addr++) {
+		if (node == NULL || (addr & MEM_PAGE_MASK) == 0) {
+			node = mem_get_page(mem, addr);
+		}
+		node->data[addr & MEM_PAGE_MASK] = *data++;
+	}
+	return 0;
+}
+
+int mem_read(struct mem *mem, uint64_t addr, uint64_t size, uint8_t *data)
+{
+	const uint64_t end_addr = addr + size;
+	if (end_addr > mem->size) {
+		return 1;
+	}
+
+	struct mem_node *node = NULL;
+	for (; addr < end_addr; addr++) {
+		if (node == NULL || (addr & MEM_PAGE_MASK) == 0) {
+			node = mem_get_page(mem, addr);
+		}
+		*data++ = node->data[addr & MEM_PAGE_MASK];
+	}
+	return 0;
 }
 
 static int print_hex_iter_func(struct mem_node *node, struct iter_params *params)
