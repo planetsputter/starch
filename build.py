@@ -168,15 +168,15 @@ def process_cfg(filename, buildcfg):
 	comment_regex = r'^\s*#'
 	empty_regex = r'^\s*$'
 	file = open(filename)
-	lineno = 1
+	lineno = 0
 	for line in file:
 		try: # Attempt to parse the line
+			lineno = lineno + 1
 			# Strip trailing newline, if any
 			if len(line) > 0 and line[-1] == '\n': line = line[:-1]
 
 			# Skip comments and empty lines
 			if re.match(comment_regex, line) or re.match(empty_regex, line):
-				lineno = lineno + 1
 				continue
 
 			# Process line as a key-value pair
@@ -218,10 +218,9 @@ def process_cfg(filename, buildcfg):
 				ctx[key] = values[0]
 			else: # Others expect a list of values
 				ctx[key] = values
-			lineno = lineno + 1
 
 		except Exception as e: # Add detail to exception and re-throw
-			raise Exception('line %d: %s. line: %s' % (lineno, str(e), line))
+			raise Exception('line %d: %s' % (lineno, str(e)))
 
 	if ctx['target']: process_target() # Process final target
 
@@ -277,7 +276,7 @@ if __name__ == '__main__':
 		try:
 			process_cfg(cfgfile, buildcfg)
 		except Exception as e:
-			raise Exception('failed to parse %s: %s' % (sh_esc(cfgfile), str(e)))
+			raise Exception('failed to process %s: %s' % (sh_esc(cfgfile), str(e)))
 
 		result = subprocess.run(('make', '-f', '.build/makefile', *args))
 
