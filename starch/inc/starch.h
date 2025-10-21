@@ -373,6 +373,7 @@ enum {
 	STINT_ASSERT_FAILURE, // IO assertion failed
 	STINT_DIV_BY_ZERO, // Division by zero
 	STINT_BAD_IO_ACCESS, // Access to unused IO memory
+	STINT_BAD_FRAME_ACCESS, // Stack access out of current stack frame
 	STINT_BAD_STACK_ACCESS, // Stack access out of stack memory region
 	STINT_BAD_ADDR, // Address out of range
 	STINT_NUM_INTS,

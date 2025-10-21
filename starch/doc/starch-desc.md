@@ -339,7 +339,7 @@ These instructions will transfer control flow to a non-sequential instruction if
 
 ### Memory Operations
 
-These instructions load data from memory to the stack or store data from the stack to memory. Instructions with "sfp" use offsets from the stack frame pointer address, SFP. This allows to bring arguments to the current function and local variables within the current function to the top of the stack, because they reside at known offsets from SFP. The offset operand is always 64 bits wide. Opcode names with an additional "r" indicate an order-reversed variant.
+These instructions load data from memory to the stack or store data from the stack to memory. Instructions with "sfp" use offsets from the stack frame pointer address, SFP. This allows to bring arguments to the current function and local variables within the current function to the top of the stack, because they reside at known offsets from SFP. For negative offsets, the stack frame metadata size (16) is subtracted (subtraction not shown in the table below). This allows reference to the calling function arguments and return values without dependence on the stack frame metadata size. The offset operand is always 64 bits wide. Opcode names with an additional "r" indicate an order-reversed variant.
 
 | Op Code        | PC After | Stack Before | Stack After           | Side Effect          |
 |:-------------- |:-------- |:------------ |:--------------------- |:-------------------- |

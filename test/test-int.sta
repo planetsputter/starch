@@ -60,9 +60,9 @@ setslp $STACK_LIMIT
 ; Set the given interrupt handler to jump to the given address
 ;
 :set_int_addr ; void set_int_addr(intu8, addr64)
-	push64 -25
+	push64 -9
 	loadpopsfp64  ; addr64
-	push64 -17
+	push64 -1
 	loadpopsfp8   ; addr64, intu8
 	prom8u64      ; addr64, intu64
 	push64 16
@@ -80,7 +80,7 @@ setslp $STACK_LIMIT
 ; Restore the default handler for the given interrupt, which halts with the interrupt code
 ;
 :restore_int_handler ; void restore_int_handler(intu8)
-	push64 -17
+	push64 -1
 	loadpopsfp8 ; intu8
 	dup8        ; intu8, intu8
 	prom8u64    ; intu8, intu64
