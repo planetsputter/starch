@@ -286,30 +286,45 @@ int mem_read64(struct mem *mem, uint64_t addr, uint64_t *data)
 int mem_load_image(struct mem *mem, uint64_t addr, uint64_t size, FILE *image_file)
 {
 	const uint64_t end_addr = addr + size;
-	int ret;
-	struct mem_node *node = NULL;
-	for (; addr < end_addr && (ret = fgetc(image_file)) != EOF; addr++) {
-		if (node == NULL || (addr & MEM_PAGE_MASK) == 0) {
-			node = mem_get_page(mem, addr);
-		}
-		node->data[addr & MEM_PAGE_MASK] = ret;
+	if (end_addr > mem->size || end_addr < addr) { // Check size and wrap
+		return 1;
 	}
-	return feof(image_file) ? 1 : 0;
+
+	int ret = 0;
+	while (addr < end_addr) {
+		// Read data page by page
+		uint64_t max_read = MEM_PAGE_SIZE - (addr & MEM_PAGE_MASK);
+		if (max_read > end_addr - addr) {
+			max_read = end_addr - addr;
+		}
+		struct mem_node *node = mem_get_page(mem, addr);
+		size_t num_read = fread(node->data + (addr & MEM_PAGE_MASK), 1, max_read, image_file);
+		if (num_read != max_read) {
+			ret = 1;
+			break;
+		}
+		addr += max_read;
+	}
+	return ret;
 }
 
 int mem_write(struct mem *mem, uint64_t addr, uint64_t size, const uint8_t *data)
 {
 	const uint64_t end_addr = addr + size;
-	if (end_addr > mem->size) {
+	if (end_addr > mem->size || end_addr < addr) { // Check size and wrap
 		return 1;
 	}
 
-	struct mem_node *node = NULL;
-	for (; addr < end_addr; addr++) {
-		if (node == NULL || (addr & MEM_PAGE_MASK) == 0) {
-			node = mem_get_page(mem, addr);
+	while (addr < end_addr) {
+		// Copy data page by page
+		uint64_t max_copy = MEM_PAGE_SIZE - (addr & MEM_PAGE_MASK);
+		if (max_copy > end_addr - addr) {
+			max_copy = end_addr - addr;
 		}
-		node->data[addr & MEM_PAGE_MASK] = *data++;
+		struct mem_node *node = mem_get_page(mem, addr);
+		memcpy(node->data + (addr & MEM_PAGE_MASK), data, max_copy);
+		data += max_copy;
+		addr += max_copy;
 	}
 	return 0;
 }
@@ -317,16 +332,20 @@ int mem_write(struct mem *mem, uint64_t addr, uint64_t size, const uint8_t *data
 int mem_read(struct mem *mem, uint64_t addr, uint64_t size, uint8_t *data)
 {
 	const uint64_t end_addr = addr + size;
-	if (end_addr > mem->size) {
+	if (end_addr > mem->size || end_addr < addr) { // Check size and wrap
 		return 1;
 	}
 
-	struct mem_node *node = NULL;
-	for (; addr < end_addr; addr++) {
-		if (node == NULL || (addr & MEM_PAGE_MASK) == 0) {
-			node = mem_get_page(mem, addr);
+	while (addr < end_addr) {
+		// Copy data page by page
+		uint64_t max_copy = MEM_PAGE_SIZE - (addr & MEM_PAGE_MASK);
+		if (max_copy > end_addr - addr) {
+			max_copy = end_addr - addr;
 		}
-		*data++ = node->data[addr & MEM_PAGE_MASK];
+		struct mem_node *node = mem_get_page(mem, addr);
+		memcpy(data, node->data + (addr & MEM_PAGE_MASK), max_copy);
+		data += max_copy;
+		addr += max_copy;
 	}
 	return 0;
 }
