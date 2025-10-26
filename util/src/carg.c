@@ -19,6 +19,8 @@ static const char *desc_for_arg_error(enum carg_error error)
 		return "unexpected argument";
 	case CARG_ERROR_UNRECOGNIZED_FLAG:
 		return "unrecognized flag";
+	case CARG_ERROR_UNRECOGNIZED_OPTION:
+		return "unrecognized option";
 	}
 	return "UNKNOWN";
 }
@@ -179,6 +181,15 @@ enum carg_error carg_parse_args(
 				}
 
 				// Argument has been parsed as sequence of flags
+				continue;
+			}
+
+			if (arg[0] == '-' && arg[1] == '-') {
+				// This argument is an unrecognized option
+				last_error = CARG_ERROR_UNRECOGNIZED_OPTION;
+				if (error_handler == NULL || !error_handler(last_error, arg)) {
+					return last_error;
+				}
 				continue;
 			}
 		}
