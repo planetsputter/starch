@@ -156,15 +156,6 @@ int main(int argc, const char *argv[])
 				break;
 			}
 
-			// Print opcode name
-			ret = fprintf(outfile, "%s", name);
-			if (ret < 0) {
-				fprintf(stderr, "error: failed to write to \"%s\"\n", arg_output ? arg_output : "stdout");
-				ret = 1;
-				break;
-			}
-			ret = 0;
-
 			// Determine type of immediate value
 			int sdt = imm_type_for_opcode(opcode);
 			if (sdt < 0) {
@@ -179,6 +170,7 @@ int main(int argc, const char *argv[])
 			// Read little-endian immediate value
 			int64_t val = 0;
 			int64_t b;
+			ret = 0;
 			for (int j = 0; j < imm_len; j++) {
 				b = fgetc(infile);
 				if (b == EOF) {
@@ -190,6 +182,14 @@ int main(int argc, const char *argv[])
 				val |= b << (j * 8);
 			}
 			if (ret) break;
+
+			// Print opcode name
+			ret = fprintf(outfile, "%s", name);
+			if (ret < 0) {
+				fprintf(stderr, "error: failed to write to \"%s\"\n", arg_output ? arg_output : "stdout");
+				ret = 1;
+				break;
+			}
 
 			// Print value
 			if (sdt == SDT_VOID) {
