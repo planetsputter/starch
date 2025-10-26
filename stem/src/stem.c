@@ -14,6 +14,7 @@ const char *arg_cycles = NULL;
 const char *arg_dump = NULL;
 const char *arg_help = NULL;
 const char *arg_image = NULL;
+const char *arg_mem_size = NULL;
 
 struct carg_desc arg_descs[] = {
 	{
@@ -33,6 +34,15 @@ struct carg_desc arg_descs[] = {
 		false,
 		"cycles",
 		"cycles"
+	},
+	{
+		CARG_TYPE_NAMED,
+		'\0',
+		"--mem-size",
+		&arg_mem_size,
+		false,
+		"memory size",
+		NULL
 	},
 	{
 		CARG_TYPE_NAMED,
@@ -93,14 +103,25 @@ int main(int argc, const char *argv[])
 		);
 		return 1;
 	}
-	// Arguments parsed, no errors
 
+	// Parse number of cycles
 	long int max_cycles = -1;
 	if (arg_cycles) {
 		char *endptr = NULL;
 		max_cycles = strtol(arg_cycles, &endptr, 0);
 		if (*arg_cycles == '\0' || *endptr != '\0') {
 			fprintf(stderr, "error: invalid cycle count \"%s\"\n", arg_cycles);
+			return 1;
+		}
+	}
+
+	// Parse max memory size
+	long int mem_size = 0x40000000;
+	if (arg_mem_size) {
+		char *endptr = NULL;
+		mem_size = strtol(arg_mem_size, &endptr, 0);
+		if (*arg_mem_size == '\0' || *endptr != '\0' || mem_size < 0x4000) {
+			fprintf(stderr, "error: invalid memory size \"%s\"\n", arg_mem_size);
 			return 1;
 		}
 	}
@@ -131,7 +152,7 @@ int main(int argc, const char *argv[])
 
 	// Initialize emulated memory. Give ourselves 1 GiB emulated physical memory.
 	struct mem memory;
-	mem_init(&memory, 0x40000000);
+	mem_init(&memory, mem_size);
 
 	// Prepare hard-coded interrupt handlers, which just halt with the interrupt number
 	for (int i = 1; i < 256; i++) {
@@ -156,7 +177,8 @@ int main(int argc, const char *argv[])
 		// Load section into memory
 		ret = mem_load_image(&memory, sec.addr, sec.size, infile);
 		if (ret) {
-			fprintf(stderr, "error: failed to load memory from \"%s\" to address 0\n", arg_image);
+			fprintf(stderr, "error: failed to load memory from \"%s\" to address %#"PRIx64"\n",
+				arg_image, sec.addr);
 			break;
 		}
 	}
