@@ -245,11 +245,15 @@ if __name__ == '__main__':
 
 		# Scan for a command line argument that assigns the BUILDCFG variable
 		# such as "BUILDCFG=debug". Make parses these and they will override
-		# an environment variable.
+		# an environment variable. Also scan for any targets.
+		targets = []
 		for arg in args:
 			equpos = arg.find('=')
-			if equpos > 0 and arg[:equpos] == 'BUILDCFG':
-				buildcfg = arg[equpos + 1:]
+			if equpos >= 0: # An assignment
+				if arg[:equpos] == 'BUILDCFG':
+					buildcfg = arg[equpos + 1:]
+			else: # A target
+				targets += [arg]
 
 		# Set our environment variable BUILDCFG so the make process will inherit it
 		os.putenv('BUILDCFG', buildcfg)
@@ -280,10 +284,11 @@ if __name__ == '__main__':
 
 		result = subprocess.run(('make', '-f', '.build/makefile', *args))
 
-		# Record current build configuration
-		file = open('.build/lastcfg', 'w')
-		file.write(buildcfg)
-		file.close()
+		if not ('clean' in targets and len(targets) == 1):
+			# Record current build configuration unless we only cleaned
+			file = open('.build/lastcfg', 'w')
+			file.write(buildcfg)
+			file.close()
 
 		result.check_returncode();
 
