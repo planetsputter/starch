@@ -2852,7 +2852,7 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_mem_write8(core, mem, temp_u64b, temp_u8); // Write to memory
 		if (ret) break;
-		core->sp += 8;
+		core->sp -= 8;
 		core->pc += 1;
 		break;
 	case op_storerpop16:
@@ -2862,7 +2862,7 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_mem_write16(core, mem, temp_u64b, temp_u16); // Write to memory
 		if (ret) break;
-		core->sp += 8;
+		core->sp -= 8;
 		core->pc += 1;
 		break;
 	case op_storerpop32:
@@ -2872,7 +2872,7 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_mem_write32(core, mem, temp_u64b, temp_u32); // Write to memory
 		if (ret) break;
-		core->sp += 8;
+		core->sp -= 8;
 		core->pc += 1;
 		break;
 	case op_storerpop64:
@@ -2882,7 +2882,7 @@ int core_step(struct core *core, struct mem *mem)
 		if (ret) break;
 		ret = core_mem_write64(core, mem, temp_u64b, temp_u64); // Write to memory
 		if (ret) break;
-		core->sp += 8;
+		core->sp -= 8;
 		core->pc += 1;
 		break;
 	case op_storersfp8:
