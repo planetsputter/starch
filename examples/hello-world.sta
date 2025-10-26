@@ -11,9 +11,9 @@
 ;
 ; Definitions
 ;
+.define STACK_BOTTOM 0x4000
+.define STACK_LIMIT  0x5000
 .define STATIC_ADDR  0x5000
-.define STACK_BOTTOM 0x5000
-.define STACK_LIMIT  0x4000
 
 ;
 ; Instruction section
@@ -28,22 +28,22 @@
 ;
 ; Write buffer to constant IO address
 ;
-:write_io ; ioa64, bufa64, lenu64
-	push64 24
+:write_io ; void write_io(ioa64, bufa64, lenu64)
+	push64 -16
 	loadpopsfp64 ; bufa64
-	push64 32
+	push64 -24
 	loadpopsfp64 ; bufa64, lenu64
 	add64        ; enda64
-	push64 24
+	push64 -16
 	loadpopsfp64 ; enda64, bufa64
 :write_io_loop
 	dup64        ; enda64, bufa64, bufa64
-	push64 -8
+	push64 0
 	loadpopsfp64 ; enda64, bufa64, bufa64, enda64
 	cltu64       ; enda64, bufa64, bufa64 < enda64
 	brz64 :write_io_end
 	load8        ; enda64, bufa64, data8
-	push64 16
+	push64 -8
 	loadpopsfp64 ; enda64, bufa64, data8, ioa64
 	storerpop8   ; *ioa64 = data8
 	pop8         ; enda64, bufa64
