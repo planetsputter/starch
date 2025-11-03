@@ -25,6 +25,7 @@ static const char *desc_for_arg_error(enum carg_error error)
 	return "UNKNOWN";
 }
 
+// Print a brief description of the given argument error for the given argument
 bool carg_print_error(enum carg_error error, const char *arg)
 {
 	int ret = fprintf(stderr, "error: %s", desc_for_arg_error(error));
@@ -54,6 +55,21 @@ static struct carg_desc *find_name_match(
 	return NULL;
 }
 
+// Same as above, but compares only the first n characters of each string
+static struct carg_desc *find_name_match_n(
+	struct carg_desc *desc,
+	const char *name,
+	size_t n)
+{
+	for (; desc->type != CARG_TYPE_NONE; desc++) {
+		if (desc->type != CARG_TYPE_POSITIONAL &&
+			desc->name != NULL && strncmp(desc->name, name, n) == 0) {
+			return desc;
+		}
+	}
+	return NULL;
+}
+
 // Returns the first non-positional argument description in the given list which matches the given flag.
 // Returns NULL if there is no such match.
 static struct carg_desc *find_flag_match(
@@ -66,6 +82,19 @@ static struct carg_desc *find_flag_match(
 		}
 	}
 	return NULL;
+}
+
+// Handles occurrence of a unary argument or assignment of a named value argument
+static void apply_arg(carg_handler handler, struct carg_desc *desc, const char *val)
+{
+	if (desc->value != NULL) {
+		// Store argument value
+		*desc->value = val;
+	}
+	if (handler != NULL) {
+		// Invoke handler
+		handler(desc, val);
+	}
 }
 
 enum carg_error carg_parse_args(
@@ -94,14 +123,7 @@ enum carg_error carg_parse_args(
 		if (!positional_only) {
 			if (named_expected != NULL) {
 				// A named argument value is expected in this context
-				if (named_expected->value != NULL) {
-					// Store argument value
-					*named_expected->value = arg;
-				}
-				if (handler != NULL) {
-					// Invoke handler
-					handler(named_expected, arg);
-				}
+				apply_arg(handler, named_expected, arg);
 				named_expected = NULL;
 				continue;
 			}
@@ -113,23 +135,30 @@ enum carg_error carg_parse_args(
 			}
 
 			// Argument may be a named or unary argument. Check for name match.
+			const char *val = NULL;
 			struct carg_desc *desc = find_name_match(descs, arg);
+			if (desc == NULL) {
+				// If the argument contains '=', split it into a name and value
+				val = strchr(arg, '=');
+				if (val && val > arg) { // Argument contains '=' after first character
+					desc = find_name_match_n(descs, arg, val - arg);
+					val++; // Skip the '='
+				}
+			}
 			if (desc != NULL) {
 				// Name match found
 				if (desc->type == CARG_TYPE_UNARY) {
 					// Argument is unary argument
-					if (desc->value != NULL) {
-						// Store argument which set this unary argument
-						*desc->value = arg;
-					}
-					if (handler != NULL) {
-						// Invoke handler
-						handler(desc, arg);
-					}
+					apply_arg(handler, desc, arg);
 				}
 				else if (desc->type == CARG_TYPE_NAMED) {
-					// Argument is named argument. Expect a value next.
-					named_expected = desc;
+					if (val == NULL) {
+						// Argument is named argument. Expect a value next.
+						named_expected = desc;
+					}
+					else { // Argument is an assignment. Handle value now.
+						apply_arg(handler, desc, val);
+					}
 				}
 				continue;
 			}
@@ -151,14 +180,7 @@ enum carg_error carg_parse_args(
 
 					// Flag matches
 					if (desc->type == CARG_TYPE_UNARY) {
-						if (desc->value != NULL) {
-							// Store argument which set this unary argument
-							*desc->value = arg;
-						}
-						if (handler != NULL) {
-							// Invoke handler
-							handler(desc, arg);
-						}
+						apply_arg(handler, desc, arg);
 					}
 					else if (desc->type == CARG_TYPE_NAMED) {
 						// Argument is named argument. Expect a value either after the flag
@@ -167,14 +189,7 @@ enum carg_error carg_parse_args(
 							named_expected = desc;
 						}
 						else { // Value is the rest of this argument
-							if (desc->value != NULL) {
-								// Store argument value
-								*desc->value = flag;
-							}
-							if (handler != NULL) {
-								// Invoke handler
-								handler(desc, flag);
-							}
+							apply_arg(handler, desc, flag);
 						}
 						break;
 					}
