@@ -8,19 +8,20 @@
 #include <stdint.h>
 
 #include "bstr.h"
+#include "utf8.h"
 
-// Parse a potentially escaped character literal from the given string, setting *val.
-// Returns a pointer to the next character, or NULL if the escape sequence is invalid.
-// The goal is for the format of the escape sequences to be identical to those in the C language.
-const char *parse_char_lit(const char *str, char *val);
+// Parse an entire B-string character literal, including beginning and ending single quotation marks,
+// interpreting escapes and setting *val.
+// Returns whether the character literal is valid.
+bool parse_char_lit(const bchar *str, ucp *val);
 
-// Parse an entire string literal, including beginning and ending quotation marks,
+// Parse an entire B-string string literal, including beginning and ending double quotation marks,
 // interpreting escapes and appending unescaped content to the given B-string destination.
 // Destination string will have characters appended until end of string or first invalid escape sequence.
 // Returns whether the string literal is valid.
-bool parse_string_lit(const char *str, bchar **dest);
+bool parse_string_lit(const bchar *str, bchar **dest);
 
-// Parse an integer literal, setting *val. Returns whether the conversion was successful.
+// Parse a B-string integer literal, setting *val. Returns whether the conversion was successful.
 // Character notation such as 'c' is allowed. Hexadecimal notation beginning with 0x is allowed.
 // Decimal literals are also allowed.
-bool parse_int(const char *s, int64_t *val);
+bool parse_int(const bchar *s, int64_t *val);

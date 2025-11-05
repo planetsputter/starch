@@ -20,6 +20,8 @@ echo testing emulated memory
 ../stem/test/memtest
 echo testing utf8 library
 ../util/test/utf8test
+echo testing literal parsing
+../util/test/littest
 
 # Assemble a file which contains every opcode
 echo assembling all opcodes

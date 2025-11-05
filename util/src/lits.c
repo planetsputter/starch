@@ -14,7 +14,7 @@ static char nibble_for_hex(char hex)
 	return hex - '0';
 }
 
-const char *parse_char_lit(const char *str, char *val)
+static const char *parse_char_lit_impl(const char *str, ucp *val)
 {
 	char tc = 0; // Temporary character
 	if (*str == '\\') {
@@ -66,14 +66,28 @@ const char *parse_char_lit(const char *str, char *val)
 	return str;
 }
 
-bool parse_string_lit(const char *str, bchar **dest)
+bool parse_char_lit(const bchar *s, ucp *val)
+{
+	const char *end;
+	ucp temp_val;
+	// Ensure beginning and ending single quotes, valid or no escape, and correct B-string length
+	bool ret = *s == '\'' && (end = parse_char_lit_impl(s + 1, &temp_val)) && *end == '\'' &&
+		(size_t)(end - s) == bstrlen(s) - 1;
+	if (ret) *val = temp_val;
+	return ret;
+}
+
+bool parse_string_lit(const bchar *str, bchar **dest)
 {
 	// Literal must start with '"'
-	if (*str++ != '"') return false;
+	size_t len = bstrlen(str);
+	if (len < 2 || *str != '"') return false;
 
-	char cval;
-	for (; *str && *str != '"'; ) {
-		str = parse_char_lit(str, &cval);
+	ucp cval;
+	size_t i;
+	for (i = 1; i < len - 1; i++) {
+		if (*str == '"') break; // Unescaped '"' ends literal
+		str = parse_char_lit_impl(str, &cval);
 		if (str) { // Valid unescape
 			*dest = bstr_append(*dest, cval);
 		}
@@ -83,56 +97,62 @@ bool parse_string_lit(const char *str, bchar **dest)
 	}
 
 	// Ensure escapes were valid and literal ends at the first unescaped '"'
-	return str != NULL && *str == '"' && *(str + 1) == '\0';
+	return str != NULL && *str == '"' && i == len - 1;
 }
 
-bool parse_int(const char *s, int64_t *val)
+bool parse_int(const bchar *s, int64_t *val)
 {
-	if (*s == '\0') return false; // Empty string
+	size_t slen = bstrlen(s);
 
 	// Allow character notation such as 'c', '\n'
-	long long temp_val = 0;
-	if (*s == '\'') {
-		s++;
-		char cval;
-		const char *end = parse_char_lit(s, &cval);
-		if (end == NULL || *end != '\'' || *(end + 1) != '\0') {
-			return false;
-		}
-		*val = cval;
-		return true;
+	ucp c;
+	bool ret = parse_char_lit(s, &c);
+	if (ret) {
+		*val = c;
+		return ret;
 	}
 
+	const char *p = s;
+
+	// Parse optional sign
 	bool neg;
-	if (*s == '-') {
-		s++;
-		if (*s == '\0') return false; // "-"
+	if (*p == '-') {
+		p++;
 		neg = true;
 	}
 	else {
 		neg = false;
 	}
+	if (*p == '\0') return false; // "" or "-"
 
 	// @todo: handle overflow
-	if (*s == '0' && *(s + 1) == 'x') { // Hexadecimal literal
-		s += 2;
-		if (*s == '\0') return false; // "0x"
-		for (; isxdigit(*s); s++) {
-			// Compute value of hexadecimal digit
-			int val = *s >= 'a' ? *s - 'a' + 10 : *s >= 'A' ? *s - 'A' + 10 : *s - '0';
-			temp_val = temp_val * 0x10 + val;
+	int64_t temp_val = 0;
+
+	if (*p == '0') {
+		if (*(p + 1) == 'x') { // Hexadecimal literal
+			p += 2;
+			if (*p == '\0') return false; // "0x"
+			for (; isxdigit(*p); p++) {
+				// Compute value of hexadecimal digit
+				int val = *p >= 'a' ? *p - 'a' + 10 : *p >= 'A' ? *p - 'A' + 10 : *p - '0';
+				temp_val = temp_val * 0x10 + val;
+			}
+		}
+		else { // Octal literal
+			for (p++; *p >= '0' && *p <= '7'; p++) {
+				temp_val = temp_val * 8 + *p - '0';
+			}
 		}
 	}
 	else { // Decimal literal
-		for (; isdigit(*s); s++) {
-			temp_val = temp_val * 10 + *s - '0';
+		for (; isdigit(*p); p++) {
+			temp_val = temp_val * 10 + *p - '0';
 		}
 	}
 
 	// Expect end of string
-	if (*s != '\0') return false;
+	if ((size_t)(p - s) != slen) return false;
 
 	*val = neg ? -temp_val : temp_val;
 	return true;
 }
-
