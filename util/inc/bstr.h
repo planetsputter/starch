@@ -4,6 +4,8 @@
 
 #include <stddef.h>
 
+#include "utf8.h"
+
 // Character type used to identify B-strings
 typedef char bchar;
 
@@ -23,15 +25,21 @@ void bfree(bchar *s);
 size_t bstrlen(const bchar *s);
 
 // Efficiently concatenates the src C-string onto the dest B-string.
-// Returns the possibly reallocated string dest B-string.
+// Returns the possibly reallocated dest B-string.
 bchar *bstrcatc(bchar *dest, const char *src);
 
 // Efficiently concatenates the src B-string onto the dest B-string.
-// Returns the possibly reallocated string dest B-string.
+// Returns the possibly reallocated dest B-string.
 bchar *bstrcatb(bchar *dest, const bchar *src);
 
+// Efficiently concatenates the src code point onto the dest B-string,
+// encoding as UTF-8.
+// On error, returns NULL and sets *error. Otherwise returns the possibly reallocated
+// dest B-string and sets *error to 0.
+bchar *bstrcatu(bchar *dest, ucp src, int *error);
+
 // Efficiently appends the given character to the dest B-string.
-// Returns the possibly reallocated B-string.
+// Returns the possibly reallocated dest B-string.
 bchar *bstr_append(bchar *dest, char c);
 
 // Indicates whether B-string s1 is less than, equal to, or greater than

@@ -1,9 +1,10 @@
 // bstr.c
 
-#include "bstr.h"
-
 #include <stdlib.h>
 #include <string.h>
+
+#include "bstr.h"
+#include "utf8.h"
 
 // B-string allocation increment. Used to prevent excessive reallocations.
 enum { BSTR_ALLOC_INC = 64 };
@@ -85,6 +86,26 @@ bchar *bstrcatb(bchar *dest, const bchar *src)
 
 	// Copy src contents after dest contents
 	memcpy(dest + h->len, src, srclen + 1);
+	h->len += srclen; // Increase dest length
+	return dest;
+}
+
+bchar *bstrcatu(bchar *dest, ucp src, int *error)
+{
+	// Determine bytes required to represent src code point
+	int srclen = utf8_bytes_for_char(src, error);
+	if (*error) return NULL;
+
+	// Reallocate dest B-string to accomodate extra content
+	struct bstr_hdr *h = (struct bstr_hdr*)dest - 1;
+	h = bstr_realloc_for_len(h, h->len + srclen);
+	dest = (bchar*)(h + 1);
+
+	// Encode src contents after dest contents
+	utf8_encode_char(src, (byte*)dest + h->len, srclen, error);
+	if (*error) return NULL;
+	dest[h->len + srclen] = '\0';
+
 	h->len += srclen; // Increase dest length
 	return dest;
 }

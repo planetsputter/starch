@@ -14,9 +14,12 @@ static char nibble_for_hex(char hex)
 	return hex - '0';
 }
 
-static const char *parse_char_lit_impl(const char *str, ucp *val)
+// Parses any escape code at the given string using up to remain bytes.
+// On success sets *val to the escaped character value and returns pointer to next unused byte.
+// Otherwise returns NULL.
+static const char *parse_char_lit_impl(const char *str, size_t remain, ucp *val)
 {
-	char tc = 0; // Temporary character
+	ucp tc = 0; // Temporary character
 	if (*str == '\\') {
 		switch (*++str) {
 		case 'a': tc = '\a'; break;
@@ -56,11 +59,11 @@ static const char *parse_char_lit_impl(const char *str, ucp *val)
 		}
 		str++;
 	}
-	else if (*str == '\0' || *str == '\n') { // Disallowed characters
-		return NULL;
-	}
 	else {
-		tc = *str++;
+		int error = 0;
+		utf8_decode_array((const byte*)str, remain, &tc, 1, &error);
+		if (error != UTF8_ERROR_CHARACTER_OVERFLOW && error != 0) return NULL;
+		str += utf8_bytes_for_char(tc, &error);
 	}
 	*val = tc;
 	return str;
@@ -68,13 +71,16 @@ static const char *parse_char_lit_impl(const char *str, ucp *val)
 
 bool parse_char_lit(const bchar *s, ucp *val)
 {
-	const char *end;
-	ucp temp_val;
 	// Ensure beginning and ending single quotes, valid or no escape, and correct B-string length
-	bool ret = *s == '\'' && (end = parse_char_lit_impl(s + 1, &temp_val)) && *end == '\'' &&
-		(size_t)(end - s) == bstrlen(s) - 1;
-	if (ret) *val = temp_val;
-	return ret;
+	if (*s != '\'') return false;
+
+	size_t slen = bstrlen(s);
+	ucp tv = 0;
+	const char *end = parse_char_lit_impl(s + 1, slen - 1, &tv);
+	if (end == NULL || *end != '\'' || slen != (size_t)(end - s) + 1) return false;
+
+	*val = tv;
+	return true;
 }
 
 bool parse_string_lit(const bchar *str, bchar **dest)
@@ -87,7 +93,7 @@ bool parse_string_lit(const bchar *str, bchar **dest)
 	size_t i;
 	for (i = 1; i < len - 1; i++) {
 		if (*str == '"') break; // Unescaped '"' ends literal
-		str = parse_char_lit_impl(str, &cval);
+		str = parse_char_lit_impl(str, len - i, &cval);
 		if (str) { // Valid unescape
 			*dest = bstr_append(*dest, cval);
 		}

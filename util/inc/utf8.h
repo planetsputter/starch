@@ -8,7 +8,8 @@
 typedef uint32_t ucp; // Unicode Code Point
 typedef uint8_t byte;
 
-enum { // Error codes
+enum {
+	// Error codes
 	UTF8_ERROR_INVALID_START_BYTE = 1,
 	UTF8_ERROR_INVALID_CONTINUATION_BYTE,
 	UTF8_ERROR_OVERLONG_SEQUENCE,
@@ -16,6 +17,8 @@ enum { // Error codes
 	UTF8_ERROR_BYTE_OVERFLOW,
 	UTF8_ERROR_UNEXPECTED_TERMINATION,
 	UTF8_ERROR_INVALID_CHARACTER,
+	// Constants
+	UTF8_MAX_POINT = 0x1fffff,
 };
 
 //
