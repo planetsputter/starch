@@ -40,7 +40,7 @@ ucp *utf8_decoder_decode(struct utf8_decoder *decoder, byte b, ucp *c, int *erro
 			decoder->state--;
 			if ((decoder->state & 0xf) == 0) { // Multi-byte character complete
 				// Compare number of bytes needed with sequence length
-				int bfc = utf8_bytes_for_char(decoder->c, error);
+				size_t bfc = utf8_bytes_for_char(decoder->c, error);
 				if (bfc != 0) {
 					if (bfc == decoder->state >> 4) {
 						*(c++) = decoder->c;
@@ -104,7 +104,7 @@ ucp *utf8_decode_string(const char *str, ucp *ca, size_t cc, int *error) {
 	return ca;
 }
 
-int utf8_bytes_for_char(ucp c, int *error) {
+size_t utf8_bytes_for_char(ucp c, int *error) {
 	*error = 0;
 	if (c < 0x80) return 1;
 	if (c < 0x800) return 2;
@@ -112,6 +112,20 @@ int utf8_bytes_for_char(ucp c, int *error) {
 	if (c < 0x200000) return 4;
 	*error = UTF8_ERROR_INVALID_CHARACTER;
 	return 0;
+}
+
+size_t utf8_bytes_for_array(const ucp *ca, size_t cc, int *error) {
+	*error = 0;
+	size_t sum = 0;
+	for (size_t i = 0; i < cc; i++) {
+		size_t ret = utf8_bytes_for_char(ca[i], error);
+		if (ret == 0) {
+			sum = 0;
+			break;
+		}
+		sum += ret;
+	}
+	return sum;
 }
 
 byte *utf8_encode_char(ucp c, byte *b, size_t len, int *error) {

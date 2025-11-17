@@ -62,7 +62,13 @@ ucp *utf8_decode_string(const char *str, ucp *ca, size_t cc, int *error);
 // If an error occurs, *error will be set to the appropriate error code and the return value will be zero.
 // If no error occurs, *error will be set to 0 and the return value will be between 1 and 4 inclusively.
 // The only error which may occur is UTF8_ERROR_INVALID_CHARACTER.
-int utf8_bytes_for_char(ucp c, int *error);
+size_t utf8_bytes_for_char(ucp c, int *error);
+
+// Returns the number of bytes necessary to encode all the characters in the given array.
+// If an error occurs, *error will be set to the appropriate error code and the return value will be zero.
+// If no error occurs, *error will be set to 0.
+// The only error which may occur is UTF8_ERROR_INVALID_CHARACTER.
+size_t utf8_bytes_for_array(const ucp *ca, size_t cc, int *error);
 
 // Encodes the given character into the given array of bytes of the given length.
 // If an error occurs, *error will be set to the appropriate error code.

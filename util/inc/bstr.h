@@ -18,6 +18,11 @@ bchar *bstrdupc(const char*);
 // Returns a B-string duplicate of the given B-string
 bchar *bstrdupb(const bchar*);
 
+// Creates a UTF-8 B-string duplicate of the given character array.
+// If an encoding error occurs, sets *error and returns NULL.
+// Otherwise sets *error to 0 and returns the B-string.
+bchar *bstrdupu(const ucp *ca, size_t cc, int *error);
+
 // Deallocates the given B-string
 void bfree(bchar *s);
 
@@ -32,11 +37,11 @@ bchar *bstrcatc(bchar *dest, const char *src);
 // Returns the possibly reallocated dest B-string.
 bchar *bstrcatb(bchar *dest, const bchar *src);
 
-// Efficiently concatenates the src code point onto the dest B-string,
+// Efficiently concatenates the src character array onto the dest B-string,
 // encoding as UTF-8.
 // On error, returns NULL and sets *error. Otherwise returns the possibly reallocated
 // dest B-string and sets *error to 0.
-bchar *bstrcatu(bchar *dest, ucp src, int *error);
+bchar *bstrcatu(bchar *dest, const ucp *src, size_t cc, int *error);
 
 // Efficiently appends the given character to the dest B-string.
 // Returns the possibly reallocated dest B-string.

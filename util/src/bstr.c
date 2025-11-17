@@ -49,6 +49,11 @@ bchar *bstrdupb(const bchar *bstr)
 	return bstrcatb(balloc(), bstr);
 }
 
+bchar *bstrdupu(const ucp *ca, size_t cc, int *error)
+{
+	return bstrcatu(balloc(), ca, cc, error);
+}
+
 void bfree(bchar *s)
 {
 	if (s) {
@@ -90,10 +95,10 @@ bchar *bstrcatb(bchar *dest, const bchar *src)
 	return dest;
 }
 
-bchar *bstrcatu(bchar *dest, ucp src, int *error)
+bchar *bstrcatu(bchar *dest, const ucp *src, size_t cc, int *error)
 {
 	// Determine bytes required to represent src code point
-	int srclen = utf8_bytes_for_char(src, error);
+	int srclen = utf8_bytes_for_array(src, cc, error);
 	if (*error) return NULL;
 
 	// Reallocate dest B-string to accomodate extra content
@@ -102,7 +107,7 @@ bchar *bstrcatu(bchar *dest, ucp src, int *error)
 	dest = (bchar*)(h + 1);
 
 	// Encode src contents after dest contents
-	utf8_encode_char(src, (byte*)dest + h->len, srclen, error);
+	utf8_encode_array(src, cc, (byte*)dest + h->len, srclen, error);
 	if (*error) return NULL;
 	dest[h->len + srclen] = '\0';
 
