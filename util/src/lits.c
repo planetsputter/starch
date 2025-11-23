@@ -132,7 +132,7 @@ bool parse_string_lit(const bchar *str, bchar **dest)
 				int error;
 				*dest = bstrcatu(*dest, &cval, 1, &error);
 				if (error) {
-					// Escaped unicode character too large for UTF-8 representation
+					// Escaped Unicode character too large for UTF-8 representation
 					str = NULL;
 					break;
 				}
