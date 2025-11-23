@@ -17,11 +17,12 @@ static char nibble_for_hex(char hex)
 // Parses any escape code at the given string using up to remain bytes.
 // On success sets *val to the escaped character value and returns pointer to next unused byte.
 // Otherwise returns NULL.
-static const char *parse_char_lit_impl(const char *str, size_t remain, ucp *val)
+static const char *parse_char_lit_impl(const char *str, size_t remain, ucp *val, int *esctype)
 {
 	ucp tc = 0; // Temporary character
 	if (*str == '\\') {
-		switch (*++str) {
+		char e = *++str;
+		switch (e) {
 		case 'a': tc = '\a'; break;
 		case 'b': tc = '\b'; break;
 		case 'f': tc = '\f'; break;
@@ -38,6 +39,24 @@ static const char *parse_char_lit_impl(const char *str, size_t remain, ucp *val)
 			do { // Hexadecimal escape sequences are of arbitrary length
 				tc = (tc << 4) | nibble_for_hex(*str);
 			} while (isxdigit(*++str));
+			str--;
+			break;
+		case 'u': // Four-digit Unicode character notation
+			str++;
+			for (int i = 0; i < 4; i++) {
+				if (!isxdigit(*str)) return NULL;
+				tc = (tc << 4) | nibble_for_hex(*str);
+				str++;
+			}
+			str--;
+			break;
+		case 'U': // Eight-digit Unicode character notation
+			str++;
+			for (int i = 0; i < 8; i++) {
+				if (!isxdigit(*str)) return NULL;
+				tc = (tc << 4) | nibble_for_hex(*str);
+				str++;
+			}
 			str--;
 			break;
 		default:
@@ -57,6 +76,7 @@ static const char *parse_char_lit_impl(const char *str, size_t remain, ucp *val)
 			}
 			tc = (tc << 3) + *str - '0';
 		}
+		if (esctype) *esctype = e;
 		str++;
 	}
 	else {
@@ -64,6 +84,7 @@ static const char *parse_char_lit_impl(const char *str, size_t remain, ucp *val)
 		utf8_decode_array((const byte*)str, remain, &tc, 1, &error);
 		if (error != UTF8_ERROR_CHARACTER_OVERFLOW && error != 0) return NULL;
 		str += utf8_bytes_for_char(tc, &error);
+		if (esctype) *esctype = 0;
 	}
 	*val = tc;
 	return str;
@@ -76,7 +97,7 @@ bool parse_char_lit(const bchar *s, ucp *val)
 
 	size_t slen = bstrlen(s);
 	ucp tv = 0;
-	const char *end = parse_char_lit_impl(s + 1, slen - 1, &tv);
+	const char *end = parse_char_lit_impl(s + 1, slen - 1, &tv, NULL);
 	if (end == NULL || *end != '\'' || slen != (size_t)(end - s) + 1) return false;
 
 	*val = tv;
@@ -91,18 +112,33 @@ bool parse_string_lit(const bchar *str, bchar **dest)
 	const char *end = str + len;
 
 	ucp cval;
+	int esctype;
 	for (str++; str < end;) {
 		if (*str == '"') { // Unescaped '"' ends literal
 			break;
 		}
-		str = parse_char_lit_impl(str, end - str, &cval);
-		if (str) { // Valid unescape
-			int error;
-			*dest = bstrcatu(*dest, &cval, 1, &error);
-			// @todo: error will be set non-zero if cval is too large
-			// which could happen for large hexadecimal escapes.
+		// Parse potentially escaped value
+		str = parse_char_lit_impl(str, end - str, &cval, &esctype);
+		if (str) {
+			if (esctype != 0 && esctype != 'u' && esctype != 'U') {
+				// This escape type represents a single char
+				if (cval > 255) { // Escaped value too large
+					str = NULL;
+					break;
+				}
+				*dest = bstr_append(*dest, cval);
+			}
+			else {
+				int error;
+				*dest = bstrcatu(*dest, &cval, 1, &error);
+				if (error) {
+					// Escaped unicode character too large for UTF-8 representation
+					str = NULL;
+					break;
+				}
+			}
 		}
-		else {
+		else { // Invalid escape sequence
 			break;
 		}
 	}

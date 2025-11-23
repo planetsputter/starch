@@ -9,8 +9,15 @@
 #include "bstr.h"
 #include "lits.h"
 
-// Returns a random unicode code point, favoring lower values in a logarithmic fashion
-ucp randcp() {
+static int nibtohex(int nib)
+{
+	if (nib < 10) return '0' + nib;
+	return nib + 'a' - 10;
+}
+
+// Returns a random Unicode code point, favoring lower values in a logarithmic fashion
+static ucp randcp()
+{
 	long r = random();
 	ucp c = (ucp)r % (UTF8_MAX_POINT + 1);
 	int bits = ((unsigned long)r / (UTF8_MAX_POINT + 1)) % 21 + 1;
@@ -22,7 +29,7 @@ struct esc_pair {
 	char c;
 	ucp v;
 };
-struct esc_pair esc_pairs[] = {
+static struct esc_pair esc_pairs[] = {
 	// List in order of increasing c
 	{ '\"', '"' },
 	{ '\'', '\'' },
@@ -51,7 +58,7 @@ int main()
 	srandom(tv.tv_usec + tv.tv_sec * 1000000);
 
 	ucp c, tc;
-	ucp ca[5];
+	ucp ca[10];
 	bchar *ts = NULL;
 	int error = (int)random();
 
@@ -70,7 +77,7 @@ int main()
 			assert(parse_char_lit(ts, &c) && c == next_esc->v);
 			next_esc++;
 		}
-		else if (i < '0' && i > '7' && i != 'x') { // Invalid escape
+		else if (i < '0' && i > '7' && i != 'x' && i != 'u' && i != 'U') { // Invalid escape
 			tc = c;
 			assert(!parse_char_lit(ts, &c) && c == tc);
 		}
@@ -101,6 +108,32 @@ int main()
 	tc = c;
 	assert(!parse_char_lit(ts, &c) && c == tc);
 	bfree(ts);
+
+	// """ and "\" are invalid
+	error = (int)random();
+	utf8_decode_array((const byte*)"\"\"\"", 3, ca, sizeof(ca) / sizeof(*ca), &error);
+	assert(error == 0);
+	error = (int)random();
+	ts = bstrdupu(ca, 3, &error);
+	assert(error == 0);
+	ds = balloc();
+	assert(!parse_string_lit(ts, &ds));
+	bfree(ts);
+	ca[1] = '\\';
+	error = (int)random();
+	ts = bstrdupu(ca, 3, &error);
+	assert(error == 0);
+	assert(!parse_string_lit(ts, &ds));
+	bfree(ts);
+	// "" followed by null is invalid
+	ca[1] = '"';
+	ca[2] = '\0';
+	error = (int)random();
+	ts = bstrdupu(ca, 3, &error);
+	assert(error == 0);
+	assert(!parse_string_lit(ts, &ds));
+	bfree(ts);
+	bfree(ds);
 
 	// Test rejection of empty hexadecimal escape '\x'
 	ts = bstrdupc("'\\x'");
@@ -217,6 +250,22 @@ int main()
 		tc = c & (((size_t)1 << (esclen * 4)) - 1); // Zero portion not in literal
 		c = randcp();
 		assert(parse_char_lit(ts, &c) && c == tc);
+		if (esclen == 4) {
+			// Should get same result with 4-digit Unicode escape
+			bfree(ts);
+			ba[2] = 'u';
+			ts = bstrdupc(ba);
+			c = randcp();
+			assert(parse_char_lit(ts, &c) && c == tc);
+		}
+		else if (esclen == 8) {
+			// Should get same result with 8-digit Unicode escape
+			bfree(ts);
+			ba[2] = 'U';
+			ts = bstrdupc(ba);
+			c = randcp();
+			assert(parse_char_lit(ts, &c) && c == tc);
+		}
 		bfree(ts);
 
 		// Test octal escapes, 1-3 characters in length, e.g. '\0'
@@ -284,21 +333,23 @@ int main()
 		bfree(ds);
 		bfree(ts);
 
-		// """ and "\" are invalid
-		ca[1] = '"';
+		// "\xhhhhhh" is valid only if the hexadecimal value is less than 256
 		error = (int)random();
-		ts = bstrdupu(ca, 3, &error);
+		utf8_decode_array((const byte*)"\"\\xhhhhhh\"", 10, ca, sizeof(ca) / sizeof(*ca), &error);
+		assert(error == 0);
+		c = randcp();
+		tc = c;
+		for (int j = 8; j > 2; j--) {
+			ca[j] = nibtohex(c & 0xf);
+			c >>= 4;
+		}
+		error = (int)random();
+		ts = bstrdupu(ca, 10, &error);
 		assert(error == 0);
 		ds = balloc();
-		assert(!parse_string_lit(ts, &ds));
-		bfree(ts);
-		ca[1] = '\\';
-		error = (int)random();
-		ts = bstrdupu(ca, 3, &error);
-		assert(error == 0);
-		assert(!parse_string_lit(ts, &ds));
-		bfree(ts);
+		assert(parse_string_lit(ts, &ds) == (tc < 256));
 		bfree(ds);
+		bfree(ts);
 	}
 
 	return 0;

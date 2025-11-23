@@ -28,7 +28,7 @@ Example:
 
 ### Statements
 
-Statements consist of an opcode or pseudo-op followed by an optional argument. Whether or not the argument is present depends on the opcode. The argument may be an integer or string literal or a label usage, again depending on the opcode. The label usage must start with a colon (':'). Typical C-style syntax for integer literals is supported.
+Statements consist of an opcode or pseudo-op followed by an optional argument. Whether or not the argument is present depends on the opcode. The argument may be an integer or string literal or a label usage, again depending on the opcode. The label usage must start with a colon (':'). Typical C-style syntax for integer, character, and string literals is supported.
 
 Example:
 ```
