@@ -240,7 +240,7 @@ int main()
 		//
 
 		// Any single character string literal is invalid
-		c = '"';//randcp();
+		c = randcp();
 		error = (int)random();
 		ts = bstrdupu(&c, 1, &error);
 		assert(error == 0);
