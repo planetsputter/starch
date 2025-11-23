@@ -88,14 +88,19 @@ bool parse_string_lit(const bchar *str, bchar **dest)
 	// Literal must start with '"'
 	size_t len = bstrlen(str);
 	if (len < 2 || *str != '"') return false;
+	const char *end = str + len;
 
 	ucp cval;
-	size_t i;
-	for (i = 1; i < len - 1; i++) {
-		if (*str == '"') break; // Unescaped '"' ends literal
-		str = parse_char_lit_impl(str, len - i, &cval);
+	for (str++; str < end;) {
+		if (*str == '"') { // Unescaped '"' ends literal
+			break;
+		}
+		str = parse_char_lit_impl(str, end - str, &cval);
 		if (str) { // Valid unescape
-			*dest = bstr_append(*dest, cval);
+			int error;
+			*dest = bstrcatu(*dest, &cval, 1, &error);
+			// @todo: error will be set non-zero if cval is too large
+			// which could happen for large hexadecimal escapes.
 		}
 		else {
 			break;
@@ -103,7 +108,7 @@ bool parse_string_lit(const bchar *str, bchar **dest)
 	}
 
 	// Ensure escapes were valid and literal ends at the first unescaped '"'
-	return str != NULL && *str == '"' && i == len - 1;
+	return str != NULL && str == end - 1 && *str == '"';
 }
 
 bool parse_int(const bchar *s, int64_t *val)

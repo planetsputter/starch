@@ -115,16 +115,6 @@ bchar *bstrcatu(bchar *dest, const ucp *src, size_t cc, int *error)
 	return dest;
 }
 
-bchar *bstr_append(bchar *dest, char c)
-{
-	struct bstr_hdr *h = (struct bstr_hdr*)dest - 1;
-	dest[h->len++] = c;
-	h = bstr_realloc_for_len(h, h->len);
-	dest = (bchar*)(h + 1);
-	dest[h->len] = '\0';
-	return dest;
-}
-
 int bstrcmpc(const bchar *s1, const char *s2)
 {
 	// B-strings can contain null characters, so we iterate based on length

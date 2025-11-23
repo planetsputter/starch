@@ -43,10 +43,6 @@ bchar *bstrcatb(bchar *dest, const bchar *src);
 // dest B-string and sets *error to 0.
 bchar *bstrcatu(bchar *dest, const ucp *src, size_t cc, int *error);
 
-// Efficiently appends the given character to the dest B-string.
-// Returns the possibly reallocated dest B-string.
-bchar *bstr_append(bchar *dest, char c);
-
 // Indicates whether B-string s1 is less than, equal to, or greater than
 // C-string s2 by returning an integer less than, equal to, or greater than zero.
 // Note: Strings are compared using the default signedness of the char type.
