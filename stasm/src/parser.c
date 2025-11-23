@@ -670,19 +670,12 @@ int parser_parse_byte(struct parser *parser, byte b, struct parser_event *pe)
 		return ret;
 	}
 
-	// Re-encode a completed character
-	byte enc[5];
-	*utf8_encode_char(c, enc, sizeof(enc) - 1, &ret) = '\0';
+	// Re-encode a completed character into a B-string
+	bchar *enc = bstrdupu(&c, 1, &ret);
 	if (ret) {
 		fprintf(stderr, "error: UTF-8 encoding error in \"%s\" line %d char %d\n",
 			parser->filename, parser->line, parser->ch);
 		return ret;
-	}
-
-	if (c == '\0') { // Null characters are not permitted in source for various reasons
-		fprintf(stderr, "error: null character in \"%s\" line %d char %d\n",
-			parser->filename, parser->line, parser->ch);
-		return 1;
 	}
 
 	// Process the decoded character
@@ -692,12 +685,12 @@ int parser_parse_byte(struct parser *parser, byte b, struct parser_event *pe)
 			ret = parser_finish_token(parser); // First finish any adjacent token
 			if (ret) break;
 			// Start new token
-			parser->token = bstrdupc((const char*)enc);
+			parser->token = bstrdupb(enc);
 			parser->tline = parser->line;
 			parser->tch = parser->ch;
 			parser->ss = PSS_QUOTED;
 		}
-		else if (isspace(c) || c == ';') { // These finish a token
+		else if (isspace(c) || c == ';' || c == '\0') { // These finish a token
 			ret = parser_finish_token(parser);
 			if (ret) break;
 			if (c == ';') { // Comments are introduced by ';'
@@ -714,14 +707,14 @@ int parser_parse_byte(struct parser *parser, byte b, struct parser_event *pe)
 				parser->tline = parser->line;
 				parser->tch = parser->ch;
 			}
-			parser->token = bstrcatc(parser->token, (const char*)enc);
+			parser->token = bstrcatb(parser->token, enc);
 		}
 		break;
 
 	case PSS_QUOTED: // Character in string literal
 	case PSS_ESCAPED: // Escaped character in string literal
 		// Add character to token
-		parser->token = bstrcatc(parser->token, (const char*)enc);
+		parser->token = bstrcatb(parser->token, enc);
 		if (c == '\n') { // Not even escaped newlines are allowed
 			fprintf(stderr, "error: newline in string literal in \"%s\" line %d char %d\n",
 				parser->filename, parser->tline, parser->tch);
@@ -761,6 +754,7 @@ int parser_parse_byte(struct parser *parser, byte b, struct parser_event *pe)
 		ret = 1;
 		break;
 	}
+	bfree(enc);
 
 	// Keep track of line and character
 	if (c == '\n') {
