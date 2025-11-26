@@ -2177,9 +2177,9 @@ int core_step(struct core *core, struct mem *mem)
 	case op_call:
 		ret = core_mem_read64(core, mem, core->pc + 1, &temp_u64); // Read imm address
 		if (ret) break;
-		ret = core_frame_write64(core, mem, core->sp, core->pc + 9); // Push RETA
+		ret = core_frame_write64(core, mem, core->sp, core->sfp); // Push SFP
 		if (ret) break;
-		ret = core_frame_write64(core, mem, core->sp + 8, core->sfp); // Push SFP
+		ret = core_frame_write64(core, mem, core->sp + 8, core->pc + 9); // Push RETA
 		if (ret) break;
 		core->sp += STACK_FRAME_METADATA_SIZE;
 		core->sfp = core->sp;
@@ -2188,18 +2188,18 @@ int core_step(struct core *core, struct mem *mem)
 	case op_calls:
 		ret = core_frame_read64(core, mem, core->sp - 8, &temp_u64); // Read and pop address
 		if (ret) break;
-		ret = core_frame_write64(core, mem, core->sp - 8, core->pc + 1); // Push RETA
+		ret = core_frame_write64(core, mem, core->sp - 8, core->sfp); // Push SFP
 		if (ret) break;
-		ret = core_frame_write64(core, mem, core->sp, core->sfp); // Push SFP
+		ret = core_frame_write64(core, mem, core->sp, core->pc + 1); // Push RETA
 		if (ret) break;
-		core->sp += 8;
+		core->sp += STACK_FRAME_METADATA_SIZE - 8;
 		core->sfp = core->sp;
 		core->pc = temp_u64;
 		break;
 	case op_ret:
-		ret = core_stack_read64(core, mem, core->sfp - 8, &temp_u64); // Read PSFP
+		ret = core_stack_read64(core, mem, core->sfp - STACK_FRAME_METADATA_SIZE + 8, &temp_u64b); // Read RETA
 		if (ret) break;
-		ret = core_stack_read64(core, mem, core->sfp - 16, &temp_u64b); // Read RETA
+		ret = core_stack_read64(core, mem, core->sfp - STACK_FRAME_METADATA_SIZE, &temp_u64); // Read PSFP
 		if (ret) break;
 		core->sp = core->sfp - STACK_FRAME_METADATA_SIZE;
 		core->sfp = temp_u64;

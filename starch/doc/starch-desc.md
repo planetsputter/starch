@@ -31,8 +31,8 @@ To call a function that takes arguments, arguments are pushed onto the stack beg
 |:------- |:--------------------------- |
 | SP      |                             |
 | SFP     | Current function local data |
-| SFP-8   | PSFP                        |
-| SFP-16  | RETA                        |
+| SFP-8   | RETA                        |
+| SFP-16  | PSFP                        |
 |         | RETV                        |
 |         | ARG1                        |
 |         | ...                         |
@@ -296,11 +296,11 @@ These instructions result in a Boolean value, either a zero or a one, replacing 
 
 These instructions call functions and return from them. Variants with an "s" use an address on the stack.
 
-| Op Code   | PC After   | Stack Before                    | Stack After     | SFP After |
-|:--------- |:---------- |:------------------------------- |:--------------- |:--------- |
-| call      | [PC+1]64   |                                 | PC64 + 9, SFP64 | SP + 16   |
-| calls     | a64        | a64                             | PC64 + 1, SFP64 | SP + 8    |
-| ret       | [SFP-16]64 | RETA64, PSFP64@[SFP64-8], [...] |                 | [SFP-8]64 |
+| Op Code   | PC After   | Stack Before                   | Stack After     | SFP After  |
+|:--------- |:---------- |:------------------------------ |:--------------- |:---------- |
+| call      | [PC+1]64   |                                | SFP64, PC64 + 9 | SP + 16    |
+| calls     | a64        | a64                            | SFP64, PC64 + 1 | SP + 8     |
+| ret       | [SFP-8]64  | PSFP64@[SFP-16], RETA64, [...] |                 | [SFP-16]64 |
 
 ### Jump Instructions
 
