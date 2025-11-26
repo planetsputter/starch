@@ -9,6 +9,7 @@
 #include "parser.h"
 #include "starch.h"
 #include "stub.h"
+#include "util.h"
 
 // Variables set by command-line arguments
 const char *arg_help = NULL;
@@ -64,20 +65,6 @@ void detect_non_help_arg(struct carg_desc *desc, const char *arg)
 	if (desc->value != &arg_help) {
 		non_help_arg = true;
 	}
-}
-
-// Write the 64-bit unsigned value to eight bytes in little-endian order.
-// @todo: Move to utiity library.
-static void u64_to_little8(uint64_t val, uint8_t *data)
-{
-	data[0] = val;
-	data[1] = val >> 8;
-	data[2] = val >> 16;
-	data[3] = val >> 24;
-	data[4] = val >> 32;
-	data[5] = val >> 40;
-	data[6] = val >> 48;
-	data[7] = val >> 56;
 }
 
 //
@@ -181,13 +168,13 @@ static int apply_label_usage(FILE *outfile, struct label_usage *lu, uint64_t lab
 			fprintf(stderr, "error: immediate label value out of range for opcode\n");
 			return 1;
 		}
-		u64_to_little8(imm_val, buff + 1);
+		put_little64(imm_val, buff + 1);
 	}
 
 	// This is not a jump or branch instruction.
 	// All other instructions expecting a 64-bit immediate value can take a label immediate.
 	else if (imm_bytes == 8) {
-		u64_to_little8(label_addr, buff + 1);
+		put_little64(label_addr, buff + 1);
 	}
 	else {
 		fprintf(stderr, "error: opcode does not accept an immediate label\n");
@@ -528,7 +515,7 @@ int main(int argc, const char *argv[])
 						}
 					}
 
-					u64_to_little8((uint64_t)immval, buff + 1);
+					put_little64((uint64_t)immval, buff + 1);
 				}
 			}
 			else if (sdt != SDT_VOID || imm_bytes != 0) { // Internal error
