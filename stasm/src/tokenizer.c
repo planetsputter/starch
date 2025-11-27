@@ -2,7 +2,6 @@
 
 #include <assert.h>
 #include <ctype.h>
-#include <stdbool.h>
 
 #include "tokenizer.h"
 
@@ -121,8 +120,12 @@ void tokenizer_emit(struct tokenizer *tz, bchar **token)
 	}
 }
 
-void tokenizer_finish(struct tokenizer *tz)
+bool tokenizer_finish(struct tokenizer *tz)
 {
+	if (tz->state >= TZS_QUOTED) { // Cannot end stream within a quoted token
+		return false;
+	}
 	// Stream end is considered to end the current line
 	tokenizer_parse(tz, '\n');
+	return true;
 }
