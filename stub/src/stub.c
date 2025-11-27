@@ -8,6 +8,7 @@
 #include <unistd.h>
 
 #include "stub.h"
+#include "util.h"
 
 void stub_sec_init(struct stub_sec *sec, uint64_t addr, uint8_t flags, uint64_t size)
 {
@@ -24,43 +25,6 @@ enum {
 static const uint8_t expected_hdr[STUB_HEADER_SIZE] = {
 	's', 't', 'b', 0x01
 };
-
-// Get a 64-bit unsigned value from eight bytes in little-endian order
-static uint64_t u64_from_little8(const uint8_t *data)
-{
-	return (uint64_t)data[0] | ((uint64_t)data[1] << 8) |
-		((uint64_t)data[2] << 16) | ((uint64_t)data[3] << 24) |
-		((uint64_t)data[4] << 32) | ((uint64_t)data[5] << 40) |
-		((uint64_t)data[6] << 48) | ((uint64_t)data[7] << 56);
-}
-
-// Write the 64-bit unsigned value to eight bytes in little-endian order
-static void u64_to_little8(uint64_t val, uint8_t *data)
-{
-	data[0] = val;
-	data[1] = val >> 8;
-	data[2] = val >> 16;
-	data[3] = val >> 24;
-	data[4] = val >> 32;
-	data[5] = val >> 40;
-	data[6] = val >> 48;
-	data[7] = val >> 56;
-}
-
-// Get 32-bit signed value from four bytes in little-endian order
-static int32_t i32_from_little4(const uint8_t *data)
-{
-	return (uint32_t)data[0] | ((uint32_t)data[1] << 8) |
-		((uint32_t)data[2] << 16) | ((uint32_t)data[3] << 24);
-}
-
-static void u32_to_little4(uint32_t val, uint8_t *data)
-{
-	data[0] = val;
-	data[1] = val >> 8;
-	data[2] = val >> 16;
-	data[3] = val >> 24;
-}
 
 // Checks that the file has a valid header.
 // Seeks to the beginning of the section counts.
@@ -123,10 +87,10 @@ int stub_verify(FILE *file)
 		}
 
 		// Get section data begin file offset
-		uint64_t bfo = u64_from_little8(temp_array + 9);
+		uint64_t bfo = get_little64(temp_array + 9);
 
 		// Get section data end file offset
-		uint64_t efo = u64_from_little8(temp_array + 17);
+		uint64_t efo = get_little64(temp_array + 17);
 
 		// Check offsets
 		if (bfo != last_efo || efo < bfo) {
@@ -180,7 +144,7 @@ int stub_get_section_counts(FILE *file, int *maxnsec, int *nsec)
 	}
 
 	// Check maximum number of sections
-	*maxnsec = i32_from_little4(temp_array);
+	*maxnsec = (int)get_little32(temp_array);
 	if (*maxnsec <= 0) {
 		return STUB_ERROR_INVALID_SECTION_COUNT;
 	}
@@ -192,7 +156,7 @@ int stub_get_section_counts(FILE *file, int *maxnsec, int *nsec)
 	}
 
 	// Check number of sections
-	*nsec = i32_from_little4(temp_array);
+	*nsec = (int)get_little32(temp_array);
 	if (*nsec < 0 || *nsec > *maxnsec) {
 		return STUB_ERROR_INVALID_SECTION_COUNT;
 	}
@@ -223,12 +187,12 @@ int stub_load_section(FILE *file, int section, struct stub_sec *sec)
 
 	// Interpret section header
 	uint8_t flags = temp_array[8];
-	uint64_t bfo = u64_from_little8(temp_array + 9);
-	uint64_t efo = u64_from_little8(temp_array + 17);
+	uint64_t bfo = get_little64(temp_array + 9);
+	uint64_t efo = get_little64(temp_array + 17);
 	if (bfo > efo) {
 		return STUB_ERROR_INVALID_FILE_OFFSET;
 	}
-	sec->addr = u64_from_little8(temp_array);
+	sec->addr = get_little64(temp_array);
 	sec->flags = flags;
 	sec->size = efo - bfo;
 
@@ -273,7 +237,7 @@ int stub_init(FILE *file, int maxnsec)
 
 	// Write maximum number of sections
 	uint8_t temp_array[4];
-	u32_to_little4(maxnsec, temp_array);
+	put_little32(maxnsec, temp_array);
 	bc = fwrite(temp_array, 1, 4, file);
 	if (bc != 4) {
 		return STUB_ERROR_WRITE_FAILURE;
@@ -332,7 +296,7 @@ int stub_save_section(FILE *file, int index, struct stub_sec *sec)
 		if (bc != 8) {
 			return STUB_ERROR_PREMATURE_EOF;
 		}
-		prev_efo = u64_from_little8(temp_array);
+		prev_efo = get_little64(temp_array);
 	}
 
 	// Check the previous efo
@@ -341,12 +305,12 @@ int stub_save_section(FILE *file, int index, struct stub_sec *sec)
 	}
 
 	// Prepare section header
-	u64_to_little8(sec->addr, temp_array);
+	put_little64(sec->addr, temp_array);
 	temp_array[8] = sec->flags;
 	// The bfo of the current section is the efo of the previous section
-	u64_to_little8(prev_efo, temp_array + 9);
+	put_little64(prev_efo, temp_array + 9);
 	// The efo of the current section is the orginal file position
-	u64_to_little8((uint64_t)fpos, temp_array + 17);
+	put_little64((uint64_t)fpos, temp_array + 17);
 
 	// @todo: We should already be here. Why is this necessary on Mac OSX?
 	if (fseek(file, STUB_HEADER_SIZE + 8 + STUB_SECTION_HEADER_SIZE * index, SEEK_SET)) {
@@ -366,7 +330,7 @@ int stub_save_section(FILE *file, int index, struct stub_sec *sec)
 		if (fseek(file, STUB_HEADER_SIZE + 4, SEEK_SET)) {
 			return STUB_ERROR_SEEK_ERROR;
 		}
-		u32_to_little4(index + 1, temp_array);
+		put_little32(index + 1, temp_array);
 		bc = fwrite(temp_array, 1, 4, file);
 		if (bc != 4) {
 			return STUB_ERROR_PREMATURE_EOF;

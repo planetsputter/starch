@@ -6,9 +6,10 @@
 #include <stdlib.h>
 
 #include "bstr.h"
+#include "lits.h"
 #include "parser.h"
 #include "starch.h"
-#include "lits.h"
+#include "util.h"
 
 // Automatic symbols, besides instruction opcodes and interrupt numbers
 struct autosym {
@@ -37,29 +38,6 @@ static struct autosym *get_autosym(const char *name)
 		}
 	}
 	return ret;
-}
-
-// Returns the nibble value of the given hexadecimal character
-// Write the 64-bit unsigned value to eight bytes in little-endian order
-static void u64_to_little8(uint64_t val, uint8_t *data)
-{
-	data[0] = val;
-	data[1] = val >> 8;
-	data[2] = val >> 16;
-	data[3] = val >> 24;
-	data[4] = val >> 32;
-	data[5] = val >> 40;
-	data[6] = val >> 48;
-	data[7] = val >> 56;
-}
-
-// Return the 64-bit unsigned value represented by the given eight bytes
-static uint64_t little8_to_u64(const uint8_t *data)
-{
-	return (uint64_t)data[0] | ((uint64_t)data[1] << 8) |
-		((uint64_t)data[2] << 16) | ((uint64_t)data[3] << 24) |
-		((uint64_t)data[4] << 32) | ((uint64_t)data[5] << 40) |
-		((uint64_t)data[6] << 48) | ((uint64_t)data[7] << 56);
 }
 
 // Returns the minimum number of bytes required to represent the given value
@@ -119,7 +97,7 @@ int parser_event_print(const struct parser_event *pe, FILE *outfile)
 		}
 	}	break;
 	case PET_DATA:
-		fprintf(outfile, ".data%d %#"PRIx64"\n", pe->data.len, little8_to_u64(pe->data.raw));
+		fprintf(outfile, ".data%d %#"PRIx64"\n", pe->data.len, get_little64(pe->data.raw));
 		break;
 	case PET_SECTION:
 		fprintf(outfile, ".section %#"PRIx64"\n", pe->sec.addr);
@@ -523,7 +501,7 @@ static int parser_finish_token(struct parser *parser)
 			// Transform literal value to byte array
 			// @todo: Make these cases more similar
 			if (parser->event.type == PET_DATA) {
-				u64_to_little8((uint64_t)immval, parser->event.data.raw);
+				put_little64((uint64_t)immval, parser->event.data.raw);
 			}
 		}
 		if (parser->event.type == PET_INST) {
