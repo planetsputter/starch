@@ -1,6 +1,7 @@
 // stasm.c
 
 #include <errno.h>
+#include <stdarg.h>
 #include <stdlib.h>
 
 #include "bstr.h"
@@ -8,6 +9,7 @@
 #include "lits.h"
 #include "parser.h"
 #include "starch.h"
+#include "stasm.h"
 #include "stub.h"
 #include "util.h"
 
@@ -76,6 +78,9 @@ struct inc_link {
 	struct inc_link *prev;
 };
 
+// The include chain
+static struct inc_link *inc_chain = NULL;
+
 // Initializes the given link, taking ownership of the given filename B-string.
 // Also takes ownership of the given file, closing it when the object is destroyed.
 void inc_link_init(struct inc_link *link, bchar *filename, FILE *file)
@@ -90,6 +95,56 @@ void inc_link_destroy(struct inc_link *link)
 {
 	parser_destroy(&link->parser);
 	fclose(link->file);
+}
+
+// Stasm message counts by type
+static size_t msg_counts[SMT_NUM];
+size_t stasm_count_msg(int msg_type)
+{
+	return msg_counts[msg_type];
+}
+
+// Message type names including ANSI color codes
+static const char *stasm_msg_types[] = {
+	"info",
+	"\033[33mwarning\033[0m",
+	"\033[31merror\033[0m",
+};
+
+int stasm_msgf(int msg_type, const char *format, ...)
+{
+	bool usetoknums = msg_type & SMF_USETOK;
+	msg_type &= ~SMF_USETOK;
+
+	// Prepend message type name
+	FILE *out_file = msg_type <= SMT_INFO ? stdout : stderr;
+	fprintf(out_file, "%s: ", stasm_msg_types[msg_type]);
+
+	// Prepend the current file and line if it is known
+	struct inc_link *link = inc_chain;
+	if (link) {
+		int line = usetoknums ? link->parser.tline : link->parser.line;
+		int ch = usetoknums ? link->parser.tch : link->parser.ch;
+		fprintf(out_file, "%s:%d:%d: ", link->parser.filename, line, ch);
+	}
+
+	// Format and print the given message
+	va_list args;
+	va_start(args, format);
+	int ret = vfprintf(out_file, format, args);
+	va_end(args);
+	fprintf(out_file, "\n"); // Append newline
+
+	// Print the include chain
+	if (link) {
+		link = link->prev;
+	}
+	for (; link; link = link->prev) {
+		fprintf(out_file, "  in file included from %s:%d\n", link->parser.filename, link->parser.line - 1);
+	}
+
+	msg_counts[msg_type]++;
+	return ret;
 }
 
 //
@@ -115,7 +170,7 @@ static int apply_label_usage(FILE *outfile, struct label_usage *lu, uint64_t lab
 	// Seek to the instruction
 	int ret = fseek(outfile, lu->foffset, SEEK_SET);
 	if (ret) {
-		fprintf(stderr, "error: failed to seek in output file \"%s\", errno %d\n", arg_output, errno);
+		stasm_msgf(SMT_ERROR, "failed to seek in output file \"%s\", errno %d", arg_output, errno);
 		return ret;
 	}
 
@@ -123,7 +178,7 @@ static int apply_label_usage(FILE *outfile, struct label_usage *lu, uint64_t lab
 	uint8_t buff[9];
 	size_t bc = fread(buff, 1, 1, outfile);
 	if (bc != 1) {
-		fprintf(stderr, "error: failed to read from output file \"%s\", errno %d\n", arg_output, errno);
+		stasm_msgf(SMT_ERROR, "failed to read from output file \"%s\", errno %d", arg_output, errno);
 		return ret;
 	}
 
@@ -131,7 +186,7 @@ static int apply_label_usage(FILE *outfile, struct label_usage *lu, uint64_t lab
 	int sdt = imm_type_for_opcode(buff[0]);
 	if (sdt < 0) {
 		const char *opname = name_for_opcode(buff[0]);
-		fprintf(stderr, "error: failed to get immediate type for opcode 0x%02x (%s)\n",
+		stasm_msgf(SMT_ERROR, "failed to get immediate type for opcode 0x%02x (%s)",
 			buff[0], opname ? opname : "unknown");
 		return 1;
 	}
@@ -139,19 +194,19 @@ static int apply_label_usage(FILE *outfile, struct label_usage *lu, uint64_t lab
 	// Get the immediate size
 	int imm_bytes = sdt_size(sdt);
 	if (imm_bytes < 1 || imm_bytes > 8) {
-		fprintf(stderr, "error: invalid immediate size %d for data type %d\n", imm_bytes, sdt);
+		stasm_msgf(SMT_ERROR, "invalid immediate size %d for data type %d", imm_bytes, sdt);
 		return 1;
 	}
 
 	// Check that the immediate bytes are all zero
 	bc = fread(buff + 1, 1, imm_bytes, outfile);
 	if (bc != (size_t)imm_bytes) {
-		fprintf(stderr, "error: failed to read from output file \"%s\", errno %d\n", arg_output, errno);
+		stasm_msgf(SMT_ERROR, "failed to read from output file \"%s\", errno %d", arg_output, errno);
 		return ret;
 	}
 	for (int i = 0; i < imm_bytes; i++) {
 		if (buff[i + 1] != 0) {
-			fprintf(stderr, "error: immediate data not cleared prior to label application\n");
+			stasm_msgf(SMT_ERROR, "immediate data not cleared prior to label application");
 			return ret;
 		}
 	}
@@ -165,7 +220,7 @@ static int apply_label_usage(FILE *outfile, struct label_usage *lu, uint64_t lab
 		int64_t min_val = 0, max_val = 0;
 		sdt_min_max(sdt, &min_val, &max_val);
 		if (imm_bytes < 8 && (imm_val < min_val || imm_val > max_val)) {
-			fprintf(stderr, "error: immediate label value out of range for opcode\n");
+			stasm_msgf(SMT_ERROR, "immediate label value out of range for opcode");
 			return 1;
 		}
 		put_little64(imm_val, buff + 1);
@@ -177,21 +232,21 @@ static int apply_label_usage(FILE *outfile, struct label_usage *lu, uint64_t lab
 		put_little64(label_addr, buff + 1);
 	}
 	else {
-		fprintf(stderr, "error: opcode does not accept an immediate label\n");
+		stasm_msgf(SMT_ERROR, "opcode does not accept an immediate label");
 		return 1;
 	}
 
 	// Seek back to beginning of instruction
 	ret = fseek(outfile, -imm_bytes - 1, SEEK_CUR);
 	if (ret) {
-		fprintf(stderr, "error: failed to seek in output file \"%s\", errno %d\n", arg_output, errno);
+		stasm_msgf(SMT_ERROR, "failed to seek in output file \"%s\", errno %d", arg_output, errno);
 		return 1;
 	}
 
 	// Write instruction to output file
 	bc = fwrite(buff, 1, imm_bytes + 1, outfile);
 	if (bc != (size_t)imm_bytes + 1) {
-		fprintf(stderr, "error: failed to write to output file %s, errno %d\n", arg_output, errno);
+		stasm_msgf(SMT_ERROR, "failed to write to output file %s, errno %d", arg_output, errno);
 		return 1;
 	}
 
@@ -257,7 +312,7 @@ int main(int argc, const char *argv[])
 	if (arg_help) {
 		// Usage requested
 		if (non_help_arg) {// Other arguments present
-			fprintf(stderr, "warning: Only printing usage. Other arguments present.\n");
+			stasm_msgf(SMT_ERROR, "warning: Only printing usage. Other arguments present.");
 		}
 		carg_print_usage(argv[0], arg_descs);
 		return parse_error != CARG_ERROR_NONE;
@@ -278,7 +333,7 @@ int main(int argc, const char *argv[])
 		char *end = NULL;
 		maxnsec = strtol(arg_maxnsec, &end, 0);
 		if (!end || *end != '\0' || *arg_maxnsec == '\0') {
-			fprintf(stderr, "error: failed to parse --maxnsec argument \"%s\"\n", arg_maxnsec);
+			stasm_msgf(SMT_ERROR, "failed to parse --maxnsec argument \"%s\"", arg_maxnsec);
 			return 1;
 		}
 	}
@@ -289,7 +344,7 @@ int main(int argc, const char *argv[])
 	if (arg_src) {
 		infile = fopen(arg_src, "r");
 		if (!infile) {
-			fprintf(stderr, "error: failed to open %s\n", arg_src ? arg_src : "stdin");
+			stasm_msgf(SMT_ERROR, "failed to open %s", arg_src ? arg_src : "stdin");
 			return 1;
 		}
 	}
@@ -303,7 +358,7 @@ int main(int argc, const char *argv[])
 		if (infile != stdin) {
 			fclose(infile);
 		}
-		fprintf(stderr, "error: failed to open \"%s\" for writing\n", arg_output);
+		stasm_msgf(SMT_ERROR, "failed to open \"%s\" for writing", arg_output);
 		return 1;
 	}
 
@@ -314,12 +369,12 @@ int main(int argc, const char *argv[])
 		if (infile != stdin) {
 			fclose(infile);
 		}
-		fprintf(stderr, "error: failed to initialize output stub file \"%s\"\n", arg_output);
+		stasm_msgf(SMT_ERROR, "failed to initialize output stub file \"%s\"", arg_output);
 		return 1;
 	}
 
-	// Create include chain
-	struct inc_link *inc_chain = (struct inc_link*)malloc(sizeof(struct inc_link));
+	// Initialize include chain
+	inc_chain = (struct inc_link*)malloc(sizeof(struct inc_link));
 	inc_link_init(inc_chain, arg_src ? bstrdupc(arg_src) : NULL, infile);
 
 	// Initialize label definition list.
@@ -341,13 +396,11 @@ int main(int argc, const char *argv[])
 		int c = fgetc(inc_chain->file);
 		if (c == EOF) { // Finish file
 			if (ferror(inc_chain->file)) {
-				fprintf(stderr, "error: failed to read from \"%s\", errno %d\n",
-					inc_chain->parser.filename, errno);
+				stasm_msgf(SMT_ERROR, "read failed, errno %d", errno);
 				error = 1;
 			}
 			else if (!parser_can_terminate(&inc_chain->parser)) {
-				fprintf(stderr, "error: unexpected EOF in \"%s\"\n",
-					inc_chain->parser.filename);
+				stasm_msgf(SMT_ERROR, "unexpected EOF");
 				error = 1;
 			}
 			else {
@@ -387,17 +440,17 @@ int main(int argc, const char *argv[])
 				error = stub_save_section(outfile, sec_count, &curr_sec);
 			}
 			if (error) {
-				fprintf(stderr, "error: failed to save stub section %d with error %d\n", sec_count, error);
+				stasm_msgf(SMT_ERROR, "failed to save stub section %d with error %d", sec_count, error);
 				break;
 			}
 			error = stub_load_section(outfile, sec_count, &curr_sec);
 			if (error) {
-				fprintf(stderr, "error: failed to load stub section %d with error %d\n", sec_count, error);
+				stasm_msgf(SMT_ERROR, "failed to load stub section %d with error %d", sec_count, error);
 				break;
 			}
 			curr_sec_fo = ftell(outfile);
 			if (curr_sec_fo < 0) {
-				fprintf(stderr, "error: failed to get offset of section %d with error %d\n", sec_count, errno);
+				stasm_msgf(SMT_ERROR, "failed to get offset of section %d with error %d", sec_count, errno);
 				error = 1;
 			}
 			else {
@@ -410,7 +463,7 @@ int main(int argc, const char *argv[])
 		//
 		case PET_INST: {
 			if (sec_count == 0) {
-				fprintf(stderr, "error: expected section definition before first instruction\n");
+				stasm_msgf(SMT_ERROR, "expected section definition before first instruction");
 				error = 1;
 				break;
 			}
@@ -424,7 +477,7 @@ int main(int argc, const char *argv[])
 			int sdt = imm_type_for_opcode(pe.inst.opcode);
 			if (sdt < 0) {
 				const char *opname = name_for_opcode(pe.inst.opcode);
-				fprintf(stderr, "error: failed to get immediate types for opcode 0x%02x (%s)\n",
+				stasm_msgf(SMT_ERROR, "failed to get immediate types for opcode 0x%02x (%s)",
 					pe.inst.opcode, opname ? opname : "unknown");
 				error = 1;
 				break;
@@ -439,7 +492,7 @@ int main(int argc, const char *argv[])
 			if (pe.inst.imm != NULL) { // There is an immediate value
 				if (sdt == SDT_VOID || imm_bytes == 0) { // Internal error
 					const char *opname = name_for_opcode(pe.inst.opcode);
-					fprintf(stderr, "error: unexpected immediate value for opcode 0x%02x (%s)\n",
+					stasm_msgf(SMT_ERROR, "unexpected immediate value for opcode 0x%02x (%s)",
 						pe.inst.opcode, opname ? opname : "unknown");
 					error = 1;
 					break;
@@ -448,7 +501,7 @@ int main(int argc, const char *argv[])
 					// Get current file offset
 					long current_fo = ftell(outfile);
 					if (current_fo < 0) {
-						fprintf(stderr, "error: failed to get offset with error %d\n", errno);
+						stasm_msgf(SMT_ERROR, "failed to get offset with error %d", errno);
 						error = 1;
 						break;
 					}
@@ -467,7 +520,7 @@ int main(int argc, const char *argv[])
 						bool parse_ret = parse_string_lit(pe.inst.imm, &contents);
 						if (!parse_ret) { // Internal error, this should have been checked by parser
 							bfree(contents);
-							fprintf(stderr, "error: failed to parse string literal\n");
+							stasm_msgf(SMT_ERROR, "failed to parse string literal");
 							error = 1;
 							break;
 						}
@@ -497,8 +550,7 @@ int main(int argc, const char *argv[])
 					int64_t immval = 0;
 					bool success = parse_int(pe.inst.imm, &immval);
 					if (!success) {
-						fprintf(stderr, "error: failed to parse integer literal \"%s\" in \"%s\" line %d char %d\n",
-							pe.inst.imm, inc_chain->parser.filename, inc_chain->parser.tline, inc_chain->parser.tch);
+						stasm_msgf(SMT_ERROR, "failed to parse integer literal \"%s\"", pe.inst.imm);
 						error = 1;
 						break;
 					}
@@ -508,8 +560,7 @@ int main(int argc, const char *argv[])
 						int64_t minval, maxval;
 						sdt_min_max(sdt, &minval, &maxval);
 						if (immval < minval || immval > maxval) {
-							fprintf(stderr, "error: literal \"%s\" is out of bounds for type in \"%s\" line %d char %d\n",
-									pe.inst.imm, inc_chain->parser.filename, inc_chain->parser.tline, inc_chain->parser.tch);
+							stasm_msgf(SMT_ERROR, "literal \"%s\" is out of bounds for type", pe.inst.imm);
 							error = 1;
 							break;
 						}
@@ -520,7 +571,7 @@ int main(int argc, const char *argv[])
 			}
 			else if (sdt != SDT_VOID || imm_bytes != 0) { // Internal error
 				const char *opname = name_for_opcode(pe.inst.opcode);
-				fprintf(stderr, "error: expected immediate value for opcode 0x%02x (%s)\n",
+				stasm_msgf(SMT_ERROR, "expected immediate value for opcode 0x%02x (%s)",
 					pe.inst.opcode, opname ? opname : "unknown");
 				error = 1;
 				break;
@@ -529,7 +580,7 @@ int main(int argc, const char *argv[])
 			// Write instruction to output file
 			size_t written = fwrite(buff, 1, imm_bytes + 1, outfile);
 			if (written != (size_t)imm_bytes + 1) {
-				fprintf(stderr, "error: failed to write to output file %s, errno %d\n", arg_output, errno);
+				stasm_msgf(SMT_ERROR, "failed to write to output file %s, errno %d", arg_output, errno);
 				if (lu) {
 					free(lu);
 				}
@@ -549,7 +600,7 @@ int main(int argc, const char *argv[])
 		//
 		case PET_DATA: {
 			if (sec_count == 0) {
-				fprintf(stderr, "error: expected section definition before raw data\n");
+				stasm_msgf(SMT_ERROR, "expected section definition before raw data");
 				error = 1;
 				break;
 			}
@@ -557,7 +608,7 @@ int main(int argc, const char *argv[])
 			// Write raw data to output file
 			size_t written = fwrite(pe.data.raw, 1, pe.data.len, outfile);
 			if (written != (size_t)pe.data.len) {
-				fprintf(stderr, "error: failed to write to output file %s, errno %d\n", arg_output, errno);
+				stasm_msgf(SMT_ERROR, "failed to write to output file %s, errno %d", arg_output, errno);
 				error = 1;
 				break;
 			}
@@ -571,9 +622,7 @@ int main(int argc, const char *argv[])
 			// Attempt to open the included file
 			infile = fopen(pe.filename, "r");
 			if (!infile) { // Failed to open included file
-				fprintf(stderr, "error: failed to open \"%s\" included from \"%s\" line %d\n",
-					pe.filename, inc_chain->parser.filename,
-					inc_chain->parser.tline);
+				stasm_msgf(SMT_ERROR, "failed to open \"%s\"", pe.filename);
 				error = 1;
 			}
 			else { // File opened successfully
@@ -593,7 +642,7 @@ int main(int argc, const char *argv[])
 		//
 		case PET_LABEL: {
 			if (sec_count == 0) {
-				fprintf(stderr, "error: expected section definition before label\n");
+				stasm_msgf(SMT_ERROR, "expected section definition before label");
 				error = 1;
 				break;
 			}
@@ -601,7 +650,7 @@ int main(int argc, const char *argv[])
 			// Compute current position within section
 			long fpos = ftell(outfile);
 			if (fpos < 0) {
-				fprintf(stderr, "error: failed to get offset of label %s with error %d\n", pe.label, error);
+				stasm_msgf(SMT_ERROR, "failed to get offset of label %s with error %d", pe.label, error);
 				error = 1;
 				break;
 			}
@@ -620,7 +669,7 @@ int main(int argc, const char *argv[])
 			}
 			else if (!rec->usages) {
 				// A definition already exists for this label
-				fprintf(stderr, "error: definition already exists for label %s\n", pe.label);
+				stasm_msgf(SMT_ERROR, "definition already exists for label %s", pe.label);
 				error = 1;
 			}
 			else {
@@ -644,7 +693,7 @@ int main(int argc, const char *argv[])
 				// Seek back to the original position
 				int seek_error = fseek(outfile, fpos, SEEK_SET);
 				if (seek_error) {
-					fprintf(stderr, "error: failed to seek in output file \"%s\", errno %d\n", arg_output, errno);
+					stasm_msgf(SMT_ERROR, "failed to seek in output file \"%s\", errno %d", arg_output, errno);
 					if (error == 0) error = seek_error;
 				}
 			}
@@ -655,7 +704,7 @@ int main(int argc, const char *argv[])
 		//
 		case PET_STRINGS:
 			if (sec_count == 0) {
-				fprintf(stderr, "error: expected section definition before .strings\n");
+				stasm_msgf(SMT_ERROR, "expected section definition before .strings");
 				error = 1;
 				break;
 			}
@@ -670,7 +719,7 @@ int main(int argc, const char *argv[])
 				}
 
 				if (!rec->usages) { // Internal error
-					fprintf(stderr, "error: string literal without usage\n");
+					stasm_msgf(SMT_ERROR, "string literal without usage");
 					error = 1;
 					break;
 				}
@@ -678,7 +727,7 @@ int main(int argc, const char *argv[])
 				// Note current file offset
 				long fpos = ftell(outfile);
 				if (fpos < 0) {
-					fprintf(stderr, "error: failed to seek in output file \"%s\", errno %d\n", arg_output, errno);
+					stasm_msgf(SMT_ERROR, "failed to seek in output file \"%s\", errno %d", arg_output, errno);
 					error = 1;
 					break;
 				}
@@ -689,7 +738,7 @@ int main(int argc, const char *argv[])
 				size_t write_len = bstrlen(rec->label) + 1;
 				size_t bc = fwrite(rec->label, 1, write_len, outfile);
 				if (bc != write_len) {
-					fprintf(stderr, "error: failed to write to output file, errno %d\n", errno);
+					stasm_msgf(SMT_ERROR, "failed to write to output file, errno %d", errno);
 					error = 1;
 					break;
 				}
@@ -711,7 +760,7 @@ int main(int argc, const char *argv[])
 				// Seek to after the string contents
 				int seek_error = fseek(outfile, fpos + write_len, SEEK_SET);
 				if (seek_error) {
-					fprintf(stderr, "error: failed to seek in output file \"%s\", errno %d\n", arg_output, errno);
+					stasm_msgf(SMT_ERROR, "failed to seek in output file \"%s\", errno %d", arg_output, errno);
 					if (error == 0) error = seek_error;
 				}
 
@@ -725,7 +774,7 @@ int main(int argc, const char *argv[])
 			break;
 
 		default: // Invalid event type
-			fprintf(stderr, "error: invalid parser event type %d\n", pe.type);
+			stasm_msgf(SMT_ERROR, "invalid parser event type %d", pe.type);
 			error = 1;
 			break;
 		}
@@ -737,7 +786,7 @@ int main(int argc, const char *argv[])
 		// Save the last section of the stub file
 		int save_error = stub_save_section(outfile, sec_count - 1, &curr_sec);
 		if (save_error) {
-			fprintf(stderr, "error: failed to save section %d to \"%s\"\n", sec_count - 1, arg_output);
+			stasm_msgf(SMT_ERROR, "failed to save section %d to \"%s\"", sec_count - 1, arg_output);
 			if (error == 0) {
 				error = save_error;
 			}
@@ -752,10 +801,10 @@ int main(int argc, const char *argv[])
 		// the other error may have halted assembly before the labels were defined.
 		if (error == 0 && label_recs->usages) {
 			if (label_recs->string_lit) {
-				fprintf(stderr, "error: use of undefined string literal\n");
+				stasm_msgf(SMT_ERROR, "use of undefined string literal");
 			}
 			else {
-				fprintf(stderr, "error: use of undefined label \"%s\"\n", label_recs->label);
+				stasm_msgf(SMT_ERROR, "use of undefined label \"%s\"", label_recs->label);
 			}
 			undefined_label = true;
 		}

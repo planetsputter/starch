@@ -9,6 +9,7 @@
 #include "lits.h"
 #include "parser.h"
 #include "starch.h"
+#include "stasm.h"
 #include "util.h"
 
 // Automatic symbols, besides instruction opcodes and interrupt numbers
@@ -172,8 +173,7 @@ static int parser_finish_token(struct parser *parser)
 	bchar *symbol = NULL;
 	if (parser->token[0] == '$') {
 		if (parser->token[1] == '\0') { // Check for empty symbol name
-			fprintf(stderr, "error: empty symbol name in \"%s\" line %d char %d\n",
-				parser->filename, parser->tline, parser->tch);
+			stasm_msgf(SMT_ERROR | SMF_USETOK, "empty symbol name");
 			ret = 1;
 		}
 		else { // Look up an existing symbol definition
@@ -222,8 +222,7 @@ static int parser_finish_token(struct parser *parser)
 					smap_insert(&parser->defs, bstrdupc(parser->token + 1), symbol);
 				}
 				else {
-					fprintf(stderr, "error: undefined symbol \"%s\" in \"%s\" line %d char %d\n",
-						parser->token + 1, parser->filename, parser->tline, parser->tch);
+					stasm_msgf(SMT_ERROR | SMF_USETOK, "undefined symbol \"%s\"", parser->token + 1);
 					ret = 1;
 				}
 			}
@@ -274,15 +273,13 @@ static int parser_finish_token(struct parser *parser)
 				parser->ts = PTS_EOL;
 			}
 			else {
-				fprintf(stderr, "error: unrecognized assembler command \"%s\" in \"%s\" line %d char %d\n",
-					parser->token, parser->filename, parser->tline, parser->tch);
+				stasm_msgf(SMT_ERROR | SMF_USETOK, "unrecognized assembler command \"%s\"", parser->token);
 				ret = 1;
 			}
 		}
 		else if (symbol[0] == ':') { // ':' introduces a label
 			if (symbol[1] == '\0') {
-				fprintf(stderr, "error: empty label in \"%s\" line %d char %d\n",
-					parser->filename, parser->tline, parser->tch);
+				stasm_msgf(SMT_ERROR | SMF_USETOK, "empty label");
 				ret = 1;
 			}
 			else {
@@ -300,8 +297,7 @@ static int parser_finish_token(struct parser *parser)
 		}
 		else if (symbol[0] == '"') { // Introduces a quoted string
 			// Quoted strings are not valid for the first word in a statement
-			fprintf(stderr, "error: unexpected quoted string in \"%s\" line %d char %d\n",
-				parser->filename, parser->tline, parser->tch);
+			stasm_msgf(SMT_ERROR | SMF_USETOK, "unexpected quoted string");
 			ret = 1;
 		}
 		else { // Everything else must be an instruction
@@ -322,8 +318,7 @@ static int parser_finish_token(struct parser *parser)
 					opcode = op_push64as64;
 				}
 				else {
-					fprintf(stderr, "error: unrecognized opcode \"%s\" in \"%s\" line %d char %d\n",
-						symbol, parser->filename, parser->tline, parser->tch);
+					stasm_msgf(SMT_ERROR | SMF_USETOK, "unrecognized opcode \"%s\"", symbol);
 					ret = 1;
 					break;
 				}
@@ -334,8 +329,7 @@ static int parser_finish_token(struct parser *parser)
 				// Look up immediate type for opcode
 				int sdt = imm_type_for_opcode(opcode);
 				if (sdt < 0) {
-					fprintf(stderr, "error: failed to look up immediate type for opcode %s in \"%s\" line %d char %d\n",
-						symbol, parser->filename, parser->tline, parser->tch);
+					stasm_msgf(SMT_ERROR | SMF_USETOK, "failed to look up immediate type for opcode %s", symbol);
 					ret = 1;
 					break;
 				}
@@ -368,8 +362,7 @@ static int parser_finish_token(struct parser *parser)
 			if (parser->event.type != PET_INST) {
 				// @todo: Possibly support string literal immediates for data64 event type,
 				// though this could be confusing because data would be pointer to string elsewhere
-				fprintf(stderr, "error: unsupported statement type for string literal in \"%s\" line %d char %d\n",
-					parser->filename, parser->tline, parser->tch);
+				stasm_msgf(SMT_ERROR | SMF_USETOK, "unsupported statement type for string literal");
 				ret = 1;
 				break;
 			}
@@ -378,7 +371,7 @@ static int parser_finish_token(struct parser *parser)
 			int sdt = imm_type_for_opcode(parser->event.inst.opcode);
 			int dt_size = sdt_size(sdt);
 			if (dt_size != 8) {
-				fprintf(stderr, "error: opcode %s cannot accept a string literal immediate value\n",
+				stasm_msgf(SMT_ERROR | SMF_USETOK, "opcode %s cannot accept a string literal immediate value",
 					name_for_opcode(parser->event.inst.opcode));
 				ret = 1;
 				break;
@@ -386,15 +379,13 @@ static int parser_finish_token(struct parser *parser)
 		}
 		else if (symbol[0] == ':') { // Immediate is label
 			if (symbol[1] == '\0') { // Empty label
-				fprintf(stderr, "error: empty label in \"%s\" line %d char %d\n",
-					parser->filename, parser->tline, parser->tch);
+				stasm_msgf(SMT_ERROR | SMF_USETOK, "empty label");
 				ret = 1;
 				break;
 			}
 			if (parser->event.type != PET_INST) {
 				// @todo: Allow labels to be used for raw data
-				fprintf(stderr, "error: unsupported statement type for label in \"%s\" line %d char %d\n",
-					parser->filename, parser->tline, parser->tch);
+				stasm_msgf(SMT_ERROR | SMF_USETOK, "unsupported statement type for label");
 				ret = 1;
 				break;
 			}
@@ -404,8 +395,7 @@ static int parser_finish_token(struct parser *parser)
 			int64_t immval = 0;
 			bool success = parse_int(symbol, &immval);
 			if (!success) {
-				fprintf(stderr, "error: failed to parse integer literal \"%s\" in \"%s\" line %d char %d\n",
-					symbol, parser->filename, parser->tline, parser->tch);
+				stasm_msgf(SMT_ERROR | SMF_USETOK, "failed to parse integer literal \"%s\"", symbol);
 				ret = 1;
 				break;
 			}
@@ -449,8 +439,7 @@ static int parser_finish_token(struct parser *parser)
 					}
 					break;
 				default:
-					fprintf(stderr, "error: invalid opcode for pseudo-op in \"%s\" line %d char %d\n",
-							parser->filename, parser->tline, parser->tch);
+					stasm_msgf(SMT_ERROR | SMF_USETOK, "invalid opcode for pseudo-op");
 					ret = 1;
 				}
 				if (ret) break;
@@ -475,8 +464,7 @@ static int parser_finish_token(struct parser *parser)
 					sdt = SDT_A64;
 				}
 				else {
-					fprintf(stderr, "error: bad raw data size in \"%s\" line %d char %d\n",
-						parser->filename, parser->tline, parser->tch);
+					stasm_msgf(SMT_ERROR | SMF_USETOK, "bad raw data size");
 					ret = 1;
 					break;
 				}
@@ -491,8 +479,7 @@ static int parser_finish_token(struct parser *parser)
 				int64_t minval, maxval;
 				sdt_min_max(sdt, &minval, &maxval);
 				if (immval < minval || immval > maxval) {
-					fprintf(stderr, "error: literal \"%s\" is out of bounds for type in \"%s\" line %d char %d\n",
-							symbol, parser->filename, parser->tline, parser->tch);
+					stasm_msgf(SMT_ERROR | SMF_USETOK, "literal \"%s\" is out of bounds for type", symbol);
 					ret = 1;
 					break;
 				}
@@ -522,8 +509,7 @@ static int parser_finish_token(struct parser *parser)
 	// Expect end of line
 	//
 	case PTS_EOL:
-		fprintf(stderr, "error: expected eol in \"%s\" line %d char %d\n",
-				parser->filename, parser->tline, parser->tch);
+		stasm_msgf(SMT_ERROR | SMF_USETOK, "expected eol");
 		ret = 1;
 		break;
 
@@ -561,8 +547,7 @@ static int parser_finish_token(struct parser *parser)
 		int64_t litval;
 		bool success = parse_int(symbol, &litval);
 		if (!success) {
-			fprintf(stderr, "error: failed to parse integer literal \"%s\" in \"%s\" line %d char %d\n",
-				symbol, parser->filename, parser->tline, parser->tch);
+			stasm_msgf(SMT_ERROR | SMF_USETOK, "failed to parse integer literal \"%s\"", symbol);
 			ret = 1;
 			break;
 		}
@@ -580,21 +565,27 @@ static int parser_finish_token(struct parser *parser)
 	case PTS_INCLUDE:
 		// Require include file name to be quoted
 		if (symbol[0] != '"') {
-			fprintf(stderr, "error: expected quoted filename in \"%s\" line %d char %d\n",
-				parser->filename, parser->tline, parser->tch);
+			stasm_msgf(SMT_ERROR | SMF_USETOK, "expected quoted filename");
 			ret = 1;
 		}
 		else { // Emit an include event
 			parser->event.type = PET_INCLUDE;
-			parser->event.filename = parser->token;
-			parser->token = NULL;
+			bchar *fname = balloc();
+			bool parsed = parse_string_lit(parser->token, &fname);
+			if (!parsed) {
+				bfree(fname);
+				stasm_msgf(SMT_ERROR | SMF_USETOK, "failed to parse quoted filename");
+				ret = 1;
+			}
+			else {
+				parser->event.filename = fname;
+			}
 		}
 		parser->ts = PTS_EOL;
 		break;
 
 	default:
-		fprintf(stderr, "error: bad token state while parsing \"%s\" line %d char %d\n",
-			parser->filename, parser->tline, parser->tch);
+		stasm_msgf(SMT_ERROR | SMF_USETOK, "bad token state");
 		ret = 1;
 		break;
 	}
@@ -613,8 +604,7 @@ static int parser_finish_line(struct parser *parser, struct parser_event *pe)
 		parser->ts = PTS_DEFAULT;
 	}
 	if (parser->ts != PTS_DEFAULT) {
-		fprintf(stderr, "error: unexpected EOL in \"%s\" line %d char %d\n",
-			parser->filename, parser->line, parser->ch);
+		stasm_msgf(SMT_ERROR, "unexpected EOL");
 		return 1;
 	}
 	if (parser->event.type != PET_NONE) {
@@ -640,8 +630,7 @@ int parser_parse_byte(struct parser *parser, byte b, struct parser_event *pe)
 	ucp c;
 	ucp *next = utf8_decoder_decode(&parser->decoder, b, &c, &ret);
 	if (ret) {
-		fprintf(stderr, "error: UTF-8 decoding error in \"%s\" line %d char %d\n",
-			parser->filename, parser->line, parser->ch);
+		stasm_msgf(SMT_ERROR, "UTF-8 decoding error");
 		return ret;
 	}
 	if (next == &c) { // No character generated
@@ -651,8 +640,7 @@ int parser_parse_byte(struct parser *parser, byte b, struct parser_event *pe)
 	// Re-encode a completed character into a B-string
 	bchar *enc = bstrdupu(&c, 1, &ret);
 	if (ret) {
-		fprintf(stderr, "error: UTF-8 encoding error in \"%s\" line %d char %d\n",
-			parser->filename, parser->line, parser->ch);
+		stasm_msgf(SMT_ERROR, "UTF-8 encoding error");
 		return ret;
 	}
 
@@ -694,8 +682,7 @@ int parser_parse_byte(struct parser *parser, byte b, struct parser_event *pe)
 		// Add character to token
 		parser->token = bstrcatb(parser->token, enc);
 		if (c == '\n') { // Not even escaped newlines are allowed
-			fprintf(stderr, "error: newline in string literal in \"%s\" line %d char %d\n",
-				parser->filename, parser->tline, parser->tch);
+			stasm_msgf(SMT_ERROR | SMF_USETOK, "newline in string literal");
 			ret = 1;
 		}
 		else if (parser->ss == PSS_ESCAPED) { // Escaped characters are not processed further
@@ -707,8 +694,7 @@ int parser_parse_byte(struct parser *parser, byte b, struct parser_event *pe)
 			bool result = parse_string_lit(parser->token, &unesc_token);
 			bfree(unesc_token);
 			if (!result) {
-				fprintf(stderr, "error: invalid string literal in \"%s\" line %d char %d\n",
-					parser->filename, parser->tline, parser->tch);
+				stasm_msgf(SMT_ERROR | SMF_USETOK, "invalid string literal");
 				ret = 1;
 				break;
 			}
@@ -727,8 +713,7 @@ int parser_parse_byte(struct parser *parser, byte b, struct parser_event *pe)
 		break;
 
 	default: // Bad parser syntax state
-		fprintf(stderr, "error: bad syntax state while parsing \"%s\" line %d char %d\n",
-			parser->filename, parser->tline, parser->tch);
+		stasm_msgf(SMT_ERROR, "bad syntax state");
 		ret = 1;
 		break;
 	}
