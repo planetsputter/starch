@@ -47,6 +47,9 @@ def mf_write_rule(mf, target, deps):
 
 # Process a build configuration file
 def process_cfg(filename, buildcfg):
+	# Open the build configuration file
+	file = open(filename)
+
 	# Make the build directory and object directory
 	pathlib.Path('.build/obj').mkdir(exist_ok=True, parents=True)
 
@@ -167,7 +170,6 @@ def process_cfg(filename, buildcfg):
 	# Parse each line of the file
 	comment_regex = r'^\s*#'
 	empty_regex = r'^\s*$'
-	file = open(filename)
 	lineno = 0
 	for line in file:
 		try: # Attempt to parse the line
