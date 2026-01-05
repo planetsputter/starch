@@ -7,6 +7,7 @@
 #include <sys/time.h>
 
 #include "bstr.h"
+#include "bmap.c"
 #include "smap.c"
 
 enum {
@@ -15,25 +16,37 @@ enum {
 static char testkeys[TEST_SIZE + 1];
 static char testvals[TEST_SIZE + 1];
 
-static void str_free(char *str)
+static void test_depth(const struct smap *node)
 {
-	free(str);
+	int maxd = -1, leftd = -1, rightd = -1;
+	if (node->left) {
+		test_depth(node->left);
+		leftd = node->left->depth;
+		if (leftd > maxd) maxd = leftd;
+	}
+	if (node->right) {
+		test_depth(node->right);
+		rightd = node->right->depth;
+		if (rightd > maxd) maxd = rightd;
+	}
+	int diffd = leftd - rightd;
+	assert(node->depth == maxd + 1 && diffd <= 1 && diffd >= -1);
 }
 
-static void test_depth(const struct smap_node *node)
+static void test_bdepth(const struct bmap *node)
 {
-	int maxd = -1, prevd = -1, nextd = -1;
-	if (node->prev) {
-		test_depth(node->prev);
-		prevd = node->prev->depth;
-		if (prevd > maxd) maxd = prevd;
+	int maxd = -1, leftd = -1, rightd = -1;
+	if (node->left) {
+		test_bdepth(node->left);
+		leftd = node->left->depth;
+		if (leftd > maxd) maxd = leftd;
 	}
-	if (node->next) {
-		test_depth(node->next);
-		nextd = node->next->depth;
-		if (nextd > maxd) maxd = nextd;
+	if (node->right) {
+		test_bdepth(node->right);
+		rightd = node->right->depth;
+		if (rightd > maxd) maxd = rightd;
 	}
-	int diffd = prevd - nextd;
+	int diffd = leftd - rightd;
 	assert(node->depth == maxd + 1 && diffd <= 1 && diffd >= -1);
 }
 
@@ -47,15 +60,6 @@ int main()
 	testkeys[TEST_SIZE] = '\0';
 	testvals[TEST_SIZE] = '\0';
 
-	// Initialize with no deallocation function so we can use string literals
-	struct smap smap;
-	smap_init(&smap, NULL);
-
-	//
-	// Test initial conditions
-	//
-	assert(smap.root == NULL);
-
 	// Get current time
 	struct timeval tv;
 	int ret = gettimeofday(&tv, NULL);
@@ -68,41 +72,60 @@ int main()
 	srandom(tv.tv_usec + tv.tv_sec * 1000000);
 
 	//
+	// Initialize for C-strings
+	//
+	struct smap *smap = smap_create();
+
+	//
+	// Test initial conditions
+	//
+	assert(smap == NULL);
+
+	//
 	// Test tree balancing
 	//
 	for (int i = 0; i < TEST_SIZE * 2; i++) {
 		// Insert random key and value
 		int j = random() % TEST_SIZE;
-		smap_insert(&smap, (char*)testkeys + j, (char*)testvals + j);
-		assert(smap.root != NULL);
+		smap = smap_insert(smap, strdup(testkeys + j), strdup(testvals + j));
+		assert(smap != NULL);
 		// Check depth of all nodes
-		test_depth(smap.root);
+		test_depth(smap);
 		// Check that value was associated with key
-		assert(strcmp(smap_get(&smap, (char*)testkeys + j), (char*)testvals + j) == 0);
+		char *val = NULL;
+		ret = smap_get(smap, testkeys + j, &val);
+		assert(ret && val != NULL && strcmp(val, testvals + j) == 0);
 	}
 
-	// Re-init for C-strings
-	smap_destroy(&smap);
-	assert(smap.root == NULL);
-	smap_init(&smap, str_free);
+	smap_delete(smap);
 
-	// Test with C-string
-	assert(smap_get(&smap, "testkey") == NULL);
-	smap_insert(&smap, strdup("testkey"), strdup("testval"));
-	assert(strcmp(smap_get(&smap, "testkey"), "testval") == 0);
+	//
+	// Initialize for B-strings
+	//
+	struct bmap *bmap = bmap_create();
 
-	// Re-init for B-strings
-	smap_destroy(&smap);
-	assert(smap.root == NULL);
-	assert(smap_get(&smap, "testkey") == NULL);
-	smap_init(&smap, bfree);
+	//
+	// Test initial conditions
+	//
+	assert(bmap == NULL);
 
-	// Test with B-string
-	assert(smap_get(&smap, "testkey") == NULL);
-	smap_insert(&smap, bstrdupc("testkey"), bstrdupc("testval"));
-	assert(strcmp(smap_get(&smap, "testkey"), "testval") == 0);
-	smap_destroy(&smap);
-	assert(smap_get(&smap, "testkey") == NULL);
+	//
+	// Test for B-strings
+	//
+	for (int i = 0; i < TEST_SIZE * 2; i++) {
+		// Insert random key and value
+		int j = random() % TEST_SIZE;
+		bmap = bmap_insert(bmap, bstrdupc(testkeys + j), bstrdupc(testvals + j));
+		assert(bmap != NULL);
+		// Check depth of all nodes
+		test_bdepth(bmap);
+		// Check that value was associated with key
+		char *val = NULL;
+		ret = bmap_get(bmap, testkeys + j, &val);
+		assert(ret && val != NULL && strcmp(val, testvals + j) == 0);
+	}
+
+	bmap_delete(bmap);
 
 	return 0;
 }

@@ -1,0 +1,236 @@
+// map.ct
+
+#include <stdlib.h>
+
+// Check for required definitions
+#ifndef MNAME // Map type name
+#error MNAME must be defined
+#endif
+#ifndef KEYT // Key type
+#error KEYT must be defined
+#endif
+#ifndef VALT // Value type
+#error VALT must be defined
+#endif
+#ifndef COMPF // Key comparison function
+#error COMPF must be defined
+#endif
+
+#ifndef KEYDELF // Key delete function
+#define KEYDELF (void)
+#endif
+#ifndef VALDELF // Value delete function
+#define VALDELF (void)
+#endif
+
+// Check for things that must not be defined
+#ifdef MAPCREATE
+#error MAPCREATE must not be defined
+#endif
+#ifdef MAPDELETE
+#error MAPDELETE must not be defined
+#endif
+#ifdef MAPGET
+#error MAPGET must not be defined
+#endif
+#ifdef MAPUPDATE
+#error MAPUPDATE must not be defined
+#endif
+#ifdef MAPLROTATE
+#error MAPLROTATE must not be defined
+#endif
+#ifdef MAPRROTATE
+#error MAPRROTATE must not be defined
+#endif
+#ifdef MAPREBALANCE
+#error MAPREBALANCE must not be defined
+#endif
+#ifdef MAPINSERT
+#error MAPINSERT must not be defined
+#endif
+#ifdef CONCAT1
+#error CONCAT1 must not be defined
+#endif
+#ifdef CONCAT
+#error CONCAT must not be defined
+#endif
+#define CONCAT(a, b) CONCAT1(a, b)
+#define CONCAT1(a, b) a ## b
+
+// Map structure type
+struct MNAME {
+	struct MNAME *left, *right;
+	KEYT key;
+	VALT val;
+	unsigned char depth;
+};
+
+#define MAPCREATE CONCAT(MNAME, _create)
+struct MNAME *MAPCREATE(void)
+{
+	return NULL; // NULL pointer represents empty map
+}
+
+#define MAPDELETE CONCAT(MNAME, _delete)
+void MAPDELETE(struct MNAME *node)
+{
+	if (node == NULL) return;
+	MAPDELETE(node->left);
+	MAPDELETE(node->right);
+	KEYDELF(node->key);
+	VALDELF(node->val);
+	free(node);
+}
+
+#define MAPGET CONCAT(MNAME, _get)
+int MAPGET(const struct MNAME *node, KEYT key, VALT *val)
+{
+	if (node == NULL) return 0;
+	int ret;
+	int comp = COMPF(key, node->key);
+	if (comp < 0) {
+		ret = MAPGET(node->left, key, val);
+	}
+	else if (comp > 0) {
+		ret = MAPGET(node->right, key, val);
+	}
+	else {
+		*val = node->val;
+		ret = 1;
+	}
+	return ret;
+}
+
+// Updates the depth of the given node based on the depths of its children
+#define MAPUPDATE CONCAT(MNAME, _update)
+static void MAPUPDATE(struct MNAME *node)
+{
+	if (node->left) {
+		unsigned char leftdepth = node->left->depth;
+		if (node->right) {
+			unsigned char rightdepth = node->right->depth;
+			node->depth = leftdepth > rightdepth ? leftdepth + 1 : rightdepth + 1;
+		}
+		else {
+			node->depth = leftdepth + 1;
+		}
+	}
+	else {
+		if (node->right) {
+			node->depth = node->right->depth + 1;
+		}
+		else {
+			node->depth = 0;
+		}
+	}
+}
+
+// Performs a binary tree left rotation. *node must have a non-NULL right member.
+#define MAPLROTATE CONCAT(MNAME, _lrot)
+static struct MNAME *MAPLROTATE(struct MNAME *node)
+{
+	struct MNAME *newroot = node->right;
+	struct MNAME *mid = newroot->left;
+	newroot->left = node;
+	node->right = mid;
+	MAPUPDATE(node);
+	MAPUPDATE(newroot);
+	return newroot;
+}
+
+// Performs a binary tree right rotation. *node must have a non-NULL prev member.
+#define MAPRROTATE CONCAT(MNAME, _rrot)
+static struct MNAME *MAPRROTATE(struct MNAME *node)
+{
+	struct MNAME *newroot = node->left;
+	struct MNAME *mid = newroot->right;
+	newroot->right = node;
+	node->left = mid;
+	MAPUPDATE(node);
+	MAPUPDATE(newroot);
+	return newroot;
+}
+
+// Rebalance the tree beginning at the given node, returning the new root
+#define MAPREBALANCE CONCAT(MNAME, _rebalance)
+static struct MNAME *MAPREBALANCE(struct MNAME *node)
+{
+	struct MNAME *newroot;
+	if ((!node->left && node->depth > 1) ||
+		(node->left && node->depth > node->left->depth + 2)) {
+		// node->right has too much depth. node->right->left is going to end up at the same depth,
+		// while node->right->right is going to move closer to root.
+		if (!node->right->right || node->right->right->depth < node->right->depth - 1) {
+			// Greater depth comes from node->right->left. Double-rotation is needed.
+			node->right = MAPRROTATE(node->right);
+		}
+		// Left-rotate
+		newroot = MAPLROTATE(node);
+	}
+	else if ((!node->right && node->depth > 1) ||
+		(node->right && node->depth > node->right->depth + 2)) {
+		// node->left has too much depth. node->left->right is going to end up at the same depth,
+		// while node->left->left is going to move closer to root.
+		if (!node->left->left || node->left->left->depth < node->left->depth - 1) {
+			// Greater depth comes from node->left->right. Double-rotation is needed.
+			node->left = MAPLROTATE(node->left);
+		}
+		// Right-rotate
+		newroot = MAPRROTATE(node);
+	}
+	else {
+		// No rotation necessary
+		MAPUPDATE(node);
+		newroot = node;
+	}
+	return newroot;
+}
+
+#define MAPINSERT CONCAT(MNAME, _insert)
+struct MNAME *MAPINSERT(struct MNAME *node, KEYT key, VALT val)
+{
+	struct MNAME *retnode;
+	if (node == NULL) { // Empty map, allocate new node
+		retnode = (struct MNAME*)malloc(sizeof(struct MNAME));
+		memset(retnode, 0, sizeof(*retnode));
+		retnode->key = key;
+		retnode->val = val;
+	}
+	else { // Search for node with matching key
+		int comp = COMPF(key, node->key);
+		if (comp < 0) {
+			node->left = MAPINSERT(node->left, key, val);
+			if (node->depth < node->left->depth + 1) {
+				node->depth = node->left->depth + 1;
+			}
+			retnode = MAPREBALANCE(node);
+		}
+		else if (comp > 0) {
+			node->right = MAPINSERT(node->right, key, val);
+			if (node->depth < node->right->depth + 1) {
+				node->depth = node->right->depth + 1;
+			}
+			retnode = MAPREBALANCE(node);
+		}
+		else {
+			// This node is a match
+			VALDELF(node->val);
+			KEYDELF(node->key);
+			node->val = val;
+			node->key = key;
+			retnode = node;
+		}
+	}
+	return retnode;
+}
+
+#undef MAPCREATE
+#undef MAPDELETE
+#undef MAPGET
+#undef MAPUPDATE
+#undef MAPLROTATE
+#undef MAPRROTATE
+#undef MAPREBALANCE
+#undef MAPINSERT
+#undef CONCAT
+#undef CONCAT1

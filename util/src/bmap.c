@@ -1,15 +1,15 @@
-// smap.c
+// bmap.c
 
 #include <string.h>
-#include <stdlib.h>
+#include "bstr.h"
 
-// Map for C-strings
-#define MNAME smap
+// Map for B-strings
+#define MNAME bmap
 #define KEYT char*
 #define VALT char*
 #define COMPF strcmp
-#define KEYDELF free
-#define VALDELF free
+#define KEYDELF bfree
+#define VALDELF bfree
 #include "map.ct"
 #undef MNAME
 #undef KEYT
