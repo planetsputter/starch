@@ -18,6 +18,9 @@ void tokenizer_init(struct tokenizer*);
 // Destroys the tokenizer and any unemitted tokens
 void tokenizer_destroy(struct tokenizer*);
 
+// Returns whether a token is being constructed or unemitted
+bool tokenizer_in_progress(struct tokenizer*);
+
 // Parses the given character
 void tokenizer_parse(struct tokenizer*, ucp c);
 

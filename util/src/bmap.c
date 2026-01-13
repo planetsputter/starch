@@ -5,9 +5,9 @@
 
 // Map for B-strings
 #define MNAME bmap
-#define KEYT char*
-#define VALT char*
-#define COMPF strcmp
+#define KEYT bchar*
+#define VALT bchar*
+#define COMPF bstrcmpb
 #define KEYDELF bfree
 #define VALDELF bfree
 #include "map.ct"

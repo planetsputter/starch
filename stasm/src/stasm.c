@@ -4,23 +4,25 @@
 #include <stdarg.h>
 #include <stdlib.h>
 
+#include "assembler.h"
 #include "bstr.h"
 #include "carg.h"
 #include "lits.h"
-#include "parser.h"
 #include "starch.h"
 #include "stasm.h"
 #include "stub.h"
+#include "tokenizer.h"
+#include "utf8.h"
 #include "util.h"
 
 // Variables set by command-line arguments
-const char *arg_help = NULL;
-const char *arg_src = NULL;
-const char *arg_output = "a.stb";
-const char *arg_maxnsec = NULL;
-int maxnsec = 4;
+static const char *arg_help = NULL;
+static const char *arg_src = NULL;
+static const char *arg_output = "a.stb";
+static const char *arg_maxnsec = NULL;
+static int maxnsec = 4;
 
-struct carg_desc arg_descs[] = {
+static struct carg_desc arg_descs[] = {
 	{
 		CARG_TYPE_UNARY, // Type
 		'h',            // Flag
@@ -60,8 +62,8 @@ struct carg_desc arg_descs[] = {
 	{ CARG_TYPE_NONE }
 };
 
-bool non_help_arg = false;
-void detect_non_help_arg(struct carg_desc *desc, const char *arg)
+static bool non_help_arg = false;
+static void detect_non_help_arg(struct carg_desc *desc, const char *arg)
 {
 	(void)arg;
 	if (desc->value != &arg_help) {
@@ -69,12 +71,16 @@ void detect_non_help_arg(struct carg_desc *desc, const char *arg)
 	}
 }
 
+// Token line and character number
+static int tlineno, tcharno;
+
 //
 // Include file link
 //
 struct inc_link {
+	bchar *filename;
 	FILE *file;
-	struct parser parser;
+	int lineno, charno;
 	struct inc_link *prev;
 };
 
@@ -83,18 +89,28 @@ static struct inc_link *inc_chain = NULL;
 
 // Initializes the given link, taking ownership of the given filename B-string.
 // Also takes ownership of the given file, closing it when the object is destroyed.
-void inc_link_init(struct inc_link *link, bchar *filename, FILE *file)
+static void inc_link_init(struct inc_link *link, bchar *filename, FILE *file)
 {
+	link->filename = filename;
 	link->file = file;
-	parser_init(&link->parser, filename);
+	link->lineno = 1;
+	link->charno = 0; // Will be incremented before processing first character
 	link->prev = NULL;
 }
 
 // Destroys the given include link
-void inc_link_destroy(struct inc_link *link)
+static void inc_link_destroy(struct inc_link *link)
 {
-	parser_destroy(&link->parser);
-	fclose(link->file);
+	if (link->filename) {
+		bfree(link->filename);
+		link->filename = NULL;
+	}
+	if (link->file) {
+		if (link->file != stdin) {
+			fclose(link->file);
+		}
+		link->file = NULL;
+	}
 }
 
 // Stasm message counts by type
@@ -105,14 +121,18 @@ size_t stasm_count_msg(int msg_type)
 }
 
 // Message type names including ANSI color codes
+#define ANSI_YELLOW "\033[33m"
+#define ANSI_RED "\033[31m"
+#define ANSI_NORMAL "\033[0m"
 static const char *stasm_msg_types[] = {
 	"info",
-	"\033[33mwarning\033[0m",
-	"\033[31merror\033[0m",
+	ANSI_YELLOW "warning" ANSI_NORMAL,
+	ANSI_RED "error" ANSI_NORMAL,
 };
 
 int stasm_msgf(int msg_type, const char *format, ...)
 {
+	// Determine whether to use current or token line and character numbers
 	bool usetoknums = msg_type & SMF_USETOK;
 	msg_type &= ~SMF_USETOK;
 
@@ -123,9 +143,9 @@ int stasm_msgf(int msg_type, const char *format, ...)
 	// Prepend the current file and line if it is known
 	struct inc_link *link = inc_chain;
 	if (link) {
-		int line = usetoknums ? link->parser.tline : link->parser.line;
-		int ch = usetoknums ? link->parser.tch : link->parser.ch;
-		fprintf(out_file, "%s:%d:%d: ", link->parser.filename, line, ch);
+		int line = usetoknums ? tlineno : link->lineno;
+		int ch = usetoknums ? tcharno : link->charno;
+		fprintf(out_file, "%s:%d:%d: ", link->filename, line, ch);
 	}
 
 	// Format and print the given message
@@ -140,163 +160,11 @@ int stasm_msgf(int msg_type, const char *format, ...)
 		link = link->prev;
 	}
 	for (; link; link = link->prev) {
-		fprintf(out_file, "  in file included from %s:%d\n", link->parser.filename, link->parser.line - 1);
+		fprintf(out_file, "  in file included from %s:%d\n", link->filename, link->lineno - 1);
 	}
 
 	msg_counts[msg_type]++;
 	return ret;
-}
-
-//
-// Records the use of an undefined label
-//
-struct label_usage {
-	long foffset; // Offset of instruction in file
-	uint64_t addr; // Address of usage
-	struct label_usage *prev;
-};
-
-// Initializes the given label usage
-static void label_usage_init(struct label_usage *lu, long foffset, uint64_t addr)
-{
-	lu->foffset = foffset;
-	lu->addr = addr;
-	lu->prev = NULL;
-}
-
-// Applies the given label usage in the given file once the label address is known
-static int apply_label_usage(FILE *outfile, struct label_usage *lu, uint64_t label_addr)
-{
-	// Seek to the instruction
-	int ret = fseek(outfile, lu->foffset, SEEK_SET);
-	if (ret) {
-		stasm_msgf(SMT_ERROR, "failed to seek in output file \"%s\", errno %d", arg_output, errno);
-		return ret;
-	}
-
-	// Read the instruction opcode
-	uint8_t buff[9];
-	size_t bc = fread(buff, 1, 1, outfile);
-	if (bc != 1) {
-		stasm_msgf(SMT_ERROR, "failed to read from output file \"%s\", errno %d", arg_output, errno);
-		return ret;
-	}
-
-	// Get the immediate type
-	int sdt = imm_type_for_opcode(buff[0]);
-	if (sdt < 0) {
-		const char *opname = name_for_opcode(buff[0]);
-		stasm_msgf(SMT_ERROR, "failed to get immediate type for opcode 0x%02x (%s)",
-			buff[0], opname ? opname : "unknown");
-		return 1;
-	}
-
-	// Get the immediate size
-	int imm_bytes = sdt_size(sdt);
-	if (imm_bytes < 1 || imm_bytes > 8) {
-		stasm_msgf(SMT_ERROR, "invalid immediate size %d for data type %d", imm_bytes, sdt);
-		return 1;
-	}
-
-	// Check that the immediate bytes are all zero
-	bc = fread(buff + 1, 1, imm_bytes, outfile);
-	if (bc != (size_t)imm_bytes) {
-		stasm_msgf(SMT_ERROR, "failed to read from output file \"%s\", errno %d", arg_output, errno);
-		return ret;
-	}
-	for (int i = 0; i < imm_bytes; i++) {
-		if (buff[i + 1] != 0) {
-			stasm_msgf(SMT_ERROR, "immediate data not cleared prior to label application");
-			return ret;
-		}
-	}
-
-	// Check for jump/branch opcodes that explicitly accept and interpret a label immediate
-	int jmp_br = 0, use_delta = 0;
-	opcode_is_jmp_br(buff[0], &jmp_br, &use_delta);
-	if (jmp_br) {
-		int64_t imm_val = use_delta ? label_addr - lu->addr : label_addr;
-		// Bounds-check
-		int64_t min_val = 0, max_val = 0;
-		sdt_min_max(sdt, &min_val, &max_val);
-		if (imm_bytes < 8 && (imm_val < min_val || imm_val > max_val)) {
-			stasm_msgf(SMT_ERROR, "immediate label value out of range for opcode");
-			return 1;
-		}
-		put_little64(imm_val, buff + 1);
-	}
-
-	// This is not a jump or branch instruction.
-	// All other instructions expecting a 64-bit immediate value can take a label immediate.
-	else if (imm_bytes == 8) {
-		put_little64(label_addr, buff + 1);
-	}
-	else {
-		stasm_msgf(SMT_ERROR, "opcode does not accept an immediate label");
-		return 1;
-	}
-
-	// Seek back to beginning of instruction
-	ret = fseek(outfile, -imm_bytes - 1, SEEK_CUR);
-	if (ret) {
-		stasm_msgf(SMT_ERROR, "failed to seek in output file \"%s\", errno %d", arg_output, errno);
-		return 1;
-	}
-
-	// Write instruction to output file
-	bc = fwrite(buff, 1, imm_bytes + 1, outfile);
-	if (bc != (size_t)imm_bytes + 1) {
-		stasm_msgf(SMT_ERROR, "failed to write to output file %s, errno %d", arg_output, errno);
-		return 1;
-	}
-
-	return 0;
-}
-
-//
-// Label record
-//
-struct label_rec {
-	bool string_lit; // Whether this label is a string literal
-	bchar *label; // B-string, either label or string literal contents
-	uint64_t addr; // Only relevant if usages is NULL
-	// Track usages until label is defined. Label is defined if this is NULL.
-	struct label_usage *usages;
-	struct label_rec *prev;
-};
-
-// Initializes the given label record, taking ownership of the given label B-string
-static void label_rec_init(struct label_rec *rec, bool string_lit, bchar *label, uint64_t addr, struct label_usage *usages)
-{
-	rec->string_lit = string_lit;
-	rec->label = label;
-	rec->addr = addr;
-	rec->usages = usages;
-	rec->prev = NULL;
-}
-
-// Destroys the given label record
-static void label_rec_destroy(struct label_rec *rec)
-{
-	bfree(rec->label);
-	rec->label = NULL;
-	for (struct label_usage *usage = rec->usages; usage; ) {
-		struct label_usage *prev = usage->prev;
-		free(usage);
-		usage = prev;
-	}
-	rec->usages = NULL;
-}
-
-// Look up the label record for the given B-string label name or string literal
-static struct label_rec *get_rec_for_label(struct label_rec *rec, bool string_lit, const bchar *label)
-{
-	for (; rec; rec = rec->prev) {
-		if (rec->string_lit == string_lit && bstrcmpb(rec->label, label) == 0) {
-			return rec;
-		}
-	}
-	return NULL;
 }
 
 int main(int argc, const char *argv[])
@@ -363,8 +231,8 @@ int main(int argc, const char *argv[])
 	}
 
 	// Initialize output file
-	int error = stub_init(outfile, maxnsec);
-	if (error) {
+	int ret = stub_init(outfile, maxnsec);
+	if (ret) {
 		fclose(outfile);
 		if (infile != stdin) {
 			fclose(infile);
@@ -377,10 +245,155 @@ int main(int argc, const char *argv[])
 	inc_chain = (struct inc_link*)malloc(sizeof(struct inc_link));
 	inc_link_init(inc_chain, arg_src ? bstrdupc(arg_src) : NULL, infile);
 
-	// Initialize label definition list.
-	// @todo: Make a binary search tree for efficient lookup.
-	struct label_rec *label_recs = NULL;
+	// Initialize decoder
+	struct utf8_decoder decoder;
+	utf8_decoder_init(&decoder);
 
+	// Initialize tokenizer
+	struct tokenizer tokenizer;
+	tokenizer_init(&tokenizer);
+
+	// Initialize assembler
+	struct assembler as;
+	assembler_init(&as, outfile);
+
+	bool pop_inc = false;
+	ucp c = 0;
+	bool tip = false; // Token in progress
+
+	// Parse each byte of the source file and each included file
+	while (inc_chain) {
+		// Check whether a token is in progress
+		if (!tip && tokenizer_in_progress(&tokenizer)) {
+			tip = true;
+			tlineno = inc_chain->lineno;
+			tcharno = inc_chain->charno;
+		}
+
+		// Assemble any emitted tokens
+		bchar *token = NULL;
+		tokenizer_emit(&tokenizer, &token);
+		if (token) {
+			tip = false;
+			// Assemble the token
+			ret = assembler_handle_token(&as, token);
+			if (ret) break;
+
+			// Check for included file
+			bchar *filename = NULL;
+			assembler_get_include(&as, &filename);
+			if (filename) {
+				// Open included file
+				FILE *incfile = fopen(filename, "r");
+				if (!incfile) {
+					stasm_msgf(SMT_ERROR, "failed to open %s", filename);
+					ret = 1;
+					break;
+				}
+
+				// Add link to chain
+				struct inc_link *link = (struct inc_link*)malloc(sizeof(struct inc_link));
+				inc_link_init(link, filename, incfile);
+				link->prev = inc_chain;
+				inc_chain = link;
+			}
+			continue;
+		}
+
+		// Pop the included file if requested
+		if (pop_inc) {
+			pop_inc = false;
+
+			// Remove the front link
+			struct inc_link *prev = inc_chain->prev;
+			inc_link_destroy(inc_chain);
+			free(inc_chain);
+			inc_chain = prev;
+			if (!inc_chain) break; // Assembled all files
+		}
+		// Keep track of line and character numbers
+		else if (c == '\n') {
+			inc_chain->lineno++;
+			inc_chain->charno = 1;
+		}
+		else {
+			inc_chain->charno++;
+		}
+
+		// Get a character from the current input file
+		for (;;) {
+			int b = fgetc(inc_chain->file);
+			if (b == EOF) { // Finish file
+				if (ferror(inc_chain->file)) {// Check for file read error
+					stasm_msgf(SMT_ERROR, "read failed, errno %d", errno);
+					ret = 1;
+					break;
+				}
+				// Ensure the decoder and tokenizer can terminate now
+				if (!utf8_decoder_can_terminate(&decoder) || !tokenizer_finish(&tokenizer)) {
+					stasm_msgf(SMT_ERROR, "unexpected EOF");
+					ret = 1;
+					break;
+				}
+				// Handle end of file like end of statement
+				c = '\n';
+				pop_inc = true;
+				break;
+			}
+
+			// Decode byte
+			ucp *cp = utf8_decoder_decode(&decoder, b, &c, &ret);
+			if (ret) { // Encoding error
+				stasm_msgf(SMT_ERROR, "encoding error");
+				break;
+			}
+			if (cp != &c) break; // Character generated
+		}
+		if (ret) break;
+
+		// Feed the generated character to the tokenizer
+		tokenizer_parse(&tokenizer, c);
+	}
+
+	/*
+	if (sec_count) {
+		// Save the last section of the stub file
+		int save_error = stub_save_section(outfile, sec_count - 1, &curr_sec);
+		if (save_error) {
+			stasm_msgf(SMT_ERROR, "failed to save section %d to \"%s\"", sec_count - 1, arg_output);
+			if (ret == 0) {
+				ret = save_error;
+			}
+		}
+	}
+	*/
+
+	// Destroy tokenizer
+	tokenizer_destroy(&tokenizer);
+
+	// Destroy assembler
+	assembler_destroy(&as);
+
+	// Destroy include chain
+	while (inc_chain) {
+		struct inc_link *prev = inc_chain->prev;
+		inc_link_destroy(inc_chain);
+		free(inc_chain);
+		inc_chain = prev;
+	}
+
+	// Close output file
+	fclose(outfile);
+
+	return ret;
+
+	//
+	//
+	// OLD CODE
+	//
+	//
+
+	/*
 	// Set up assembler state
 	int sec_count = 0; // Count of sections encountered
 	long curr_sec_fo = 0; // File offset of current section data
@@ -793,6 +806,9 @@ int main(int argc, const char *argv[])
 		}
 	}
 
+	// Destroy tokenizer
+	tokenizer_destroy(&tokenizer);
+
 	// Destroy label record list
 	bool undefined_label = false;
 	for (; label_recs;) {
@@ -829,4 +845,5 @@ int main(int argc, const char *argv[])
 	fclose(outfile);
 
 	return error;
+	*/
 }

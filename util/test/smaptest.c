@@ -82,7 +82,7 @@ int main()
 	assert(smap == NULL);
 
 	//
-	// Test tree balancing
+	// Test for C-strings
 	//
 	for (int i = 0; i < TEST_SIZE * 2; i++) {
 		// Insert random key and value
@@ -120,8 +120,9 @@ int main()
 		// Check depth of all nodes
 		test_bdepth(bmap);
 		// Check that value was associated with key
-		char *val = NULL;
-		ret = bmap_get(bmap, testkeys + j, &val);
+		bchar *val = NULL, *name = bstrdupc(testkeys + j);
+		ret = bmap_get(bmap, name, &val);
+		bfree(name);
 		assert(ret && val != NULL && strcmp(val, testvals + j) == 0);
 	}
 

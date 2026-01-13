@@ -13,7 +13,7 @@ enum { // Tokenizer states
 };
 
 // Single-character operators in numeric order
-static const char *scos = "\n!#%&'()*+,-./:<=>?@[\\]^`{|}~";
+static const char *scos = "\n!#%&'()*+,-./<=>?@[\\]^`{|}~";
 
 // Returns whether the given character is a single-character operator
 static bool is_sco(ucp c)
@@ -32,23 +32,38 @@ void tokenizer_init(struct tokenizer *tz)
 
 void tokenizer_destroy(struct tokenizer *tz)
 {
-	if (tz->ctoken) bfree(tz->ctoken);
-	if (tz->token1) bfree(tz->token1);
-	if (tz->token2) bfree(tz->token2);
-	tokenizer_init(tz);
+	if (tz->ctoken) {
+		bfree(tz->ctoken);
+		tz->ctoken = NULL;
+	}
+	if (tz->token1) {
+		bfree(tz->token1);
+		tz->token1 = NULL;
+	}
+	if (tz->token2) {
+		bfree(tz->token2);
+		tz->token2 = NULL;
+	}
+}
+
+bool tokenizer_in_progress(struct tokenizer *tz)
+{
+	return tz->ctoken != NULL || tz->token1 != NULL;
 }
 
 // Enqueues the current token for emission
 static void tokenizer_enqueue(struct tokenizer *tz)
 {
-	if (tz->token1) {
-		assert(tz->token2 == NULL); // We should never enqueue more than two tokens
-		tz->token2 = tz->ctoken;
+	if (tz->ctoken) {
+		if (tz->token1) {
+			assert(tz->token2 == NULL); // We should never enqueue more than two tokens
+			tz->token2 = tz->ctoken;
+		}
+		else {
+			tz->token1 = tz->ctoken;
+		}
+		tz->ctoken = NULL;
 	}
-	else {
-		tz->token1 = tz->ctoken;
-	}
-	tz->ctoken = NULL;
 }
 
 void tokenizer_parse(struct tokenizer *tz, ucp c)
@@ -125,7 +140,7 @@ bool tokenizer_finish(struct tokenizer *tz)
 	if (tz->state >= TZS_QUOTED) { // Cannot end stream within a quoted token
 		return false;
 	}
-	// Stream end is considered to end the current line
-	tokenizer_parse(tz, '\n');
+	// Finish current token, if any
+	tokenizer_enqueue(tz);
 	return true;
 }
