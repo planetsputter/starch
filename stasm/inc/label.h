@@ -29,15 +29,15 @@ int label_usage_apply(const struct label_usage *lu, FILE *outfile, uint64_t labe
 struct label_rec {
 	bool string_lit; // Whether this label is a string literal
 	bchar *label; // B-string, either label or string literal contents
-	uint64_t addr; // Only relevant if usages is NULL
-	// Track usages until label is defined. Label is defined if this is NULL.
-	struct label_usage *usages;
+	bool defined; // Whether this label has been defined
+	uint64_t addr; // Only relevant if label has been defined
+	struct label_usage *usages; // Label usages list
 	struct label_rec *prev;
 };
 
 // Initializes the given label record with the given parameters.
 // Takes ownership of the given B-string label and usages.
-void label_rec_init(struct label_rec *rec, bool string_lit, bchar *label, uint64_t addr, struct label_usage *usages);
+void label_rec_init(struct label_rec *rec, bool string_lit, bool defined, bchar *label, uint64_t addr, struct label_usage *usages);
 
 // Destroys the given label record, releasing its label and usages.
 void label_rec_destroy(struct label_rec *rec);

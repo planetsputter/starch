@@ -1,4 +1,4 @@
-.section $INIT_PC_VAL
+section $INIT_PC_VAL
 invalid
 push8as8 0
 push8asu16 0

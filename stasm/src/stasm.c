@@ -212,7 +212,7 @@ int main(int argc, const char *argv[])
 	if (arg_src) {
 		infile = fopen(arg_src, "r");
 		if (!infile) {
-			stasm_msgf(SMT_ERROR, "failed to open %s", arg_src ? arg_src : "stdin");
+			stasm_msgf(SMT_ERROR, "failed to open %s", arg_src);
 			return 1;
 		}
 	}
@@ -243,7 +243,7 @@ int main(int argc, const char *argv[])
 
 	// Initialize include chain
 	inc_chain = (struct inc_link*)malloc(sizeof(struct inc_link));
-	inc_link_init(inc_chain, arg_src ? bstrdupc(arg_src) : NULL, infile);
+	inc_link_init(inc_chain, arg_src ? bstrdupc(arg_src) : bstrdupc("(stdin)"), infile);
 
 	// Initialize decoder
 	struct utf8_decoder decoder;
@@ -355,18 +355,24 @@ int main(int argc, const char *argv[])
 		tokenizer_parse(&tokenizer, c);
 	}
 
-	/*
-	if (sec_count) {
+	if (as.sec_count) {
 		// Save the last section of the stub file
-		int save_error = stub_save_section(outfile, sec_count - 1, &curr_sec);
+		int save_error = stub_save_section(outfile, as.sec_count - 1, &as.curr_sec);
 		if (save_error) {
-			stasm_msgf(SMT_ERROR, "failed to save section %d to \"%s\"", sec_count - 1, arg_output);
+			stasm_msgf(SMT_ERROR, "failed to save section %d to \"%s\"", as.sec_count - 1, arg_output);
 			if (ret == 0) {
 				ret = save_error;
 			}
 		}
 	}
-	*/
+
+	// Check for undefined labels
+	for (struct label_rec *rec = as.label_recs; rec; rec = rec->prev) {
+		if (!rec->defined) {
+			stasm_msgf(SMT_ERROR, "undefined label \"%s\"", rec->label);
+			break;
+		}
+	}
 
 	// Destroy tokenizer
 	tokenizer_destroy(&tokenizer);

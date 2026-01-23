@@ -131,7 +131,7 @@ int main(int argc, const char *argv[])
 		}
 
 		// Print section description
-		ret = fprintf(outfile, ".section %#"PRIx64"\n", sec.addr);
+		ret = fprintf(outfile, "section %#"PRIx64"\n", sec.addr);
 		if (ret < 0) {
 			fprintf(stderr, "error: failed to write to \"%s\"\n", arg_output ? arg_output : "stdout");
 			ret = 1;

@@ -106,10 +106,11 @@ int label_usage_apply(const struct label_usage *lu, FILE *outfile, uint64_t labe
 }
 
 // Initializes the given label record, taking ownership of the given label B-string
-void label_rec_init(struct label_rec *rec, bool string_lit, bchar *label, uint64_t addr, struct label_usage *usages)
+void label_rec_init(struct label_rec *rec, bool string_lit, bool defined, bchar *label, uint64_t addr, struct label_usage *usages)
 {
 	rec->string_lit = string_lit;
 	rec->label = label;
+	rec->defined = defined;
 	rec->addr = addr;
 	rec->usages = usages;
 	rec->prev = NULL;
