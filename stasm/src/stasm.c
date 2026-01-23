@@ -367,10 +367,13 @@ int main(int argc, const char *argv[])
 	}
 
 	// Check for undefined labels
-	for (struct label_rec *rec = as.label_recs; rec; rec = rec->prev) {
-		if (!rec->defined) {
-			stasm_msgf(SMT_ERROR, "undefined label \"%s\"", rec->label);
-			break;
+	if (ret == 0) {
+		for (struct label_rec *rec = as.label_recs; rec; rec = rec->prev) {
+			if (!rec->defined) {
+				stasm_msgf(SMT_ERROR, "undefined label \"%s\"", rec->label);
+				ret = 1;
+				break;
+			}
 		}
 	}
 

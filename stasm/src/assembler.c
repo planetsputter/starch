@@ -275,6 +275,7 @@ void assembler_destroy(struct assembler *as)
 		free(rec);
 		rec = temp;
 	}
+	as->label_recs = NULL;
 }
 
 // Handles definition of the given label at the current position
@@ -462,6 +463,9 @@ static int assembler_handle_opcode(struct assembler *as)
 		assert(false);
 	}
 
+	struct label_usage *lu = NULL;
+	struct label_rec *rec = NULL;
+
 	if (!as->word1) { // No immediate value
 		assert(as->sdt == SDT_VOID && as->state == APS_OPCODE2);
 	}
@@ -480,36 +484,36 @@ static int assembler_handle_opcode(struct assembler *as)
 			uint64_t curr_addr = as->curr_sec.addr + current_fo - as->curr_sec_fo;
 
 			// Note usage of label
-			struct label_usage *lu = (struct label_usage*)malloc(sizeof(struct label_usage));
-			label_usage_init(lu, current_fo + opcode_size, curr_addr + opcode_size);
+			// @todo: if this is raw data, note the size of that raw data in the label usage
+			// and modify the label apply code to handle it
+			lu = (struct label_usage*)malloc(sizeof(struct label_usage));
+			label_usage_init(lu, current_fo, curr_addr);
 
-			// See if label address is known
-			uint64_t addr = 0;
-			struct label_rec *rec = label_rec_lookup(as->label_recs, true, as->word1);
+			// Find existing label record
+			rec = label_rec_lookup(as->label_recs, as->word1[0] == '"', as->word1);
 			if (!rec) {
 				// Label has not been used before. Add new label record to list.
-				struct label_rec *next = (struct label_rec*)malloc(sizeof(struct label_rec));
-				label_rec_init(next, as->word1[0] == '"', false, bstrdupb(as->word1), addr, lu);
-				next->prev = as->label_recs;
-				as->label_recs = next;
-			}
-			else if (rec->defined) {
-				// The address for this label is known
-				// todo: Don't discard here
-				free(lu);
-				addr = rec->addr;
+				rec = (struct label_rec*)malloc(sizeof(struct label_rec));
+				label_rec_init(rec, as->word1[0] == '"', false, bstrdupb(as->word1), 0, lu);
+				rec->prev = as->label_recs;
+				as->label_recs = rec;
 			}
 			else {
-				// This label has been used before but does not have an address yet.
-				// Note the usage and move on.
+				// Add usage to existing label record
 				lu->prev = rec->usages;
 				rec->usages = lu;
 			}
 
-			// @todo: Look up max immediate size
+			// If label address is known, then apply it after writing instruction to file.
+			// Otherwise, don't.
+			if (!rec->defined) {
+				lu = NULL;
+			}
 
-			imm_val = addr;
-			imm_bytes_reqd = 8; // @todo
+			// Bytes required can depend on the instruction. For now we let errors be detected
+			// when the label is applied.
+			// @todo: Is this always correct?
+			imm_bytes_reqd = 0;
 		}
 		else { // Integer literal
 			assert(as->pret1);
@@ -588,6 +592,11 @@ static int assembler_handle_opcode(struct assembler *as)
 	if (written != (size_t)(opcode_size + imm_bytes)) {
 		stasm_msgf(SMT_ERROR, "failed to write to output file, errno %d", errno);
 		return 1;
+	}
+
+	// If a label was used and can be applied, apply it
+	if (lu) {
+		return label_usage_apply(lu, as->outfile, rec->addr);
 	}
 
 	return 0;

@@ -27,6 +27,7 @@ int label_usage_apply(const struct label_usage *lu, FILE *outfile, uint64_t labe
 	}
 
 	// Read the instruction opcode
+	// @todo: What about labels as data?
 	uint8_t buff[9];
 	size_t bc = fread(buff, 1, 1, outfile);
 	if (bc != 1) {
@@ -84,6 +85,7 @@ int label_usage_apply(const struct label_usage *lu, FILE *outfile, uint64_t labe
 		put_little64(label_addr, buff + 1);
 	}
 	else {
+		// @todo: This would be an internal error
 		stasm_msgf(SMT_ERROR, "opcode does not accept an immediate label");
 		return 1;
 	}
@@ -95,7 +97,7 @@ int label_usage_apply(const struct label_usage *lu, FILE *outfile, uint64_t labe
 		return 1;
 	}
 
-	// Write instruction to output file
+	// Write instruction with label value to output file
 	bc = fwrite(buff, 1, imm_bytes + 1, outfile);
 	if (bc != (size_t)imm_bytes + 1) {
 		stasm_msgf(SMT_ERROR, "failed to write to output file, errno %d", errno);
