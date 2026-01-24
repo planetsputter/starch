@@ -155,7 +155,7 @@ enum {
 	ASM_CMD_STRINGS,
 };
 // Returns the index of the given assembler command, or negative
-int get_asm_cmd(const char *cmd)
+static int get_asm_cmd(const char *cmd)
 {
 	// Use binary search for efficiency
 	int low = 0, high = sizeof(asm_cmd_names) / sizeof(*asm_cmd_names) - 1, mid;
@@ -193,7 +193,7 @@ enum {
 	PSOP_PUSH8,
 };
 // Returns the index of the given pseudo-op, or negative
-int get_psop(const char *name)
+static int get_psop(const char *name)
 {
 	// Use binary search for efficiency
 	int low = 0, high = sizeof(psop_names) / sizeof(*psop_names) - 1, mid;
@@ -603,132 +603,6 @@ static int assembler_handle_opcode(struct assembler *as)
 	}
 
 	return 0;
-
-	/*
-	buff[0] = pe.inst.opcode;
-	memset(buff + 1, 0, sizeof(buff) - 1);
-
-	// Get the immediate type
-	int sdt = imm_type_for_opcode(pe.inst.opcode);
-	if (sdt < 0) {
-		const char *opname = name_for_opcode(pe.inst.opcode);
-		stasm_msgf(SMT_ERROR, "failed to get immediate types for opcode 0x%02x (%s)",
-			pe.inst.opcode, opname ? opname : "unknown");
-		error = 1;
-		break;
-	}
-	// Get the immediate size
-	int imm_bytes = sdt_size(sdt);
-
-	// Initialize potential label usage
-	struct label_usage *lu = NULL;
-	struct label_rec *rec = NULL;
-
-	if (pe.inst.imm != NULL) { // There is an immediate value
-		if (sdt == SDT_VOID || imm_bytes == 0) { // Internal error
-			const char *opname = name_for_opcode(pe.inst.opcode);
-			stasm_msgf(SMT_ERROR, "unexpected immediate value for opcode 0x%02x (%s)",
-				pe.inst.opcode, opname ? opname : "unknown");
-			error = 1;
-			break;
-		}
-		if (pe.inst.imm[0] == ':' || pe.inst.imm[0] == '"') { // Label or string literal immediate
-			// Get current file offset
-			long current_fo = ftell(outfile);
-			if (current_fo < 0) {
-				stasm_msgf(SMT_ERROR, "failed to get offset with error %d", errno);
-				error = 1;
-				break;
-			}
-			// Compute current address
-			uint64_t curr_addr = curr_sec.addr + current_fo - curr_sec_fo;
-
-			// Create a usage record for this label
-			lu = (struct label_usage*)malloc(sizeof(struct label_usage));
-			label_usage_init(lu, current_fo, curr_addr);
-
-			// Look up the label record
-			bool string_lit = pe.inst.imm[0] == '"';
-			if (string_lit) {
-				// Parse and store string literal contents, not representation
-				bchar *contents = balloc();
-				bool parse_ret = parse_string_lit(pe.inst.imm, &contents);
-				if (!parse_ret) { // Internal error, this should have been checked by parser
-					bfree(contents);
-					stasm_msgf(SMT_ERROR, "failed to parse string literal");
-					error = 1;
-					break;
-				}
-				bfree(pe.inst.imm);
-				pe.inst.imm = contents;
-			}
-			rec = get_rec_for_label(label_recs, string_lit, pe.inst.imm);
-			if (rec == NULL) {
-				// Label has not yet been used or defined. Add new label record to list.
-				struct label_rec *next = (struct label_rec*)malloc(sizeof(struct label_rec));
-				label_rec_init(next, string_lit, pe.inst.imm, 0, lu);
-				lu = NULL;
-				pe.inst.imm = NULL;
-				next->prev = label_recs;
-				label_recs = next;
-			}
-			else if (rec->usages) {
-				// Label has been used before but is not defined. Add label usage to list.
-				lu->prev = rec->usages;
-				rec->usages = lu;
-				lu = NULL;
-			}
-			// Otherwise the label is already defined
-		}
-		else { // Numeric literal
-			// Parse numeric literal
-			int64_t immval = 0;
-			bool success = parse_int(pe.inst.imm, &immval);
-			if (!success) {
-				stasm_msgf(SMT_ERROR, "failed to parse integer literal \"%s\"", pe.inst.imm);
-				error = 1;
-				break;
-			}
-
-			// Check numeric literal immediate bounds
-			if (imm_bytes < 8) {
-				int64_t minval, maxval;
-				sdt_min_max(sdt, &minval, &maxval);
-				if (immval < minval || immval > maxval) {
-					stasm_msgf(SMT_ERROR, "literal \"%s\" is out of bounds for type", pe.inst.imm);
-					error = 1;
-					break;
-				}
-			}
-
-			put_little64((uint64_t)immval, buff + 1);
-		}
-	}
-	else if (sdt != SDT_VOID || imm_bytes != 0) { // Internal error
-		const char *opname = name_for_opcode(pe.inst.opcode);
-		stasm_msgf(SMT_ERROR, "expected immediate value for opcode 0x%02x (%s)",
-			pe.inst.opcode, opname ? opname : "unknown");
-		error = 1;
-		break;
-	}
-
-	// Write instruction to output file
-	size_t written = fwrite(buff, 1, imm_bytes + 1, outfile);
-	if (written != (size_t)imm_bytes + 1) {
-		stasm_msgf(SMT_ERROR, "failed to write to output file %s, errno %d", arg_output, errno);
-		if (lu) {
-			free(lu);
-		}
-		error = 1;
-		break;
-	}
-
-	if (lu) {
-		// Label already defined and can be applied right away
-		error = apply_label_usage(outfile, lu, rec->addr);
-		free(lu);
-	}
-	*/
 }
 
 int assembler_handle_token(struct assembler *as, bchar *token)
