@@ -14,11 +14,12 @@
 struct label_usage {
 	long foffset; // Offset of instruction in file
 	uint64_t addr; // Address of usage
+	int data_len; // If non-zero, the length of the raw data label
 	struct label_usage *prev;
 };
 
-// Initializes the given label usage with the given file offset and address
-void label_usage_init(struct label_usage *lu, long foffset, uint64_t addr);
+// Initializes the given label usage with the given file offset, address, and raw data length
+void label_usage_init(struct label_usage *lu, long foffset, uint64_t addr, int data_len);
 
 // Applies the given label usage to the given output stub file at the given address
 int label_usage_apply(const struct label_usage *lu, FILE *outfile, uint64_t label_addr);

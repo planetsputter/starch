@@ -52,3 +52,14 @@ uint64_t get_little64(const uint8_t *data)
 		((uint64_t)data[6] << 48) |
 		((uint64_t)data[7] << 56);
 }
+
+int min_bytes_for_val(int64_t val)
+{
+	if (val < (int32_t)0x80000000) return 8;
+	if (val < (int16_t)0x8000) return 4;
+	if (val < (int8_t)0x80) return 2;
+	if (val <= (uint8_t)0xff) return 1;
+	if (val <= (uint16_t)0xffff) return 2;
+	if (val <= (uint32_t)0xffffffff) return 4;
+	return 8;
+}

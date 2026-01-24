@@ -213,18 +213,6 @@ int get_psop(const char *name)
 	return -1;
 }
 
-// Returns the minimum number of bytes required to represent the given value
-static int min_bytes_for_val(int64_t val)
-{
-	if (val < (int32_t)0x80000000) return 8;
-	if (val < (int16_t)0x8000) return 4;
-	if (val < (int8_t)0x80) return 2;
-	if (val <= (uint8_t)0xff) return 1;
-	if (val <= (uint16_t)0xffff) return 2;
-	if (val <= (uint32_t)0xffffffff) return 4;
-	return 8;
-}
-
 enum { // Assembler parse states
 	APS_DEFAULT,
 	APS_INCLUDE1,
@@ -318,9 +306,7 @@ static int assembler_handle_label_def(struct assembler *as, bchar *token)
 		for (struct label_usage *lu = rec->usages; lu; lu = lu->prev) {
 			// Apply each of the usages
 			ret = label_usage_apply(lu, as->outfile, rec->addr);
-			if (ret) {
-				break;
-			}
+			if (ret) break;
 		}
 
 		// Seek back to the original position
@@ -401,6 +387,7 @@ static int assembler_handle_strings(struct assembler *as)
 
 		// Apply all usages of the string literal
 		assert(rec->usages);
+		rec->defined = true;
 		rec->addr = addr; // Address is now known
 		for (struct label_usage *lu = rec->usages; lu; lu = lu->prev) {
 			ret = label_usage_apply(lu, as->outfile, addr);
@@ -473,7 +460,8 @@ static int assembler_handle_opcode(struct assembler *as)
 		int imm_bytes_reqd;
 		int64_t imm_val = 0;
 		assert(as->sdt != SDT_VOID);
-		if (as->word1[0] == '"' || as->word1[0] == ':') { // String literal or label
+		bool string_lit = as->word1[0] == '"';
+		if (string_lit || as->word1[0] == ':') { // String literal or label
 			// Get current file offset
 			long current_fo = ftell(as->outfile);
 			if (current_fo < 0) {
@@ -483,22 +471,37 @@ static int assembler_handle_opcode(struct assembler *as)
 			// Compute current address
 			uint64_t curr_addr = as->curr_sec.addr + current_fo - as->curr_sec_fo;
 
-			// Note usage of label
-			// @todo: if this is raw data, note the size of that raw data in the label usage
-			// and modify the label apply code to handle it
+			// Note usage of label, including whether it is a raw usage
 			lu = (struct label_usage*)malloc(sizeof(struct label_usage));
-			label_usage_init(lu, current_fo, curr_addr);
+			label_usage_init(lu, current_fo, curr_addr, opcode_size == 0 ? imm_bytes : 0);
+
+			// Label name or contents of string literal
+			bchar *contents;
+			if (string_lit) { // String literal
+				contents = balloc();
+				if (!parse_string_lit(as->word1, &contents)) {
+					bfree(contents);
+					stasm_msgf(SMT_ERROR | SMF_USETOK, "invalid string literal");
+					return 1;
+				}
+			}
+			else { // Label
+				contents = as->word1;
+			}
 
 			// Find existing label record
-			rec = label_rec_lookup(as->label_recs, as->word1[0] == '"', as->word1);
+			rec = label_rec_lookup(as->label_recs, string_lit, contents);
 			if (!rec) {
-				// Label has not been used before. Add new label record to list.
+				// Label has not been used before. Add new label record to list with usage.
 				rec = (struct label_rec*)malloc(sizeof(struct label_rec));
-				label_rec_init(rec, as->word1[0] == '"', false, bstrdupb(as->word1), 0, lu);
+				label_rec_init(rec, string_lit, false, string_lit ? contents : bstrdupb(as->word1), 0, lu);
 				rec->prev = as->label_recs;
 				as->label_recs = rec;
 			}
 			else {
+				if (string_lit) {
+					bfree(contents);
+				}
 				// Add usage to existing label record
 				lu->prev = rec->usages;
 				rec->usages = lu;

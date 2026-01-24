@@ -212,7 +212,7 @@ int main(int argc, const char *argv[])
 	if (arg_src) {
 		infile = fopen(arg_src, "r");
 		if (!infile) {
-			stasm_msgf(SMT_ERROR, "failed to open %s", arg_src);
+			stasm_msgf(SMT_ERROR, "failed to open %s, errno %d", arg_src, errno);
 			return 1;
 		}
 	}
@@ -226,7 +226,7 @@ int main(int argc, const char *argv[])
 		if (infile != stdin) {
 			fclose(infile);
 		}
-		stasm_msgf(SMT_ERROR, "failed to open \"%s\" for writing", arg_output);
+		stasm_msgf(SMT_ERROR, "failed to open \"%s\" for writing, errno %d", arg_output, errno);
 		return 1;
 	}
 
@@ -286,7 +286,7 @@ int main(int argc, const char *argv[])
 				// Open included file
 				FILE *incfile = fopen(filename, "r");
 				if (!incfile) {
-					stasm_msgf(SMT_ERROR, "failed to open %s", filename);
+					stasm_msgf(SMT_ERROR, "failed to open %s, errno %d", filename, errno);
 					ret = 1;
 					break;
 				}
