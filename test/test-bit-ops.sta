@@ -50,7 +50,7 @@ setslp $STACK_LIMIT
 	push64 :rep64_data
 	storerpop64
 	pop64
-	rjmpi8 :begin
+	rjmp :begin
 :end
 	halt 0
 

@@ -2239,58 +2239,6 @@ int core_step(struct core *core, struct mem *mem)
 	//
 	// Branching operations
 	//
-	case op_brz8:
-		ret = core_mem_read64(core, mem, core->pc + 1, &temp_u64b); // Read address
-		if (ret) break;
-		ret = core_frame_read8(core, mem, core->sp - 1, &temp_u8); // Read condition
-		if (ret) break;
-		core->sp -= 1;
-		if (temp_u8) {
-			core->pc += 9;
-		}
-		else {
-			core->pc = temp_u64b;
-		}
-		break;
-	case op_brz16:
-		ret = core_mem_read64(core, mem, core->pc + 1, &temp_u64b); // Read address
-		if (ret) break;
-		ret = core_frame_read16(core, mem, core->sp - 2, &temp_u16); // Read condition
-		if (ret) break;
-		core->sp -= 2;
-		if (temp_u16) {
-			core->pc += 9;
-		}
-		else {
-			core->pc = temp_u64b;
-		}
-		break;
-	case op_brz32:
-		ret = core_mem_read64(core, mem, core->pc + 1, &temp_u64b); // Read address
-		if (ret) break;
-		ret = core_frame_read32(core, mem, core->sp - 4, &temp_u32); // Read condition
-		if (ret) break;
-		core->sp -= 4;
-		if (temp_u32) {
-			core->pc += 9;
-		}
-		else {
-			core->pc = temp_u64b;
-		}
-		break;
-	case op_brz64:
-		ret = core_mem_read64(core, mem, core->pc + 1, &temp_u64b); // Read address
-		if (ret) break;
-		ret = core_frame_read64(core, mem, core->sp - 8, &temp_u64); // Read condition
-		if (ret) break;
-		core->sp -= 8;
-		if (temp_u64) {
-			core->pc += 9;
-		}
-		else {
-			core->pc = temp_u64b;
-		}
-		break;
 	case op_rbrz8i8:
 		ret = core_mem_read8(core, mem, core->pc + 1, &temp_u8b); // Read offset
 		if (ret) break;

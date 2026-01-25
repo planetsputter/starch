@@ -50,7 +50,7 @@ setslp $STACK_LIMIT
 	push64 :rep64_data
 	storerpop64
 	pop64
-	rjmpi8 :begin
+	rjmp :begin
 :end
 	halt 0
 
@@ -143,7 +143,7 @@ setslp $STACK_LIMIT
 	dup8        ; a8, b8, b8
 	push8 0     ; a8, b8, b8, 0_8
 	ceq8        ; a8, b8, b8 == 0_8
-	rbrz8i8 :test_div8_mod8 ; a8, b8
+	brz8 :test_div8_mod8 ; a8, b8
 	pop8        ; a8
 	push8 1     ; a8, 1_8
 
@@ -325,7 +325,7 @@ setslp $STACK_LIMIT
 	dup16        ; a16, b16, b16
 	push16 0     ; a16, b16, b16, 0_16
 	ceq16        ; a16, b16, b16 == 0_16
-	rbrz16i8 :test_div16_mod16 ; a16, b16
+	brz16 :test_div16_mod16 ; a16, b16
 	pop16        ; a16
 	push16 1     ; a16, 1_16
 
@@ -507,7 +507,7 @@ setslp $STACK_LIMIT
 	dup32        ; a32, b32, b32
 	push32 0     ; a32, b32, b32, 0_32
 	ceq32        ; a32, b32, b32 == 0_32
-	rbrz32i8 :test_div32_mod32 ; a32, b32
+	brz32 :test_div32_mod32 ; a32, b32
 	pop32        ; a32
 	push32 1     ; a32, 1_32
 
@@ -689,7 +689,7 @@ setslp $STACK_LIMIT
 	dup64        ; a64, b64, b64
 	push64 0     ; a64, b64, b64, 0_64
 	ceq64        ; a64, b64, b64 == 0_64
-	rbrz64i8 :test_div64_mod64 ; a64, b64
+	brz64 :test_div64_mod64 ; a64, b64
 	pop64        ; a64
 	push64 1     ; a64, 1_64
 

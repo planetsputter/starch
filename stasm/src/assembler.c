@@ -180,6 +180,10 @@ static int get_asm_cmd(const char *cmd)
 //
 // Pseudo-op names in alphabetic order
 static const char *psop_names[] = {
+	"brz16",
+	"brz32",
+	"brz64",
+	"brz8",
 	"push16",
 	"push32",
 	"push64",
@@ -188,6 +192,10 @@ static const char *psop_names[] = {
 };
 // Pseudo-op symbolic constants in same order as above
 enum {
+	PSOP_BRZ16,
+	PSOP_BRZ32,
+	PSOP_BRZ64,
+	PSOP_BRZ8,
 	PSOP_PUSH16,
 	PSOP_PUSH32,
 	PSOP_PUSH64,
@@ -431,6 +439,18 @@ static int assembler_handle_opcode(struct assembler *as)
 		// Put the worst-case (max program size) opcode
 		int opcode;
 		switch (as->code) {
+		case PSOP_BRZ16:
+			opcode = op_rbrz16i32;
+			break;
+		case PSOP_BRZ32:
+			opcode = op_rbrz32i32;
+			break;
+		case PSOP_BRZ64:
+			opcode = op_rbrz64i32;
+			break;
+		case PSOP_BRZ8:
+			opcode = op_rbrz8i32;
+			break;
 		case PSOP_PUSH16:
 			opcode = op_push16as16;
 			break;
@@ -540,7 +560,89 @@ static int assembler_handle_opcode(struct assembler *as)
 		if (as->state == APS_PSOP2 && imm_bytes_reqd) {
 			// Compact pseudo-ops when immediate value is known
 			int opcode;
+			bool oob = false;
 			switch (as->code) {
+			case PSOP_BRZ16:
+				as->sdt = sdt_icontain(imm_val);
+				switch (as->sdt) {
+				case SDT_I8:
+					opcode = op_rbrz16i8;
+					break;
+				case SDT_I16:
+					opcode = op_rbrz16i16;
+					break;
+				case SDT_I32:
+					opcode = op_rbrz16i32;
+					break;
+				case SDT_I64:
+					// There is no conditional branch by 64-bit immediate opcode
+					oob = true;
+					break;
+				default:
+					assert(false);
+				}
+				break;
+			case PSOP_BRZ32:
+				as->sdt = sdt_icontain(imm_val);
+				switch (as->sdt) {
+				case SDT_I8:
+					opcode = op_rbrz32i8;
+					break;
+				case SDT_I16:
+					opcode = op_rbrz32i16;
+					break;
+				case SDT_I32:
+					opcode = op_rbrz32i32;
+					break;
+				case SDT_I64:
+					// There is no conditional branch by 64-bit immediate opcode
+					oob = true;
+					break;
+				default:
+					assert(false);
+				}
+				break;
+			case PSOP_BRZ64:
+				as->sdt = sdt_icontain(imm_val);
+				switch (as->sdt) {
+				case SDT_I8:
+					opcode = op_rbrz64i8;
+					break;
+				case SDT_I16:
+					opcode = op_rbrz64i16;
+					break;
+				case SDT_I32:
+					opcode = op_rbrz64i32;
+					break;
+				case SDT_I64:
+					// There is no conditional branch by 64-bit immediate opcode
+					oob = true;
+					break;
+				default:
+					assert(false);
+				}
+				break;
+			case PSOP_BRZ8:
+				as->sdt = sdt_icontain(imm_val);
+				switch (as->sdt) {
+				case SDT_I8:
+					opcode = op_rbrz8i8;
+					break;
+				case SDT_I16:
+					opcode = op_rbrz8i16;
+					break;
+				case SDT_I32:
+					opcode = op_rbrz8i32;
+					break;
+				case SDT_I64:
+					// There is no conditional branch by 64-bit immediate opcode
+					oob = true;
+					break;
+				default:
+					assert(false);
+				}
+				break;
+
 			case PSOP_PUSH16:
 				if (imm_bytes_reqd < 2) {
 					if (imm_val < 0) opcode = op_push8asi16;
@@ -584,6 +686,7 @@ static int assembler_handle_opcode(struct assembler *as)
 				// Already as compact as possible
 				opcode = op_push8as8;
 				break;
+
 			case PSOP_RJMP:
 				as->sdt = sdt_icontain(imm_val);
 				switch (as->sdt) {
@@ -598,14 +701,18 @@ static int assembler_handle_opcode(struct assembler *as)
 					break;
 				case SDT_I64:
 					// There is no relative branch by 64-bit immediate opcode
-					stasm_msgf(SMT_ERROR | SMF_USETOK, "immediate value out of range for opcode");
-					return 1;
+					oob = true;
+					break;
 				default:
 					assert(false);
 				}
 				break;
 			default:
 				assert(false);
+			}
+			if (oob) {
+				stasm_msgf(SMT_ERROR | SMF_USETOK, "immediate value out of range for opcode");
+				return 1;
 			}
 			buff[0] = opcode;
 			as->sdt = imm_type_for_opcode(opcode);
@@ -717,6 +824,13 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 					break;
 				}
 				switch (code) {
+				case PSOP_BRZ16:
+				case PSOP_BRZ32:
+				case PSOP_BRZ64:
+				case PSOP_BRZ8:
+					sdt = SDT_I32;
+					break;
+
 				case PSOP_PUSH16:
 					sdt = SDT_A16;
 					break;
@@ -729,6 +843,7 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 				case PSOP_PUSH8:
 					sdt = SDT_A8;
 					break;
+
 				case PSOP_RJMP:
 					sdt = SDT_I32;
 					break;

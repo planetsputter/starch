@@ -176,10 +176,6 @@ jmps
 rjmpi8 0
 rjmpi16 0
 rjmpi32 0
-brz8 0
-brz16 0
-brz32 0
-brz64 0
 rbrz8i8 0
 rbrz8i16 0
 rbrz8i32 0

@@ -238,10 +238,6 @@ static const char *op_names[] = {
 	//
 	// Branching operations
 	//
-	[op_brz8] = "brz8",
-	[op_brz16] = "brz16",
-	[op_brz32] = "brz32",
-	[op_brz64] = "brz64",
 	[op_rbrz8i8] = "rbrz8i8",
 	[op_rbrz8i16] = "rbrz8i16",
 	[op_rbrz8i32] = "rbrz8i32",
@@ -343,10 +339,6 @@ void opcode_is_jmp_br(int opcode, int *jmp_br, int *delta)
 
 	switch (opcode) {
 	case op_jmp:
-	case op_brz8:
-	case op_brz16:
-	case op_brz32:
-	case op_brz64:
 		*jmp_br = 1;
 		break;
 
@@ -752,12 +744,6 @@ int imm_type_for_opcode(int opcode)
 	//
 	// Branching operations
 	//
-	case op_brz8:
-	case op_brz16:
-	case op_brz32:
-	case op_brz64:
-		ret = SDT_U64;
-		break;
 	case op_rbrz8i8:
 	case op_rbrz16i8:
 	case op_rbrz32i8:

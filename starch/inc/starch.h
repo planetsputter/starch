@@ -242,10 +242,6 @@ enum {
 	//
 	// Branching operations
 	//
-	op_brz8,      // Jump to 8 byte imm addr if top 1 byte popped is zero
-	op_brz16,     // Jump to 8 byte imm addr if top 2 byte popped is zero
-	op_brz32,     // Jump to 8 byte imm addr if top 4 byte popped is zero
-	op_brz64,     // Jump to 8 byte imm addr if top 8 byte popped is zero
 	op_rbrz8i8,   // Relative jump by signed 1 byte imm addr if top 1 byte popped is zero
 	op_rbrz8i16,  // Relative jump by signed 2 byte imm addr if top 1 byte popped is zero
 	op_rbrz8i32,  // Relative jump by signed 4 byte imm addr if top 1 byte popped is zero
