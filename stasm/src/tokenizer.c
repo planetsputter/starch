@@ -67,6 +67,7 @@ bool tokenizer_in_progress(struct tokenizer *tz)
 static void tokenizer_enqueue(struct tokenizer *tz)
 {
 	if (tz->ctoken) {
+		assert(bstrlen(tz->ctoken) > 0);
 		if (tz->token1) {
 			assert(tz->token2 == NULL); // We should never enqueue more than two tokens
 			tz->token2 = tz->ctoken;
@@ -86,7 +87,6 @@ void tokenizer_parse(struct tokenizer *tz, ucp c)
 		int error = 0;
 		switch (tz->state) {
 		case TZS_DEFAULT:
-			// @todo: It would be nice if ':' started a new token
 			if (c == 0 || isspace((int)c) || is_sco(c) || c == '"' || c == ';' || c == '-' || c == '+') {
 				// These characters end the current token, if any
 				tokenizer_enqueue(tz);

@@ -635,8 +635,8 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 			break;
 		}
 		if (symbol[0] == ':') { // ':' introduces a label
-			if (symbol[1] == '\0' || strchr(symbol + 1, ':') != NULL) {
-				// Label name may not contain ':' and must not be empty
+			if (symbol[1] == '\0') {
+				// Label name must not be empty
 				stasm_msgf(SMT_ERROR | SMF_USETOK, "invalid label name");
 				ret = 1;
 				break;

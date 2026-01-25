@@ -36,12 +36,12 @@ section $INIT_PC_VAL
 	add64        ; enda64
 	push64 -16
 	loadpopsfp64 ; enda64, bufa64
-:write_io_loop
+:write_io:loop
 	dup64        ; enda64, bufa64, bufa64
 	push64 0
 	loadpopsfp64 ; enda64, bufa64, bufa64, enda64
 	cltu64       ; enda64, bufa64, bufa64 < enda64
-	brz64 :write_io_end
+	brz64 :write_io:end
 	load8        ; enda64, bufa64, data8
 	push64 -8
 	loadpopsfp64 ; enda64, bufa64, data8, ioa64
@@ -49,8 +49,8 @@ section $INIT_PC_VAL
 	pop8         ; enda64, bufa64
 	push64 1
 	add64        ; enda64, bufa64 + 1
-	rjmpi8 :write_io_loop
-:write_io_end
+	rjmpi8 :write_io:loop
+:write_io:end
 	ret
 
 ;
