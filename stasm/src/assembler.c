@@ -888,6 +888,11 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 			// Section address is in word1
 			// @todo: Allow section flags
 			if (as->pret1) { // Address parsed successfully
+				if (as->pval1 < 0) {
+					stasm_msgf(SMT_ERROR | SMF_USETOK, "section address cannot be negative");
+					ret = 1;
+					break;
+				}
 				ret = assembler_handle_section(as, (uint64_t)as->pval1);
 			}
 			break;
