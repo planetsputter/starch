@@ -468,6 +468,45 @@ int sdt_size(int dt)
 	return ret;
 }
 
+int sdt_icontain(int64_t val)
+{
+	// Do a binary search of sorts to reduce the number of copmarisons required
+	int sdt;
+	if (val >= -0x80) {
+		if (val > 0x7fff) {
+			if (val > 0x7fffffffl) sdt = SDT_I64;
+			else sdt = SDT_I32;
+		}
+		else {
+			if (val > 0x7f) sdt = SDT_I16;
+			else sdt = SDT_I8;
+		}
+	}
+	else {
+		if (val >= -0x80000000l) {
+			if (val >= -0x8000) sdt = SDT_I16;
+			else sdt = SDT_I32;
+		}
+		else sdt = SDT_I64;
+	}
+	return sdt;
+}
+
+int sdt_ucontain(uint64_t val)
+{
+	// Do a binary search of sorts to reduce the number of comparisons required
+	int sdt;
+	if (val > 0xffff) {
+		if (val > 0xffffffffl) sdt = SDT_U64;
+		else sdt = SDT_U32;
+	}
+	else {
+		if (val > 0xff) sdt = SDT_U16;
+		else sdt = SDT_U8;
+	}
+	return sdt;
+}
+
 int imm_type_for_opcode(int opcode)
 {
 	int ret;

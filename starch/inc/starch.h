@@ -360,6 +360,12 @@ void sdt_min_max(int sdt, int64_t *min, int64_t *max);
 // Returns the byte size of the given data type, or negative on error
 int sdt_size(int sdt);
 
+// Returns the smallest signed data type to contain the given value
+int sdt_icontain(int64_t val);
+
+// Returns the smallest unsigned data type to contain the given value
+int sdt_ucontain(uint64_t val);
+
 // Returns the data type of the immediate argument for the given opcode.
 // Returns negative on failure.
 int imm_type_for_opcode(int opcode);

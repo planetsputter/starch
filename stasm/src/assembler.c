@@ -184,6 +184,7 @@ static const char *psop_names[] = {
 	"push32",
 	"push64",
 	"push8",
+	"rjmp",
 };
 // Pseudo-op symbolic constants in same order as above
 enum {
@@ -191,6 +192,7 @@ enum {
 	PSOP_PUSH32,
 	PSOP_PUSH64,
 	PSOP_PUSH8,
+	PSOP_RJMP,
 };
 // Returns the index of the given pseudo-op, or negative
 static int get_psop(const char *name)
@@ -225,8 +227,8 @@ enum { // Assembler parse states
 	APS_DATA1,
 	APS_DATA2,
 	APS_STRINGS,
-	APS_PUSH1,
-	APS_PUSH2,
+	APS_PSOP1,
+	APS_PSOP2,
 	APS_OPCODE1,
 	APS_OPCODE2,
 };
@@ -425,7 +427,7 @@ static int assembler_handle_opcode(struct assembler *as)
 	case APS_OPCODE2:
 		buff[0] = as->code;
 		break;
-	case APS_PUSH2:
+	case APS_PSOP2:
 		// Put the worst-case (max program size) opcode
 		int opcode;
 		switch (as->code) {
@@ -441,6 +443,9 @@ static int assembler_handle_opcode(struct assembler *as)
 		case PSOP_PUSH8:
 			opcode = op_push8as8;
 			break;
+		case PSOP_RJMP:
+			opcode = op_rjmpi32;
+			break;
 		default:
 			assert(false);
 		}
@@ -449,9 +454,6 @@ static int assembler_handle_opcode(struct assembler *as)
 	default:
 		assert(false);
 	}
-
-	struct label_usage *lu = NULL;
-	struct label_rec *rec = NULL;
 
 	if (!as->word1) { // No immediate value
 		assert(as->sdt == SDT_VOID && as->state == APS_OPCODE2);
@@ -472,7 +474,7 @@ static int assembler_handle_opcode(struct assembler *as)
 			uint64_t curr_addr = as->curr_sec.addr + current_fo - as->curr_sec_fo;
 
 			// Note usage of label, including whether it is a raw usage
-			lu = (struct label_usage*)malloc(sizeof(struct label_usage));
+			struct label_usage *lu = (struct label_usage*)malloc(sizeof(struct label_usage));
 			label_usage_init(lu, current_fo, curr_addr, opcode_size == 0 ? imm_bytes : 0);
 
 			// Label name or contents of string literal
@@ -490,13 +492,16 @@ static int assembler_handle_opcode(struct assembler *as)
 			}
 
 			// Find existing label record
-			rec = label_rec_lookup(as->label_recs, string_lit, contents);
+			struct label_rec *rec = label_rec_lookup(as->label_recs, string_lit, contents);
 			if (!rec) {
 				// Label has not been used before. Add new label record to list with usage.
 				rec = (struct label_rec*)malloc(sizeof(struct label_rec));
 				label_rec_init(rec, string_lit, false, string_lit ? contents : bstrdupb(as->word1), 0, lu);
 				rec->prev = as->label_recs;
 				as->label_recs = rec;
+
+				// We don't know the label address, so we can't write the immediate value now
+				imm_bytes_reqd = 0;
 			}
 			else {
 				if (string_lit) {
@@ -505,79 +510,106 @@ static int assembler_handle_opcode(struct assembler *as)
 				// Add usage to existing label record
 				lu->prev = rec->usages;
 				rec->usages = lu;
-			}
 
-			// If label address is known, then apply it after writing instruction to file.
-			// Otherwise, don't.
-			if (!rec->defined) {
-				lu = NULL;
+				// If label address is known, then apply it after writing instruction to file
+				if (rec->defined) {
+					// Because the label address is known, we can determine the immediate value and bytes required
+					if (opcode_size) {
+						// Check for jump/branch opcodes that explicitly accept and interpret a label immediate.
+						int jmp_br = 0, use_delta = 0;
+						opcode_is_jmp_br(buff[0], &jmp_br, &use_delta);
+						imm_val = use_delta ? rec->addr - lu->addr : rec->addr;
+					}
+					else { // Label value is data
+						imm_val = rec->addr;
+					}
+					imm_bytes_reqd = min_bytes_for_val(imm_val);
+				}
+				else { // Label address is not currently known, so we can't write the immediate value now
+					imm_bytes_reqd = 0;
+				}
 			}
-
-			// Bytes required can depend on the instruction. For now we let errors be detected
-			// when the label is applied.
-			// @todo: Is this always correct?
-			imm_bytes_reqd = 0;
 		}
 		else { // Integer literal
 			assert(as->pret1);
 
 			imm_val = as->pval1;
 			imm_bytes_reqd = min_bytes_for_val(imm_val);
+		}
 
-			if (as->state == APS_PUSH2) {
-				// Compact push pseudo-ops where possible
-				int opcode;
-				switch (as->code) {
-				case PSOP_PUSH16:
-					if (imm_bytes_reqd < 2) {
-						if (imm_val < 0) opcode = op_push8asi16;
-						else opcode = op_push8asu16;
-					}
-					else {
-						opcode = op_push16as16;
-					}
+		if (as->state == APS_PSOP2 && imm_bytes_reqd) {
+			// Compact pseudo-ops when immediate value is known
+			int opcode;
+			switch (as->code) {
+			case PSOP_PUSH16:
+				if (imm_bytes_reqd < 2) {
+					if (imm_val < 0) opcode = op_push8asi16;
+					else opcode = op_push8asu16;
+				}
+				else {
+					opcode = op_push16as16;
+				}
+				break;
+			case PSOP_PUSH32:
+				if (imm_bytes_reqd < 2) {
+					if (imm_val < 0) opcode = op_push8asi32;
+					else opcode = op_push8asu32;
+				}
+				else if (imm_bytes_reqd < 3) {
+					if (imm_val < 0) opcode = op_push16asi32;
+					else opcode = op_push16asu32;
+				}
+				else {
+					opcode = op_push32as32;
+				}
+				break;
+			case PSOP_PUSH64:
+				if (imm_bytes_reqd < 2) {
+					if (imm_val < 0) opcode = op_push8asi64;
+					else opcode = op_push8asu64;
+				}
+				else if (imm_bytes_reqd < 3) {
+					if (imm_val < 0) opcode = op_push16asi64;
+					else opcode = op_push16asu64;
+				}
+				else if (imm_bytes_reqd < 5) {
+					if (imm_val < 0) opcode = op_push32asi64;
+					else opcode = op_push32asu64;
+				}
+				else {
+					opcode = op_push64as64;
+				}
+				break;
+			case PSOP_PUSH8:
+				// Already as compact as possible
+				opcode = op_push8as8;
+				break;
+			case PSOP_RJMP:
+				as->sdt = sdt_icontain(imm_val);
+				switch (as->sdt) {
+				case SDT_I8:
+					opcode = op_rjmpi8;
 					break;
-				case PSOP_PUSH32:
-					if (imm_bytes_reqd < 2) {
-						if (imm_val < 0) opcode = op_push8asi32;
-						else opcode = op_push8asu32;
-					}
-					else if (imm_bytes_reqd < 3) {
-						if (imm_val < 0) opcode = op_push16asi32;
-						else opcode = op_push16asu32;
-					}
-					else {
-						opcode = op_push32as32;
-					}
+				case SDT_I16:
+					opcode = op_rjmpi16;
 					break;
-				case PSOP_PUSH64:
-					if (imm_bytes_reqd < 2) {
-						if (imm_val < 0) opcode = op_push8asi64;
-						else opcode = op_push8asu64;
-					}
-					else if (imm_bytes_reqd < 3) {
-						if (imm_val < 0) opcode = op_push16asi64;
-						else opcode = op_push16asu64;
-					}
-					else if (imm_bytes_reqd < 5) {
-						if (imm_val < 0) opcode = op_push32asi64;
-						else opcode = op_push32asu64;
-					}
-					else {
-						opcode = op_push64as64;
-					}
+				case SDT_I32:
+					opcode = op_rjmpi32;
 					break;
-				case PSOP_PUSH8:
-					// Already as compact as possible
-					opcode = op_push8as8;
-					break;
+				case SDT_I64:
+					// There is no relative branch by 64-bit immediate opcode
+					stasm_msgf(SMT_ERROR | SMF_USETOK, "immediate value out of range for opcode");
+					return 1;
 				default:
 					assert(false);
 				}
-				buff[0] = opcode;
-				as->sdt = imm_type_for_opcode(opcode);
-				imm_bytes = sdt_size(as->sdt);
+				break;
+			default:
+				assert(false);
 			}
+			buff[0] = opcode;
+			as->sdt = imm_type_for_opcode(opcode);
+			imm_bytes = sdt_size(as->sdt);
 		}
 
 		// Check that value fits into buffer
@@ -595,11 +627,6 @@ static int assembler_handle_opcode(struct assembler *as)
 	if (written != (size_t)(opcode_size + imm_bytes)) {
 		stasm_msgf(SMT_ERROR, "failed to write to output file, errno %d", errno);
 		return 1;
-	}
-
-	// If a label was used and can be applied, apply it
-	if (lu) {
-		return label_usage_apply(lu, as->outfile, rec->addr);
 	}
 
 	return 0;
@@ -677,36 +704,40 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 			nextstate = APS_STRINGS;
 			break;
 		default:
+			assert(code < 0);
 			// Everything else must be an instruction
 			code = opcode_for_name(symbol);
 			if (code < 0) {
 				// Instruction is not an exact match for any opcode. Check for pseudo-ops.
 				code = get_psop(symbol);
-				switch (code) {
-				case PSOP_PUSH16:
-					sdt = SDT_A16;
-					nextstate = APS_PUSH1;
-					break;
-				case PSOP_PUSH32:
-					sdt = SDT_A32;
-					nextstate = APS_PUSH1;
-					break;
-				case PSOP_PUSH64:
-					sdt = SDT_A64;
-					nextstate = APS_PUSH1;
-					break;
-				case PSOP_PUSH8:
-					sdt = SDT_A8;
-					nextstate = APS_PUSH1;
-					break;
-				default:
+				if (code < 0) {
 					// @todo: Should put into a state where we ignore tokens until '\n'?
 					stasm_msgf(SMT_ERROR | SMF_USETOK, "unrecognized opcode \"%s\"", symbol);
 					ret = 1;
 					break;
 				}
+				switch (code) {
+				case PSOP_PUSH16:
+					sdt = SDT_A16;
+					break;
+				case PSOP_PUSH32:
+					sdt = SDT_A32;
+					break;
+				case PSOP_PUSH64:
+					sdt = SDT_A64;
+					break;
+				case PSOP_PUSH8:
+					sdt = SDT_A8;
+					break;
+				case PSOP_RJMP:
+					sdt = SDT_I32;
+					break;
+				default:
+					assert(false);
+				}
+				nextstate = APS_PSOP1;
 			}
-			else {
+			else { // Valid Starch opcode
 				sdt = imm_type_for_opcode(code);
 				nextstate = sdt == SDT_VOID ? APS_OPCODE2 : APS_OPCODE1;
 			}
@@ -724,7 +755,7 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 	case APS_DEFINE2:
 	case APS_INCLUDE1:
 	case APS_OPCODE1:
-	case APS_PUSH1:
+	case APS_PSOP1:
 	case APS_SECTION1:
 		// Disallow newlines
 		if (token[0] == '\n') {
@@ -773,7 +804,7 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 			}
 			break;
 		case APS_OPCODE1:
-		case APS_PUSH1:
+		case APS_PSOP1:
 		case APS_DATA1:
 			// Allow quoted tokens and labels
 			if (symbol[0] == '"' || symbol[0] == ':') {
@@ -810,7 +841,7 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 	case APS_DEFINE3:
 	case APS_INCLUDE2:
 	case APS_OPCODE2:
-	case APS_PUSH2:
+	case APS_PSOP2:
 	case APS_SECTION2:
 	case APS_STRINGS:
 		// Expect end of line
@@ -843,7 +874,7 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 			break;
 
 		case APS_OPCODE2:
-		case APS_PUSH2:
+		case APS_PSOP2:
 		case APS_DATA2:
 			// word1 will be NULL if the opcode expects no immediate value.
 			// Otherwise it will be a quoted string, label, or integer literal.
