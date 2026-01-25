@@ -57,10 +57,40 @@ int main()
 	// Seed random number generator with current time in microseconds
 	srandom(tv.tv_usec + tv.tv_sec * 1000000);
 
+	int64_t val;
 	ucp c, tc;
 	ucp ca[10];
 	bchar *ts = NULL;
 	int error = (int)random();
+
+	// Test that only decimal digits are valid single-character integer literals
+	for (c = 0; c < 256; c++) {
+		ts = bstrdupu(&c, 1, &error);
+		assert(error == 0);
+		if (c >= '0' && c <= '9') {
+			assert(parse_int(ts, &val) && val == c - '0');
+		}
+		else {
+			assert(!parse_int(ts, &val));
+		}
+		bfree(ts);
+	}
+
+	// Test signed single-digit integer literals
+	ca[0] = '+';
+	for (c = '0'; c <= '9'; c++) {
+		ca[1] = c;
+		ts = bstrdupu(ca, 2, &error);
+		assert(error == 0 && parse_int(ts, &val) && val == c - '0');
+		bfree(ts);
+	}
+	ca[0] = '-';
+	for (c = '0'; c <= '9'; c++) {
+		ca[1] = c;
+		ts = bstrdupu(ca, 2, &error);
+		assert(error == 0 && parse_int(ts, &val) && val == (int64_t)'0' - c);
+		bfree(ts);
+	}
 
 	// Test only valid and no invalid single character escapes for code points below 256
 	utf8_decode_array((const byte*)"'\\x'", 4, ca, sizeof(ca) / sizeof(*ca), &error);

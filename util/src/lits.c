@@ -164,13 +164,16 @@ bool parse_int(const bchar *s, int64_t *val)
 	// Parse optional sign
 	bool neg;
 	if (*p == '-') {
-		p++;
 		neg = true;
+		p++;
 	}
 	else {
 		neg = false;
+		if (*p == '+') {
+			p++;
+		}
 	}
-	if (*p == '\0') return false; // "" or "-"
+	if (*p == '\0') return false; // "", "-", or "+"
 
 	// @todo: handle overflow
 	int64_t temp_val = 0;
