@@ -8,9 +8,9 @@
 enum { // Tokenizer states
 	TZS_DEFAULT,
 	TZS_COMMENT,
+	TZS_SIGN,
 	TZS_QUOTED,
 	TZS_QUOTED_ESC,
-	TZS_SIGN,
 };
 
 // Single-character operators in numeric order
@@ -119,6 +119,16 @@ void tokenizer_parse(struct tokenizer *tz, ucp c)
 				again = true;
 			}
 			break;
+		case TZS_SIGN:
+			if (isdigit(c)) { // Sign begins literal
+				tz->ctoken = bstrcatu(tz->ctoken, &c, 1, &error);
+			}
+			else { // Sign is its own token
+				tokenizer_enqueue(tz);
+				again = true;
+			}
+			tz->state = TZS_DEFAULT;
+			break;
 		case TZS_QUOTED:
 			// Append quoted character
 			tz->ctoken = bstrcatu(tz->ctoken, &c, 1, &error);
@@ -134,16 +144,6 @@ void tokenizer_parse(struct tokenizer *tz, ucp c)
 			// Append escaped character
 			tz->ctoken = bstrcatu(tz->ctoken, &c, 1, &error);
 			tz->state = TZS_QUOTED;
-			break;
-		case TZS_SIGN:
-			if (isdigit(c)) { // Sign begins literal
-				tz->ctoken = bstrcatu(tz->ctoken, &c, 1, &error);
-			}
-			else { // Sign is its own token
-				tokenizer_enqueue(tz);
-				again = true;
-			}
-			tz->state = TZS_DEFAULT;
 			break;
 		default:
 			assert(false);
