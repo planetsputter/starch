@@ -13,23 +13,23 @@
 ;
 ; Definitions
 ;
-.define STACK_BOTTOM 0x4000
-.define STACK_LIMIT  0x5000
-.define STATIC_ADDR  0x5000
-.define MAX_REPS     64
+define STACK_BOTTOM 0x4000
+define STACK_LIMIT  0x5000
+define STATIC_ADDR  0x5000
+define MAX_REPS     64
 
 ;
 ; Static data section
 ;
-.section $STATIC_ADDR
+section $STATIC_ADDR
 
 :rep64_data
-.data64 0
+data64 0
 
 ;
 ; Instruction section
 ;
-.section $INIT_PC_VAL
+section $INIT_PC_VAL
 
 setsbp $STACK_BOTTOM
 setsfp $STACK_BOTTOM
@@ -114,7 +114,7 @@ setslp $STACK_LIMIT
 	pop8
 	pop64
 	; We want to show that 0x00 is an invalid instruction, because it is common in data
-	.data8 0
+	data8 0
 	halt 1
 :after_invalid_00
 	push64 :after_invalid_ff
@@ -123,7 +123,7 @@ setslp $STACK_LIMIT
 	pop8
 	pop64
 	; We want to show that 0xff is an invalid instruction, because it is common in data
-	.data8 0xff
+	data8 0xff
 	halt 1
 :after_invalid_ff
 	push8 $STINT_INVALID_INST

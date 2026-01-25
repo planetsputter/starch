@@ -1,6 +1,6 @@
 ; Test pseudo-ops
 
-.section 0x1000
+section 0x1000
 
 push8 -128
 push8 0

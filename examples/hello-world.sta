@@ -11,14 +11,14 @@
 ;
 ; Definitions
 ;
-.define STACK_BOTTOM 0x4000
-.define STACK_LIMIT  0x5000
-.define STATIC_ADDR  0x5000
+define STACK_BOTTOM 0x4000
+define STACK_LIMIT  0x5000
+define STATIC_ADDR  0x5000
 
 ;
 ; Instruction section
 ;
-.section $INIT_PC_VAL
+section $INIT_PC_VAL
 	setsbp $STACK_BOTTOM
 	setsfp $STACK_BOTTOM
 	setsp  $STACK_BOTTOM
@@ -69,5 +69,5 @@
 ;
 ; Static data section
 ;
-.section $STATIC_ADDR
-.strings
+section $STATIC_ADDR
+strings

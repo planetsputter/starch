@@ -41,7 +41,7 @@ void utf8_decoder_init(struct utf8_decoder*);
 ucp *utf8_decoder_decode(struct utf8_decoder*, byte b, ucp *c, int *error);
 
 // Returns non-zero if the decoder is in a state where the input can be terminated (i.e., returns whether the decoder is NOT in the middle of a multi-byte sequence).
-int utf8_decoder_can_terminate(struct utf8_decoder*);
+int utf8_decoder_can_terminate(const struct utf8_decoder*);
 
 //
 // UTF-8 Decoding Functions

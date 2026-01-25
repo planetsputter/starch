@@ -1,4 +1,4 @@
-.section 0x1000
+section 0x1000
 push8as8 0x80
 push8as8 0
 push8as8 0xff

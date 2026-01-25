@@ -9,7 +9,7 @@
 // Character type used to identify B-strings
 typedef char bchar;
 
-// Allocates and returns a B-string
+// Allocates and returns an empty B-string
 bchar *balloc(void);
 
 // Returns a B-string duplicate of the given C-string

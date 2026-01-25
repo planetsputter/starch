@@ -11,23 +11,23 @@
 ;
 ; Definitions
 ;
-.define STACK_BOTTOM 0x4000
-.define STACK_LIMIT  0x5000
-.define STATIC_ADDR  0x5000
-.define MAX_REPS     16
+define STACK_BOTTOM 0x4000
+define STACK_LIMIT  0x5000
+define STATIC_ADDR  0x5000
+define MAX_REPS     16
 
 ;
 ; Static data section
 ;
-.section $STATIC_ADDR
+section $STATIC_ADDR
 
 :rep64_data
-.data64 0 ; rep64
+data64 0 ; rep64
 
 ;
 ; Instruction section
 ;
-.section $INIT_PC_VAL
+section $INIT_PC_VAL
 
 setsbp $STACK_BOTTOM
 setsfp $STACK_BOTTOM
@@ -41,10 +41,10 @@ setslp $STACK_LIMIT
 	push64 $MAX_REPS ; rep64, rep64, $MAX_REPS
 	cltu64           ; rep64, rep64 < $MAX_REPS
 	brz64 :end       ; rep64
-	;call :test_add8_sub8
-	;call :test_add16_sub16
-	;call :test_add32_sub32
-	;call :test_add64_sub64
+	call :test_add8_sub8
+	call :test_add16_sub16
+	call :test_add32_sub32
+	call :test_add64_sub64
 	push64 1         ; rep64, 1_64
 	add64            ; rep64 + 1_64
 	push64 :rep64_data

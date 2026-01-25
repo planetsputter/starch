@@ -55,7 +55,7 @@ ucp *utf8_decoder_decode(struct utf8_decoder *decoder, byte b, ucp *c, int *erro
 	return c;
 }
 
-int utf8_decoder_can_terminate(struct utf8_decoder *decoder) {
+int utf8_decoder_can_terminate(const struct utf8_decoder *decoder) {
 	return decoder->state == 0;
 }
 

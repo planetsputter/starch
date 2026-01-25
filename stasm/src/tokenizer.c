@@ -1,0 +1,177 @@
+// tokenizer.c
+
+#include <assert.h>
+#include <ctype.h>
+
+#include "tokenizer.h"
+
+enum { // Tokenizer states
+	TZS_DEFAULT,
+	TZS_COMMENT,
+	TZS_QUOTED,
+	TZS_QUOTED_ESC,
+	TZS_SIGN,
+};
+
+// Single-character operators in numeric order
+static const char scos[] = "\n!#%&'()*,./<=>?@[\\]^`{|}~";
+
+// Returns whether the given character is a single-character operator
+static bool is_sco(ucp c)
+{
+	// Use binary search for efficiency
+	int low = 0, high = sizeof(scos) - 2, mid;
+	while (low <= high) {
+		mid = (low + high) / 2;
+		int comp = c - scos[mid];
+		if (comp < 0) {
+			high = mid - 1;
+		}
+		else if (comp > 0) {
+			low = mid + 1;
+		}
+		else {
+			return true;
+		}
+	}
+	return false;
+}
+
+void tokenizer_init(struct tokenizer *tz)
+{
+	memset(tz, 0, sizeof(*tz));
+}
+
+void tokenizer_destroy(struct tokenizer *tz)
+{
+	if (tz->ctoken) {
+		bfree(tz->ctoken);
+		tz->ctoken = NULL;
+	}
+	if (tz->token1) {
+		bfree(tz->token1);
+		tz->token1 = NULL;
+	}
+	if (tz->token2) {
+		bfree(tz->token2);
+		tz->token2 = NULL;
+	}
+}
+
+bool tokenizer_in_progress(struct tokenizer *tz)
+{
+	return tz->ctoken != NULL || tz->token1 != NULL;
+}
+
+// Enqueues the current token for emission
+static void tokenizer_enqueue(struct tokenizer *tz)
+{
+	if (tz->ctoken) {
+		if (tz->token1) {
+			assert(tz->token2 == NULL); // We should never enqueue more than two tokens
+			tz->token2 = tz->ctoken;
+		}
+		else {
+			tz->token1 = tz->ctoken;
+		}
+		tz->ctoken = NULL;
+	}
+}
+
+void tokenizer_parse(struct tokenizer *tz, ucp c)
+{
+	bool again;
+	do {
+		again = false;
+		int error = 0;
+		switch (tz->state) {
+		case TZS_DEFAULT:
+			// @todo: It would be nice if ':' started a new token
+			if (c == 0 || isspace((int)c) || is_sco(c) || c == '"' || c == ';' || c == '-' || c == '+') {
+				// These characters end the current token, if any
+				tokenizer_enqueue(tz);
+				if (is_sco(c)) { // SCOs get their own token
+					tz->ctoken = bstrdupu(&c, 1, &error);
+					tokenizer_enqueue(tz);
+				}
+				else if (c == '"') { // Double quote begins quoted token
+					tz->ctoken = bstrdupu(&c, 1, &error);
+					tz->state = TZS_QUOTED;
+				}
+				else if (c == ';') { // Semicolon begins comment
+					tz->state = TZS_COMMENT;
+				}
+				else if (c == '-' || c == '+') { // Sign may become its own token, or start a literal
+					tz->ctoken = bstrdupu(&c, 1, &error);
+					tz->state = TZS_SIGN;
+				}
+			}
+			else { // Other characters start a token or continue the current one
+				if (!tz->ctoken) {
+					tz->ctoken = balloc();
+				}
+				tz->ctoken = bstrcatu(tz->ctoken, &c, 1, &error);
+			}
+			break;
+		case TZS_COMMENT:
+			if (c == '\n') { // Comments terminated by newline
+				tz->state = TZS_DEFAULT;
+				again = true;
+			}
+			break;
+		case TZS_QUOTED:
+			// Append quoted character
+			tz->ctoken = bstrcatu(tz->ctoken, &c, 1, &error);
+			if (c == '"') { // Unescaped double quote ends quoted token
+				tokenizer_enqueue(tz);
+				tz->state = TZS_DEFAULT;
+			}
+			else if (c == '\\') { // Backslash escapes the next character
+				tz->state = TZS_QUOTED_ESC;
+			}
+			break;
+		case TZS_QUOTED_ESC:
+			// Append escaped character
+			tz->ctoken = bstrcatu(tz->ctoken, &c, 1, &error);
+			tz->state = TZS_QUOTED;
+			break;
+		case TZS_SIGN:
+			if (isdigit(c)) { // Sign begins literal
+				tz->ctoken = bstrcatu(tz->ctoken, &c, 1, &error);
+			}
+			else { // Sign is its own token
+				tokenizer_enqueue(tz);
+				again = true;
+			}
+			tz->state = TZS_DEFAULT;
+			break;
+		default:
+			assert(false);
+		}
+		// Only possible error is character value out of range, which should
+		// not happen since these characters are coming from a decoded stream
+		assert(error == 0);
+	} while (again);
+}
+
+void tokenizer_emit(struct tokenizer *tz, bchar **token)
+{
+	if (tz->token1) {
+		*token = tz->token1;
+		tz->token1 = tz->token2;
+		tz->token2 = NULL;
+	}
+	else {
+		*token = NULL;
+	}
+}
+
+bool tokenizer_finish(struct tokenizer *tz)
+{
+	if (tz->state >= TZS_QUOTED) { // Cannot end stream within a quoted token
+		return false;
+	}
+	// Finish current token, if any
+	tokenizer_enqueue(tz);
+	return true;
+}

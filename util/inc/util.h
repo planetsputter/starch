@@ -21,3 +21,6 @@ uint32_t get_little32(const uint8_t *data);
 
 // Returns the 64-bit value represented by the array of two bytes in little-endian order
 uint64_t get_little64(const uint8_t *data);
+
+// Returns the minimum number of bytes required to represent the given value
+int min_bytes_for_val(int64_t val);
