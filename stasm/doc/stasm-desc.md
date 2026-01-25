@@ -58,19 +58,23 @@ In each case the pseudo-op resolves to the opcode which requires the smallest im
 Starch assembly pseudo-ops:
 | Psuedo-op | Description |
 |:--------- |:----------- |
-| push8     | Evalutes to push8as8. |
-| push16    | Evalutes to push8asu16, push8asi16, or push16as16. |
-| push32    | Evalutes to push8asu32, push8asi32, push16asu32, push16asi32, or push32as32. |
-| push64    | Evalutes to push8asu64, push8asi64, push16asu64, push16asi64, push32asu64, push32asi64, or push64as64. |
+| push8     | Evaluates to push8as8. |
+| push16    | Evaluates to push8asu16, push8asi16, or push16as16. |
+| push32    | Evaluates to push8asu32, push8asi32, push16asu32, push16asi32, or push32as32. |
+| push64    | Evaluates to push8asu64, push8asi64, push16asu64, push16asi64, push32asu64, push32asi64, or push64as64. |
+| brz8      | Evaluates to rbrz8i8, rbrz8i16, or rbrz8i32. |
+| brz16     | Evaluates to rbrz16i8, rbrz16i16, or rbrz16i32. |
+| brz32     | Evaluates to rbrz32i8, rbrz32i16, or rbrz32i32. |
+| brz64     | Evaluates to rbrz64i8, rbrz64i16, or rbrz64i32. |
+| rjmp      | Evaluates to rjmpi8, rjmpi16, or rjmpi32. |
 
 ### Label Definitions
 
-A label definition begins with a colon (':') and appears at the beginning of a line. This distinguishes it from a label _usage_, which appears as an argument in a statement. A label definition causes the compiler to associate the current address with the given label. It then substitutes the current address value for all previous and future usages of that label.
+A label definition begins with a colon (':') and appears at the beginning of a line. This distinguishes it from a label _usage_, which appears as an argument in a statement. A statement may occur on the same line after a label definition. A label definition causes the compiler to associate the current address with the given label. It then substitutes the current address value for all previous and future usages of that label.
 
 Labels are commonly used to assign names to function and data addresses. In the following example, `:some_data` and `:some_function` are label definitions while `:some_other_function` is a label usage:
 ```
-:some_data
-.data64 0
+:some_data data64 0
 
 :some_function
 call :some_other_function
@@ -81,26 +85,26 @@ All labels which are used in the program must be defined by the end of a Starch 
 
 ### Assembler Commands
 
-The Starch assembler supports several assembler commands which aid the developer in various ways. Each assembler command begins with a period ('.').
+The Starch assembler supports several assembler commands which aid the developer in various ways.
 
 | Assembler Command | Description |
 |:----------------- |:----------- |
-| .define \<name\> \<value\> | This command allows the developer to define a symbolic constant whose value is substituted where it is used later in the program when preceded by a dollar sign ('$'). |
-| .section \<address\> | Starts a new section at the given address. |
-| .include "\<filename\>" | Includes the contents of the file at the quoted path as if inserted into this point in the input. |
-| .data8 \<value\> | Inserts the given value into the output as an 8-bit integer. |
-| .data16 \<value\> | Inserts the given value into the output as a 16-bit integer. |
-| .data32 \<value\> | Inserts the given value into the output as a 32-bit integer. |
-| .data64 \<value\> | Inserts the given value into the output as a 64-bit integer. |
-| .strings | Inserts data for all unemitted string literals at the current position. If string literals are used, this command must be appear in the assembly source after all string literal usages. |
+| define \<name\> \<value\> | This command allows the developer to define a symbolic constant whose value is substituted where it is used later in the program when preceded by a dollar sign ('$'). |
+| section \<address\> | Starts a new section at the given address. |
+| include "\<filename\>" | Includes the contents of the file at the quoted path as if inserted into this point in the input. |
+| data8 \<value\> | Inserts the given value into the output as an 8-bit integer. |
+| data16 \<value\> | Inserts the given value into the output as a 16-bit integer. |
+| data32 \<value\> | Inserts the given value into the output as a 32-bit integer. |
+| data64 \<value\> | Inserts the given value into the output as a 64-bit integer. |
+| strings | Inserts data for all unemitted string literals at the current position. If string literals are used, this command must be appear in the assembly source after all string literal usages. |
 
 ## Symbols
 
-As noted above, the `.define` assembler command can be used to define a symbolic constant. These constants are arbitrary text words which will be substituted into the input when used later preceded by a dollar sign ('$'). Symbolic constants can be used to define constant integer values as well as opcodes, labels, and string literals.
+As noted above, the `define` assembler command can be used to define a symbolic constant. These constants are arbitrary text words which will be substituted into the input when used later preceded by a dollar sign ('$'). Symbolic constants can be used to define constant integer values as well as opcodes, labels, and string literals.
 
 The following example defines and uses a symbolic constant:
 ```
-.define MAX_REPS 0x1000
+define MAX_REPS 0x1000
 push64 $MAX_REPS
 ```
 
@@ -108,7 +112,7 @@ Symbols may not be defined more than once. Symbol redefinition will result in an
 
 ### Auto-Symbols
 
-The Starch assembler recognizes some automatic symbols which have a default value when used if not defined by the user. Each Starch interrupt name can be used as an automatic symbol which evalutes to the interrupt number (for instance `$STINT_DIV_BY_ZERO`). Each Starch opcode name can be used as an automatic symbol which evalutes to the numeric value of the opcode when capitalized and preceded by "OP_" (for instance `$OP_HALT`). Important IO addresses also have automatic symbols (for instance `$IO_STDOUT_ADDR`).
+The Starch assembler recognizes some automatic symbols which have a default value when used if not defined by the user. Each Starch interrupt name can be used as an automatic symbol which evaluates to the interrupt number (for instance `$STINT_DIV_BY_ZERO`). Each Starch opcode name can be used as an automatic symbol which evaluates to the numeric value of the opcode when capitalized and preceded by "OP_" (for instance `$OP_HALT`). Important IO addresses also have automatic symbols (for instance `$IO_STDOUT_ADDR`).
 
 The following example uses some automatic symbols:
 ```
