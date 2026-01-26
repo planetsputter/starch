@@ -130,27 +130,45 @@ static int symbol_sub(struct assembler *as, bchar *token, bchar **val)
 }
 
 //
-// Assembler commands
+// Assembler commands and pseudo-ops
 //
-// Assembler commands in alphabetic order
+// Assembler commands and pseudo-ops in alphabetic order
 static const char *asm_cmd_names[] = {
+	"brz16",
+	"brz32",
+	"brz64",
+	"brz8",
 	"data16",
 	"data32",
 	"data64",
 	"data8",
 	"define",
 	"include",
+	"push16",
+	"push32",
+	"push64",
+	"push8",
+	"rjmp",
 	"section",
 	"strings",
 };
 // Assembler command symbolic constants in same order as above
 enum {
+	ASM_CMD_BRZ16,
+	ASM_CMD_BRZ32,
+	ASM_CMD_BRZ64,
+	ASM_CMD_BRZ8,
 	ASM_CMD_DATA16,
 	ASM_CMD_DATA32,
 	ASM_CMD_DATA64,
 	ASM_CMD_DATA8,
 	ASM_CMD_DEFINE,
 	ASM_CMD_INCLUDE,
+	ASM_CMD_PUSH16,
+	ASM_CMD_PUSH32,
+	ASM_CMD_PUSH64,
+	ASM_CMD_PUSH8,
+	ASM_CMD_RJMP,
 	ASM_CMD_SECTION,
 	ASM_CMD_STRINGS,
 };
@@ -162,54 +180,6 @@ static int get_asm_cmd(const char *cmd)
 	while (low <= high) {
 		mid = (low + high) / 2;
 		int comp = strcmp(cmd, asm_cmd_names[mid]);
-		if (comp < 0) {
-			high = mid - 1;
-		}
-		else if (comp > 0) {
-			low = mid + 1;
-		}
-		else {
-			return mid;
-		}
-	}
-	return -1;
-}
-
-//
-// Pseudo-ops
-//
-// Pseudo-op names in alphabetic order
-static const char *psop_names[] = {
-	"brz16",
-	"brz32",
-	"brz64",
-	"brz8",
-	"push16",
-	"push32",
-	"push64",
-	"push8",
-	"rjmp",
-};
-// Pseudo-op symbolic constants in same order as above
-enum {
-	PSOP_BRZ16,
-	PSOP_BRZ32,
-	PSOP_BRZ64,
-	PSOP_BRZ8,
-	PSOP_PUSH16,
-	PSOP_PUSH32,
-	PSOP_PUSH64,
-	PSOP_PUSH8,
-	PSOP_RJMP,
-};
-// Returns the index of the given pseudo-op, or negative
-static int get_psop(const char *name)
-{
-	// Use binary search for efficiency
-	int low = 0, high = sizeof(psop_names) / sizeof(*psop_names) - 1, mid;
-	while (low <= high) {
-		mid = (low + high) / 2;
-		int comp = strcmp(name, psop_names[mid]);
 		if (comp < 0) {
 			high = mid - 1;
 		}
@@ -237,8 +207,18 @@ enum { // Assembler parse states
 	APS_STRINGS,
 	APS_PSOP1,
 	APS_PSOP2,
+	APS_PUSH1,
+	APS_PUSH2,
+	APS_PUSH_BRKT1,
+	APS_PUSH_BRKT2,
+	APS_PUSH_BRKT3,
+	APS_PUSH_BRKT_SFP1,
+	APS_PUSH_BRKT_SFP2,
+	APS_PUSH_BRKT_SFP3,
+	APS_PUSH_BRKT_SFP4,
 	APS_OPCODE1,
 	APS_OPCODE2,
+	APS_WAIT_EOL,
 };
 
 void assembler_init(struct assembler *as, FILE *outfile)
@@ -247,7 +227,6 @@ void assembler_init(struct assembler *as, FILE *outfile)
 	as->outfile = outfile;
 	as->defs = bmap_create();
 	as->code = 0;
-	as->sdt = SDT_VOID;
 	as->word1 = NULL;
 	as->word2 = NULL;
 	as->include = NULL;
@@ -414,76 +393,97 @@ static int assembler_handle_strings(struct assembler *as)
 	return ret;
 }
 
-// Handles an opcode, pseudo-op, or data statement
-static int assembler_handle_opcode(struct assembler *as)
+// Handles the given token as part of the given opcode or pseudo-op.
+// token may be NULL if there is no immediate value for this opcode.
+static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int code, bchar *token)
 {
 	if (as->sec_count == 0) {
 		stasm_msgf(SMT_ERROR, "expected section definition before first instruction");
 		return 1;
 	}
 
-	// Immediate type has already been computed. Get the immediate size.
-	int imm_bytes = sdt_size(as->sdt);
-
-	// Prepare bytes to write to output file
 	int opcode_size = 1; // For now we assume opcode size is 1 byte
-	uint8_t buff[9]; // Maximum instruction length is 9 bytes
-	switch (as->state) {
-	case APS_DATA2:
-		opcode_size = 0;
-		break;
-	case APS_OPCODE2:
-		buff[0] = as->code;
-		break;
-	case APS_PSOP2:
-		// Put the worst-case (max program size) opcode
-		int opcode;
-		switch (as->code) {
-		case PSOP_BRZ16:
+	int opcode, sdt;
+	if (pseudo_op) {
+		// For pseudo-ops, put the worst-case (max program size) opcode
+		switch (code) {
+		case ASM_CMD_BRZ16:
 			opcode = op_rbrz16i32;
+			sdt = SDT_I32;
 			break;
-		case PSOP_BRZ32:
+		case ASM_CMD_BRZ32:
 			opcode = op_rbrz32i32;
+			sdt = SDT_I32;
 			break;
-		case PSOP_BRZ64:
+		case ASM_CMD_BRZ64:
 			opcode = op_rbrz64i32;
+			sdt = SDT_I32;
 			break;
-		case PSOP_BRZ8:
+		case ASM_CMD_BRZ8:
 			opcode = op_rbrz8i32;
+			sdt = SDT_I32;
 			break;
-		case PSOP_PUSH16:
+		case ASM_CMD_DATA16:
+			opcode = 0;
+			opcode_size = 0;
+			sdt = SDT_A16;
+			break;
+		case ASM_CMD_DATA32:
+			opcode = 0;
+			opcode_size = 0;
+			sdt = SDT_A32;
+			break;
+		case ASM_CMD_DATA64:
+			opcode = 0;
+			opcode_size = 0;
+			sdt = SDT_A64;
+			break;
+		case ASM_CMD_DATA8:
+			opcode = 0;
+			opcode_size = 0;
+			sdt = SDT_A8;
+			break;
+		case ASM_CMD_PUSH16:
 			opcode = op_push16as16;
+			sdt = SDT_A16;
 			break;
-		case PSOP_PUSH32:
+		case ASM_CMD_PUSH32:
 			opcode = op_push32as32;
+			sdt = SDT_A32;
 			break;
-		case PSOP_PUSH64:
+		case ASM_CMD_PUSH64:
 			opcode = op_push64as64;
+			sdt = SDT_A64;
 			break;
-		case PSOP_PUSH8:
+		case ASM_CMD_PUSH8:
 			opcode = op_push8as8;
+			sdt = SDT_A8;
 			break;
-		case PSOP_RJMP:
+		case ASM_CMD_RJMP:
 			opcode = op_rjmpi32;
+			sdt = SDT_I32;
 			break;
 		default:
 			assert(false);
 		}
-		buff[0] = opcode;
-		break;
-	default:
-		assert(false);
 	}
+	else {
+		opcode = code;
+		sdt = imm_type_for_opcode(code);
+	}
+	// Prepare bytes to write to output file
+	uint8_t buff[9]; // Maximum instruction length is 9 bytes
+	buff[0] = opcode;
 
-	if (!as->word1) { // No immediate value
-		assert(as->sdt == SDT_VOID && as->state == APS_OPCODE2);
-	}
-	else { // Immediate value
+	// Immediate type has already been computed. Get the immediate size.
+	int imm_bytes = sdt_size(sdt);
+
+	if (token) { // Immediate value
 		int imm_bytes_reqd;
 		int64_t imm_val = 0;
-		assert(as->sdt != SDT_VOID);
-		bool string_lit = as->word1[0] == '"';
-		if (string_lit || as->word1[0] == ':') { // String literal or label
+		assert(sdt != SDT_VOID);
+		bool string_lit = token[0] == '"';
+		if (string_lit || token[0] == ':') { // String literal or label
 			// Get current file offset
 			long current_fo = ftell(as->outfile);
 			if (current_fo < 0) {
@@ -501,14 +501,14 @@ static int assembler_handle_opcode(struct assembler *as)
 			bchar *contents;
 			if (string_lit) { // String literal
 				contents = balloc();
-				if (!parse_string_lit(as->word1, &contents)) {
+				if (!parse_string_lit(token, &contents)) {
 					bfree(contents);
 					stasm_msgf(SMT_ERROR | SMF_USETOK, "invalid string literal");
 					return 1;
 				}
 			}
 			else { // Label
-				contents = as->word1;
+				contents = token;
 			}
 
 			// Find existing label record
@@ -516,7 +516,7 @@ static int assembler_handle_opcode(struct assembler *as)
 			if (!rec) {
 				// Label has not been used before. Add new label record to list with usage.
 				rec = (struct label_rec*)malloc(sizeof(struct label_rec));
-				label_rec_init(rec, string_lit, false, string_lit ? contents : bstrdupb(as->word1), 0, lu);
+				label_rec_init(rec, string_lit, false, string_lit ? contents : bstrdupb(contents), 0, lu);
 				rec->prev = as->label_recs;
 				as->label_recs = rec;
 
@@ -551,20 +551,30 @@ static int assembler_handle_opcode(struct assembler *as)
 			}
 		}
 		else { // Integer literal
-			assert(as->pret1);
+			// @todo: Pass in a token structure instead
+			if (token == as->word1) {
+				assert(as->pret1);
+				imm_val = as->pval1;
+			}
+			else if (token == as->word2) {
+				assert(as->pret2);
+				imm_val = as->pval2;
+			}
+			else {
+				assert(false);
+			}
 
-			imm_val = as->pval1;
 			imm_bytes_reqd = min_bytes_for_val(imm_val);
 		}
 
-		if (as->state == APS_PSOP2 && imm_bytes_reqd) {
+		if (pseudo_op && imm_bytes_reqd) {
 			// Compact pseudo-ops when immediate value is known
-			int opcode;
+			int opcode = -1;
 			bool oob = false;
-			switch (as->code) {
-			case PSOP_BRZ16:
-				as->sdt = sdt_icontain(imm_val);
-				switch (as->sdt) {
+			switch (code) {
+			case ASM_CMD_BRZ16:
+				sdt = sdt_icontain(imm_val);
+				switch (sdt) {
 				case SDT_I8:
 					opcode = op_rbrz16i8;
 					break;
@@ -582,9 +592,9 @@ static int assembler_handle_opcode(struct assembler *as)
 					assert(false);
 				}
 				break;
-			case PSOP_BRZ32:
-				as->sdt = sdt_icontain(imm_val);
-				switch (as->sdt) {
+			case ASM_CMD_BRZ32:
+				sdt = sdt_icontain(imm_val);
+				switch (sdt) {
 				case SDT_I8:
 					opcode = op_rbrz32i8;
 					break;
@@ -602,9 +612,9 @@ static int assembler_handle_opcode(struct assembler *as)
 					assert(false);
 				}
 				break;
-			case PSOP_BRZ64:
-				as->sdt = sdt_icontain(imm_val);
-				switch (as->sdt) {
+			case ASM_CMD_BRZ64:
+				sdt = sdt_icontain(imm_val);
+				switch (sdt) {
 				case SDT_I8:
 					opcode = op_rbrz64i8;
 					break;
@@ -622,9 +632,9 @@ static int assembler_handle_opcode(struct assembler *as)
 					assert(false);
 				}
 				break;
-			case PSOP_BRZ8:
-				as->sdt = sdt_icontain(imm_val);
-				switch (as->sdt) {
+			case ASM_CMD_BRZ8:
+				sdt = sdt_icontain(imm_val);
+				switch (sdt) {
 				case SDT_I8:
 					opcode = op_rbrz8i8;
 					break;
@@ -643,7 +653,14 @@ static int assembler_handle_opcode(struct assembler *as)
 				}
 				break;
 
-			case PSOP_PUSH16:
+			case ASM_CMD_DATA16:
+			case ASM_CMD_DATA32:
+			case ASM_CMD_DATA64:
+			case ASM_CMD_DATA8:
+				// We don't compact raw data
+				break;
+
+			case ASM_CMD_PUSH16:
 				if (imm_bytes_reqd < 2) {
 					if (imm_val < 0) opcode = op_push8asi16;
 					else opcode = op_push8asu16;
@@ -652,7 +669,7 @@ static int assembler_handle_opcode(struct assembler *as)
 					opcode = op_push16as16;
 				}
 				break;
-			case PSOP_PUSH32:
+			case ASM_CMD_PUSH32:
 				if (imm_bytes_reqd < 2) {
 					if (imm_val < 0) opcode = op_push8asi32;
 					else opcode = op_push8asu32;
@@ -665,7 +682,7 @@ static int assembler_handle_opcode(struct assembler *as)
 					opcode = op_push32as32;
 				}
 				break;
-			case PSOP_PUSH64:
+			case ASM_CMD_PUSH64:
 				if (imm_bytes_reqd < 2) {
 					if (imm_val < 0) opcode = op_push8asi64;
 					else opcode = op_push8asu64;
@@ -682,14 +699,14 @@ static int assembler_handle_opcode(struct assembler *as)
 					opcode = op_push64as64;
 				}
 				break;
-			case PSOP_PUSH8:
+			case ASM_CMD_PUSH8:
 				// Already as compact as possible
 				opcode = op_push8as8;
 				break;
 
-			case PSOP_RJMP:
-				as->sdt = sdt_icontain(imm_val);
-				switch (as->sdt) {
+			case ASM_CMD_RJMP:
+				sdt = sdt_icontain(imm_val);
+				switch (sdt) {
 				case SDT_I8:
 					opcode = op_rjmpi8;
 					break;
@@ -714,14 +731,16 @@ static int assembler_handle_opcode(struct assembler *as)
 				stasm_msgf(SMT_ERROR | SMF_USETOK, "immediate value out of range for opcode");
 				return 1;
 			}
-			buff[0] = opcode;
-			as->sdt = imm_type_for_opcode(opcode);
-			imm_bytes = sdt_size(as->sdt);
+			if (opcode >= 0) {
+				buff[0] = opcode;
+				sdt = imm_type_for_opcode(opcode);
+				imm_bytes = sdt_size(sdt);
+			}
 		}
 
 		// Check that value fits into buffer
 		if (imm_bytes_reqd > imm_bytes) {
-			stasm_msgf(SMT_ERROR | SMF_USETOK, "immediate value \"%s\" is out of bounds for type", as->word1);
+			stasm_msgf(SMT_ERROR | SMF_USETOK, "immediate value \"%s\" is out of bounds for type", token);
 			return 1;
 		}
 
@@ -782,6 +801,13 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 		// Check for assembler command without substitution
 		int code = get_asm_cmd(token), sdt = -1;
 		switch (code) {
+		case ASM_CMD_BRZ16:
+		case ASM_CMD_BRZ32:
+		case ASM_CMD_BRZ64:
+		case ASM_CMD_BRZ8:
+			sdt = SDT_I32;
+			nextstate = APS_PSOP1;
+			break;
 		case ASM_CMD_DATA16:
 			sdt = SDT_A16;
 			nextstate = APS_DATA1;
@@ -804,6 +830,26 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 		case ASM_CMD_INCLUDE:
 			nextstate = APS_INCLUDE1;
 			break;
+		case ASM_CMD_PUSH16:
+			sdt = SDT_A16;
+			nextstate = APS_PUSH1;
+			break;
+		case ASM_CMD_PUSH32:
+			sdt = SDT_A32;
+			nextstate = APS_PUSH1;
+			break;
+		case ASM_CMD_PUSH64:
+			sdt = SDT_A64;
+			nextstate = APS_PUSH1;
+			break;
+		case ASM_CMD_PUSH8:
+			sdt = SDT_A8;
+			nextstate = APS_PUSH1;
+			break;
+		case ASM_CMD_RJMP:
+			sdt = SDT_I32;
+			nextstate = APS_PSOP1;
+			break;
 		case ASM_CMD_SECTION:
 			nextstate = APS_SECTION1;
 			break;
@@ -815,51 +861,18 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 			// Everything else must be an instruction
 			code = opcode_for_name(symbol);
 			if (code < 0) {
-				// Instruction is not an exact match for any opcode. Check for pseudo-ops.
-				code = get_psop(symbol);
-				if (code < 0) {
-					// @todo: Should put into a state where we ignore tokens until '\n'?
-					stasm_msgf(SMT_ERROR | SMF_USETOK, "unrecognized opcode \"%s\"", symbol);
-					ret = 1;
-					break;
-				}
-				switch (code) {
-				case PSOP_BRZ16:
-				case PSOP_BRZ32:
-				case PSOP_BRZ64:
-				case PSOP_BRZ8:
-					sdt = SDT_I32;
-					break;
-
-				case PSOP_PUSH16:
-					sdt = SDT_A16;
-					break;
-				case PSOP_PUSH32:
-					sdt = SDT_A32;
-					break;
-				case PSOP_PUSH64:
-					sdt = SDT_A64;
-					break;
-				case PSOP_PUSH8:
-					sdt = SDT_A8;
-					break;
-
-				case PSOP_RJMP:
-					sdt = SDT_I32;
-					break;
-				default:
-					assert(false);
-				}
-				nextstate = APS_PSOP1;
+				// Instruction is not an exact match for any opcode
+				stasm_msgf(SMT_ERROR | SMF_USETOK, "unrecognized opcode \"%s\"", symbol);
+				nextstate = APS_WAIT_EOL; // Don't attempt to process the rest of the line
+				ret = 1;
+				break;
 			}
-			else { // Valid Starch opcode
-				sdt = imm_type_for_opcode(code);
-				nextstate = sdt == SDT_VOID ? APS_OPCODE2 : APS_OPCODE1;
-			}
+			// Valid Starch opcode
+			sdt = imm_type_for_opcode(code);
+			nextstate = sdt == SDT_VOID ? APS_OPCODE2 : APS_OPCODE1;
 			break;
 		}
 		as->code = code;
-		as->sdt = sdt;
 		break;
 
 	//
@@ -871,6 +884,12 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 	case APS_INCLUDE1:
 	case APS_OPCODE1:
 	case APS_PSOP1:
+	case APS_PUSH1:
+	case APS_PUSH_BRKT1:
+	case APS_PUSH_BRKT2:
+	case APS_PUSH_BRKT_SFP1:
+	case APS_PUSH_BRKT_SFP2:
+	case APS_PUSH_BRKT_SFP3:
 	case APS_SECTION1:
 		// Disallow newlines
 		if (token[0] == '\n') {
@@ -908,21 +927,65 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 			if (symbol[0] != '"') {
 				stasm_msgf(SMT_ERROR | SMF_USETOK, "expected quoted string");
 				ret = 1;
+				nextstate = APS_WAIT_EOL;
 				break;
 			}
+			nextstate++;
 			break;
 		case APS_DEFINE1:
 			// Disallow quoted token
 			if (symbol[0] == '"') {
 				stasm_msgf(SMT_ERROR | SMF_USETOK, "unexpected quoted string");
 				ret = 1;
+				nextstate = APS_WAIT_EOL;
+				break;
 			}
+			nextstate++;
 			break;
+
+		case APS_PUSH1:
+		case APS_PUSH_BRKT1:
+		case APS_PUSH_BRKT_SFP1:
+			bool done = false;
+			switch (as->state) {
+			case APS_PUSH1:
+				if (symbol[0] == '[') { // Begin bracket notation
+					bfree(as->word1);
+					as->word1 = NULL;
+					done = true;
+					nextstate = APS_PUSH_BRKT1;
+					break;
+				}
+				break;
+			case APS_PUSH_BRKT1:
+				if (bstrcmpc(symbol, "SFP") == 0) { // Allow "SFP" to indicate SFP addressing mode
+					bfree(as->word1);
+					as->word1 = NULL;
+					done = true;
+					nextstate = APS_PUSH_BRKT_SFP1;
+					break;
+				}
+				break;
+			case APS_PUSH_BRKT_SFP1:
+				nextstate = APS_PUSH_BRKT_SFP2;
+				if (bstrcmpc(symbol, "+") == 0) { // Allow optional "+" after "SFP" before offset
+					bfree(as->word1);
+					as->word1 = NULL;
+					done = true;
+				}
+				break;
+			default:
+				assert(false);
+			}
+			if (done) break;
+			// Fall-through
+		case APS_PUSH_BRKT_SFP2:
 		case APS_OPCODE1:
 		case APS_PSOP1:
 		case APS_DATA1:
 			// Allow quoted tokens and labels
 			if (symbol[0] == '"' || symbol[0] == ':') {
+				nextstate++;
 				break;
 			}
 			// Fall-through
@@ -937,16 +1000,28 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 			}
 			if (!bret) {
 				stasm_msgf(SMT_ERROR | SMF_USETOK, "invalid integer literal");
+				nextstate = APS_WAIT_EOL;
 				ret = 1;
+				break;
 			}
-			break;
+			// Fall-through
 		case APS_DEFINE2:
 			// Allow any token
+			nextstate++;
+			break;
+		case APS_PUSH_BRKT2:
+		case APS_PUSH_BRKT_SFP3:
+			if (symbol[0] != ']') {
+				stasm_msgf(SMT_ERROR | SMF_USETOK, "expected \"]\"");
+				nextstate = APS_WAIT_EOL;
+				ret = 1;
+				break;
+			}
+			nextstate++;
 			break;
 		default:
 			assert(false);
 		}
-		nextstate++;
 		break;
 
 	//
@@ -957,12 +1032,16 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 	case APS_INCLUDE2:
 	case APS_OPCODE2:
 	case APS_PSOP2:
+	case APS_PUSH2:
+	case APS_PUSH_BRKT3:
+	case APS_PUSH_BRKT_SFP4:
 	case APS_SECTION2:
 	case APS_STRINGS:
 		// Expect end of line
 		if (token[0] != '\n') {
 			stasm_msgf(SMT_ERROR | SMF_USETOK, "expected eol");
 			ret = 1;
+			nextstate = APS_WAIT_EOL;
 			break;
 		}
 		nextstate = APS_DEFAULT;
@@ -970,33 +1049,49 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 		switch (as->state) {
 		case APS_DEFINE3:
 			// Symbol name is in word1 while symbol value is in word2.
-			// If word1 is quoted an error message has been emitted.
-			if (as->word1[0] != '"') {
-				as->defs = bmap_insert(as->defs, as->word1, as->word2);
-				// The symbol map takes ownership of the strings
-				as->word1 = NULL;
-				as->word2 = NULL;
-			}
+			as->defs = bmap_insert(as->defs, as->word1, as->word2);
+			// The symbol map takes ownership of the strings
+			as->word1 = NULL;
+			as->word2 = NULL;
 			break;
 
 		case APS_INCLUDE2:
-			// Included file name is in word1. If not quoted, an error message has ben emitted.
-			if (as->word1[0] == '"') {
-				assert(as->include == NULL);
-				as->include = as->word1;
-				as->word1 = NULL;
-			}
+			// Included file name is in word1
+			assert(as->include == NULL);
+			as->include = as->word1;
+			as->word1 = NULL;
 			break;
 
+		case APS_DATA2:
 		case APS_OPCODE2:
 		case APS_PSOP2:
-		case APS_DATA2:
+		case APS_PUSH2:
 			// word1 will be NULL if the opcode expects no immediate value.
 			// Otherwise it will be a quoted string, label, or integer literal.
-			// Otherwise an error message has been emitted.
-			if (!as->word1 || as->word1[0] == '"' || as->word1[0] == ':' || as->pret1) {
-				ret = assembler_handle_opcode(as);
+			ret = assembler_handle_opcode(as, as->state != APS_OPCODE2, as->code, as->word1);
+			break;
+
+		case APS_PUSH_BRKT3:
+		case APS_PUSH_BRKT_SFP4:
+			ret = assembler_handle_opcode(as, true, ASM_CMD_PUSH64, as->word1);
+			if (ret) break;
+
+			int opcode = -1;
+			if (as->state == APS_PUSH_BRKT3) switch (as->code) {
+			case ASM_CMD_PUSH8: opcode = op_loadpop8; break;
+			case ASM_CMD_PUSH16: opcode = op_loadpop16; break;
+			case ASM_CMD_PUSH32: opcode = op_loadpop32; break;
+			case ASM_CMD_PUSH64: opcode = op_loadpop64; break;
+			default: assert(false);
 			}
+			else switch (as->code) {
+			case ASM_CMD_PUSH8: opcode = op_loadpopsfp8; break;
+			case ASM_CMD_PUSH16: opcode = op_loadpopsfp16; break;
+			case ASM_CMD_PUSH32: opcode = op_loadpopsfp32; break;
+			case ASM_CMD_PUSH64: opcode = op_loadpopsfp64; break;
+			default: assert(false);
+			}
+			ret = assembler_handle_opcode(as, false, opcode, NULL);
 			break;
 
 		case APS_SECTION2:
@@ -1021,6 +1116,12 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 		}
 		break;
 
+	case APS_WAIT_EOL: // An error has occurred. Ignore further tokens until EOL.
+		if (token[0] == '\n') {
+			nextstate = APS_DEFAULT;
+		}
+		break;
+
 	default:
 		assert(false);
 	}
@@ -1037,4 +1138,9 @@ void assembler_get_include(struct assembler *as, bchar **filename)
 {
 	*filename = as->include;
 	as->include = NULL;
+}
+
+bool assembler_finish(struct assembler *as)
+{
+	return as->state == APS_DEFAULT;
 }

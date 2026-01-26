@@ -355,6 +355,13 @@ int main(int argc, const char *argv[])
 		tokenizer_parse(&tokenizer, c);
 	}
 
+	if (!assembler_finish(&as)) {
+		if (ret == 0) {
+			stasm_msgf(SMT_ERROR | SMF_USETOK, "incomplete statement");
+			ret = 1;
+		}
+	}
+
 	if (as.sec_count) {
 		// Save the last section of the stub file
 		int save_error = stub_save_section(outfile, as.sec_count - 1, &as.curr_sec);

@@ -16,7 +16,7 @@ struct assembler {
 	int state;
 	FILE *outfile;
 	struct bmap *defs; // Symbol definitions
-	int code, sdt; // Current opcode and data type
+	int code; // Current opcode
 	bchar *word1, *word2, *include;
 	bool pret1, pret2; // Parse return values
 	int64_t pval1, pval2; // Parse values
@@ -42,3 +42,8 @@ int assembler_handle_token(struct assembler*, bchar *token);
 // Sets *filename to the B-string filename included as a result of the last parsed byte,
 // or NULL if there is none. Caller must release the B-string.
 void assembler_get_include(struct assembler*, bchar **filename);
+
+// Indicates that the input token stream has finished.
+// Returns whether the input token stream could be finished successfully.
+// The input stream cannot be finished successfully within a statement.
+bool assembler_finish(struct assembler*);
