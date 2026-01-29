@@ -959,19 +959,27 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 				break;
 			case APS_PUSH_BRKT1:
 				if (bstrcmpc(symbol, "SFP") == 0) { // Allow "SFP" to indicate SFP addressing mode
+					nextstate = APS_PUSH_BRKT_SFP1;
 					bfree(as->word1);
 					as->word1 = NULL;
 					done = true;
-					nextstate = APS_PUSH_BRKT_SFP1;
 					break;
 				}
 				break;
 			case APS_PUSH_BRKT_SFP1:
-				nextstate = APS_PUSH_BRKT_SFP2;
-				if (bstrcmpc(symbol, "+") == 0) { // Allow optional "+" after "SFP" before offset
+				if (symbol[0] == ']') { // "[SFP]" indicates zero offset
+					nextstate = APS_PUSH_BRKT_SFP4;
 					bfree(as->word1);
 					as->word1 = NULL;
 					done = true;
+				}
+				else {
+					nextstate = APS_PUSH_BRKT_SFP2;
+					if (bstrcmpc(symbol, "+") == 0) { // Allow optional "+" after "SFP" before offset
+						bfree(as->word1);
+						as->word1 = NULL;
+						done = true;
+					}
 				}
 				break;
 			default:
@@ -1073,6 +1081,12 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 
 		case APS_PUSH_BRKT3:
 		case APS_PUSH_BRKT_SFP4:
+			if (!as->word1) { // Such as for "[SFP]" notation
+				// @todo: This could be improved with changes to assembler_handle_opcode()
+				as->word1 = balloc();
+				as->pret1 = true;
+				as->pval1 = 0;
+			}
 			ret = assembler_handle_opcode(as, true, ASM_CMD_PUSH64, as->word1);
 			if (ret) break;
 
