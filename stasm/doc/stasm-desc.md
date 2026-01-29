@@ -68,6 +68,30 @@ Starch assembly pseudo-ops:
 | brz64     | Evaluates to rbrz64i8, rbrz64i16, or rbrz64i32. |
 | rjmp      | Evaluates to rjmpi8, rjmpi16, or rjmpi32. |
 
+### Bracket notation
+
+The push pseudo-ops can take an operand in brackets. In this form the pseudo-op actually generates two instructions, one to push the offset within brackets and another to load data from that offset. If the offset within brackets begins with the keyword "SFP", it is relative to the stack frame pointer. Otherwise it is an absolute address.
+
+Examples:
+```
+push8 [:some_label]
+; Evaluates to
+push64 :some_label
+loadpop8
+
+push8 [SFP + 10]
+; Evaluates to
+push64 10
+loadpopsfp8
+
+push32 [SFP]
+; Evaluates to
+push64 0
+loadpopsfp32
+```
+
+This allows the developer to more consisely write the common operation of bringing a local variable or function parameter to the top of the stack.
+
 ### Label Definitions
 
 A label definition begins with a colon (':') and appears at the beginning of a line. This distinguishes it from a label _usage_, which appears as an argument in a statement. A statement may occur on the same line after a label definition. A label definition causes the compiler to associate the current address with the given label. It then substitutes the current address value for all previous and future usages of that label.
