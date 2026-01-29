@@ -79,10 +79,10 @@ push8 [:some_label]
 push64 :some_label
 loadpop8
 
-push8 [SFP + 10]
+push16 [SFP + 10]
 ; Evaluates to
 push64 10
-loadpopsfp8
+loadpopsfp16
 
 push32 [SFP]
 ; Evaluates to
@@ -91,6 +91,26 @@ loadpopsfp32
 ```
 
 This allows the developer to more consisely write the common operation of bringing a local variable or function parameter to the top of the stack.
+
+The store8, store16, store32, and store64 instructions can also take bracket notation, allowing the developer to concisely notate storing the local variable at the top of the stack to the address in brackets.
+
+Examples:
+```
+store8 [:some_label]
+; Evalutes to
+push64 :some_label
+storerpop8
+
+store16 [SFP + 10]
+; Evaluates to
+push64 10
+storerpopsfp16
+
+store32 [SFP]
+; Evaluates to
+push64 0
+storerpopsfp32
+```
 
 ### Label Definitions
 
