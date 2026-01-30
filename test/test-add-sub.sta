@@ -35,20 +35,18 @@ setsp  $STACK_BOTTOM
 setslp $STACK_LIMIT
 
 :begin
-	push64 :rep64_data
-	loadpop64        ; rep64
-	dup64            ; rep64, rep64
-	push64 $MAX_REPS ; rep64, rep64, $MAX_REPS
-	cltu64           ; rep64, rep64 < $MAX_REPS
-	brz64 :end       ; rep64
+	push64 [:rep64_data] ; rep64
+	dup64                ; rep64, rep64
+	push64 $MAX_REPS     ; rep64, rep64, $MAX_REPS
+	cltu64               ; rep64, rep64 < $MAX_REPS
+	brz64 :end           ; rep64
 	call :test_add8_sub8
 	call :test_add16_sub16
 	call :test_add32_sub32
 	call :test_add64_sub64
-	push64 1         ; rep64, 1_64
-	add64            ; rep64 + 1_64
-	push64 :rep64_data
-	storerpop64
+	push64 1             ; rep64, 1_64
+	add64                ; rep64 + 1_64
+	store64 [:rep64_data]
 	pop64
 	rjmp :begin
 :end
@@ -58,295 +56,223 @@ setslp $STACK_LIMIT
 :test_add8_sub8
 
 	; Test that add8 has a zero identity
-	push64 $IO_URAND_ADDR
-	loadpop8    ; a8
-	dup8        ; a8, a8
-	dup8        ; a8, a8, a8
-	push8 0     ; a8, a8, a8, 0_8
-	add8        ; a8, a8, a8 + 0_8
-	ceq8        ; a8, a8 == a8 + 0_8
-	push64 $IO_ASSERT_ADDR
-	storerpop8  ; assert(a8 == a8 + 0_8)
+	push8 [$IO_URAND_ADDR]   ; a8
+	dup8                     ; a8, a8
+	dup8                     ; a8, a8, a8
+	push8 0                  ; a8, a8, a8, 0_8
+	add8                     ; a8, a8, a8 + 0_8
+	ceq8                     ; a8, a8 == a8 + 0_8
+	store8 [$IO_ASSERT_ADDR] ; assert(a8 == a8 + 0_8)
+	pop8                     ; a8
 
 	; Test that sub8 has a zero identity
-	pop8        ; a8
-	dup8        ; a8, a8
-	dup8        ; a8, a8, a8
-	push8 0     ; a8, a8, a8, 0_8
-	sub8        ; a8, a8, a8 - 0_8
-	ceq8        ; a8, a8 == a8 - 0_8
-	push64 $IO_ASSERT_ADDR
-	storerpop8  ; assert(a8 == a8 - 0_8)
-	pop8        ; a8
+	dup8                     ; a8, a8
+	dup8                     ; a8, a8, a8
+	push8 0                  ; a8, a8, a8, 0_8
+	sub8                     ; a8, a8, a8 - 0_8
+	ceq8                     ; a8, a8 == a8 - 0_8
+	store8 [$IO_ASSERT_ADDR] ; assert(a8 == a8 - 0_8)
+	pop8                     ; a8
 
 	; Test that add8 is inverse to sub8
-	push64 $IO_URAND_ADDR
-	loadpop8    ; a8, b8
-	push64 0
-	loadpopsfp8 ; a8, b8, a8
-	dup8        ; a8, b8, a8, a8
-	push64 1
-	loadpopsfp8 ; a8, b8, a8, a8, b8
-	add8        ; a8, b8, a8, a8 + b8
-	push64 1
-	loadpopsfp8 ; a8, b8, a8, a8 + b8, b8
-	sub8        ; a8, b8, a8, a8 + b8 - b8
-	ceq8        ; a8, b8, a8 == a8 + b8 - b8
-	push64 $IO_ASSERT_ADDR
-	storerpop8  ; assert(a8 == a8 + b8 - b8)
-	pop8        ; a8, b8
+	push8 [$IO_URAND_ADDR]   ; a8, b8
+	push8 [SFP]              ; a8, b8, a8
+	dup8                     ; a8, b8, a8, a8
+	push8 [SFP+1]            ; a8, b8, a8, a8, b8
+	add8                     ; a8, b8, a8, a8 + b8
+	push8 [SFP+1]            ; a8, b8, a8, a8 + b8, b8
+	sub8                     ; a8, b8, a8, a8 + b8 - b8
+	ceq8                     ; a8, b8, a8 == a8 + b8 - b8
+	store8 [$IO_ASSERT_ADDR] ; assert(a8 == a8 + b8 - b8)
+	pop8                     ; a8, b8
 
 	; Test that add8 is commutative
-	push64 0
-	loadpopsfp8 ; a8, b8, a8
-	push64 1
-	loadpopsfp8 ; a8, b8, a8, b8
-	add8        ; a8, b8, a8 + b8
-	push64 1
-	loadpopsfp8 ; a8, b8, a8 + b8, b8
-	push64 0
-	loadpopsfp8 ; a8, b8, a8 + b8, b8, a8
-	add8        ; a8, b8, a8 + b8, b8 + a8
-	ceq8        ; a8, b8, a8 + b8 == b8 + a8
-	push64 $IO_ASSERT_ADDR
-	storerpop8  ; assert(a8 + b8 == b8 + a8)
-	pop8        ; a8, b8
+	push8 [SFP]              ; a8, b8, a8
+	push8 [SFP+1]            ; a8, b8, a8, b8
+	add8                     ; a8, b8, a8 + b8
+	push8 [SFP+1]            ; a8, b8, a8 + b8, b8
+	push8 [SFP]              ; a8, b8, a8 + b8, b8, a8
+	add8                     ; a8, b8, a8 + b8, b8 + a8
+	ceq8                     ; a8, b8, a8 + b8 == b8 + a8
+	store8 [$IO_ASSERT_ADDR] ; assert(a8 + b8 == b8 + a8)
+	pop8                     ; a8, b8
 
 	; Test that subr8 is converse to sub8
-	push64 0
-	loadpopsfp8 ; a8, b8, a8
-	push64 1
-	loadpopsfp8 ; a8, b8, a8, b8
-	sub8        ; a8, b8, a8 - b8
-	push64 1
-	loadpopsfp8 ; a8, b8, a8 - b8, b8
-	push64 0
-	loadpopsfp8 ; a8, b8, a8 - b8, b8, a8
-	subr8       ; a8, b8, a8 - b8, a8 - b8
-	ceq8        ; a8, b8, a8 - b8 == a8 - b8
-	push64 $IO_ASSERT_ADDR
-	storerpop8  ; assert(a8 - b8 == a8 - b8)
+	push8 [SFP]              ; a8, b8, a8
+	push8 [SFP+1]            ; a8, b8, a8, b8
+	sub8                     ; a8, b8, a8 - b8
+	push8 [SFP+1]            ; a8, b8, a8 - b8, b8
+	push8 [SFP]              ; a8, b8, a8 - b8, b8, a8
+	subr8                    ; a8, b8, a8 - b8, a8 - b8
+	ceq8                     ; a8, b8, a8 - b8 == a8 - b8
+	store8 [$IO_ASSERT_ADDR] ; assert(a8 - b8 == a8 - b8)
 
 	ret ; test_add8_sub8
 
 :test_add16_sub16
 
 	; Test that add16 has a zero identity
-	push64 $IO_URAND_ADDR
-	loadpop16    ; a16
-	dup16        ; a16, a16
-	dup16        ; a16, a16, a16
-	push16 0     ; a16, a16, a16, 0_16
-	add16        ; a16, a16, a16 + 0_16
-	ceq16        ; a16, a16 == a16 + 0_16
-	push64 $IO_ASSERT_ADDR
-	storerpop16  ; assert(a16 == a16 + 0_16)
+	push16 [$IO_URAND_ADDR]   ; a16
+	dup16                     ; a16, a16
+	dup16                     ; a16, a16, a16
+	push16 0                  ; a16, a16, a16, 0_16
+	add16                     ; a16, a16, a16 + 0_16
+	ceq16                     ; a16, a16 == a16 + 0_16
+	store16 [$IO_ASSERT_ADDR] ; assert(a16 == a16 + 0_16)
+	pop16                     ; a16
 
 	; Test that sub16 has a zero identity
-	pop16        ; a16
-	dup16        ; a16, a16
-	dup16        ; a16, a16, a16
-	push16 0     ; a16, a16, a16, 0_16
-	sub16        ; a16, a16, a16 - 0_16
-	ceq16        ; a16, a16 == a16 - 0_16
-	push64 $IO_ASSERT_ADDR
-	storerpop16  ; assert(a16 == a16 - 0_16)
-	pop16        ; a16
+	dup16                     ; a16, a16
+	dup16                     ; a16, a16, a16
+	push16 0                  ; a16, a16, a16, 0_16
+	sub16                     ; a16, a16, a16 - 0_16
+	ceq16                     ; a16, a16 == a16 - 0_16
+	store16 [$IO_ASSERT_ADDR] ; assert(a16 == a16 - 0_16)
+	pop16                     ; a16
 
 	; Test that add16 is inverse to sub16
-	push64 $IO_URAND_ADDR
-	loadpop16    ; a16, b16
-	push64 0
-	loadpopsfp16 ; a16, b16, a16
-	dup16        ; a16, b16, a16, a16
-	push64 2
-	loadpopsfp16 ; a16, b16, a16, a16, b16
-	add16        ; a16, b16, a16, a16 + b16
-	push64 2
-	loadpopsfp16 ; a16, b16, a16, a16 + b16, b16
-	sub16        ; a16, b16, a16, a16 + b16 - b16
-	ceq16        ; a16, b16, a16 == a16 + b16 - b16
-	push64 $IO_ASSERT_ADDR
-	storerpop16  ; assert(a16 == a16 + b16 - b16)
-	pop16        ; a16, b16
+	push16 [$IO_URAND_ADDR]   ; a16, b16
+	push16 [SFP]              ; a16, b16, a16
+	dup16                     ; a16, b16, a16, a16
+	push16 [SFP+2]            ; a16, b16, a16, a16, b16
+	add16                     ; a16, b16, a16, a16 + b16
+	push16 [SFP+2]            ; a16, b16, a16, a16 + b16, b16
+	sub16                     ; a16, b16, a16, a16 + b16 - b16
+	ceq16                     ; a16, b16, a16 == a16 + b16 - b16
+	store16 [$IO_ASSERT_ADDR] ; assert(a16 == a16 + b16 - b16)
+	pop16                     ; a16, b16
 
 	; Test that add16 is commutative
-	push64 0
-	loadpopsfp16 ; a16, b16, a16
-	push64 2
-	loadpopsfp16 ; a16, b16, a16, b16
-	add16        ; a16, b16, a16 + b16
-	push64 2
-	loadpopsfp16 ; a16, b16, a16 + b16, b16
-	push64 0
-	loadpopsfp16 ; a16, b16, a16 + b16, b16, a16
-	add16        ; a16, b16, a16 + b16, b16 + a16
-	ceq16        ; a16, b16, a16 + b16 == b16 + a16
-	push64 $IO_ASSERT_ADDR
-	storerpop16  ; assert(a16 + b16 == b16 + a16)
-	pop16        ; a16, b16
+	push16 [SFP]              ; a16, b16, a16
+	push16 [SFP+2]            ; a16, b16, a16, b16
+	add16                     ; a16, b16, a16 + b16
+	push16 [SFP+2]            ; a16, b16, a16 + b16, b16
+	push16 [SFP]              ; a16, b16, a16 + b16, b16, a16
+	add16                     ; a16, b16, a16 + b16, b16 + a16
+	ceq16                     ; a16, b16, a16 + b16 == b16 + a16
+	store16 [$IO_ASSERT_ADDR] ; assert(a16 + b16 == b16 + a16)
+	pop16                     ; a16, b16
 
 	; Test that subr16 is converse to sub16
-	push64 0
-	loadpopsfp16 ; a16, b16, a16
-	push64 2
-	loadpopsfp16 ; a16, b16, a16, b16
-	sub16        ; a16, b16, a16 - b16
-	push64 2
-	loadpopsfp16 ; a16, b16, a16 - b16, b16
-	push64 0
-	loadpopsfp16 ; a16, b16, a16 - b16, b16, a16
-	subr16       ; a16, b16, a16 - b16, a16 - b16
-	ceq16        ; a16, b16, a16 - b16 == a16 - b16
-	push64 $IO_ASSERT_ADDR
-	storerpop16  ; assert(a16 - b16 == a16 - b16)
+	push16 [SFP]              ; a16, b16, a16
+	push16 [SFP+2]            ; a16, b16, a16, b16
+	sub16                     ; a16, b16, a16 - b16
+	push16 [SFP+2]            ; a16, b16, a16 - b16, b16
+	push16 [SFP]              ; a16, b16, a16 - b16, b16, a16
+	subr16                    ; a16, b16, a16 - b16, a16 - b16
+	ceq16                     ; a16, b16, a16 - b16 == a16 - b16
+	store16 [$IO_ASSERT_ADDR] ; assert(a16 - b16 == a16 - b16)
 
 	ret ; test_add16_sub16
 
 :test_add32_sub32
 
 	; Test that add32 has a zero identity
-	push64 $IO_URAND_ADDR
-	loadpop32    ; a32
-	dup32        ; a32, a32
-	dup32        ; a32, a32, a32
-	push32 0     ; a32, a32, a32, 0_32
-	add32        ; a32, a32, a32 + 0_32
-	ceq32        ; a32, a32 == a32 + 0_32
-	push64 $IO_ASSERT_ADDR
-	storerpop32  ; assert(a32 == a32 + 0_32)
+	push32 [$IO_URAND_ADDR]   ; a32
+	dup32                     ; a32, a32
+	dup32                     ; a32, a32, a32
+	push32 0                  ; a32, a32, a32, 0_32
+	add32                     ; a32, a32, a32 + 0_32
+	ceq32                     ; a32, a32 == a32 + 0_32
+	store32 [$IO_ASSERT_ADDR] ; assert(a32 == a32 + 0_32)
+	pop32                     ; a32
 
 	; Test that sub32 has a zero identity
-	pop32        ; a32
-	dup32        ; a32, a32
-	dup32        ; a32, a32, a32
-	push32 0     ; a32, a32, a32, 0_32
-	sub32        ; a32, a32, a32 - 0_32
-	ceq32        ; a32, a32 == a32 - 0_32
-	push64 $IO_ASSERT_ADDR
-	storerpop32  ; assert(a32 == a32 - 0_32)
-	pop32        ; a32
+	dup32                     ; a32, a32
+	dup32                     ; a32, a32, a32
+	push32 0                  ; a32, a32, a32, 0_32
+	sub32                     ; a32, a32, a32 - 0_32
+	ceq32                     ; a32, a32 == a32 - 0_32
+	store32 [$IO_ASSERT_ADDR] ; assert(a32 == a32 - 0_32)
+	pop32                     ; a32
 
 	; Test that add32 is inverse to sub32
-	push64 $IO_URAND_ADDR
-	loadpop32    ; a32, b32
-	push64 0
-	loadpopsfp32 ; a32, b32, a32
-	dup32        ; a32, b32, a32, a32
-	push64 4
-	loadpopsfp32 ; a32, b32, a32, a32, b32
-	add32        ; a32, b32, a32, a32 + b32
-	push64 4
-	loadpopsfp32 ; a32, b32, a32, a32 + b32, b32
-	sub32        ; a32, b32, a32, a32 + b32 - b32
-	ceq32        ; a32, b32, a32 == a32 + b32 - b32
-	push64 $IO_ASSERT_ADDR
-	storerpop32  ; assert(a32 == a32 + b32 - b32)
-	pop32        ; a32, b32
+	push32 [$IO_URAND_ADDR]   ; a32, b32
+	push32 [SFP]              ; a32, b32, a32
+	dup32                     ; a32, b32, a32, a32
+	push32 [SFP+4]            ; a32, b32, a32, a32, b32
+	add32                     ; a32, b32, a32, a32 + b32
+	push32 [SFP+4]            ; a32, b32, a32, a32 + b32, b32
+	sub32                     ; a32, b32, a32, a32 + b32 - b32
+	ceq32                     ; a32, b32, a32 == a32 + b32 - b32
+	store32 [$IO_ASSERT_ADDR] ; assert(a32 == a32 + b32 - b32)
+	pop32                     ; a32, b32
 
 	; Test that add32 is commutative
-	push64 0
-	loadpopsfp32 ; a32, b32, a32
-	push64 4
-	loadpopsfp32 ; a32, b32, a32, b32
-	add32        ; a32, b32, a32 + b32
-	push64 4
-	loadpopsfp32 ; a32, b32, a32 + b32, b32
-	push64 0
-	loadpopsfp32 ; a32, b32, a32 + b32, b32, a32
-	add32        ; a32, b32, a32 + b32, b32 + a32
-	ceq32        ; a32, b32, a32 + b32 == b32 + a32
-	push64 $IO_ASSERT_ADDR
-	storerpop32  ; assert(a32 + b32 == b32 + a32)
-	pop32        ; a32, b32
+	push32 [SFP]              ; a32, b32, a32
+	push32 [SFP+4]            ; a32, b32, a32, b32
+	add32                     ; a32, b32, a32 + b32
+	push32 [SFP+4]            ; a32, b32, a32 + b32, b32
+	push32 [SFP]              ; a32, b32, a32 + b32, b32, a32
+	add32                     ; a32, b32, a32 + b32, b32 + a32
+	ceq32                     ; a32, b32, a32 + b32 == b32 + a32
+	store32 [$IO_ASSERT_ADDR] ; assert(a32 + b32 == b32 + a32)
+	pop32                     ; a32, b32
 
 	; Test that subr32 is converse to sub32
-	push64 0
-	loadpopsfp32 ; a32, b32, a32
-	push64 4
-	loadpopsfp32 ; a32, b32, a32, b32
-	sub32        ; a32, b32, a32 - b32
-	push64 4
-	loadpopsfp32 ; a32, b32, a32 - b32, b32
-	push64 0
-	loadpopsfp32 ; a32, b32, a32 - b32, b32, a32
-	subr32       ; a32, b32, a32 - b32, a32 - b32
-	ceq32        ; a32, b32, a32 - b32 == a32 - b32
-	push64 $IO_ASSERT_ADDR
-	storerpop32  ; assert(a32 - b32 == a32 - b32)
+	push32 [SFP]              ; a32, b32, a32
+	push32 [SFP+4]            ; a32, b32, a32, b32
+	sub32                     ; a32, b32, a32 - b32
+	push32 [SFP+4]            ; a32, b32, a32 - b32, b32
+	push32 [SFP]              ; a32, b32, a32 - b32, b32, a32
+	subr32                    ; a32, b32, a32 - b32, a32 - b32
+	ceq32                     ; a32, b32, a32 - b32 == a32 - b32
+	store32 [$IO_ASSERT_ADDR] ; assert(a32 - b32 == a32 - b32)
 
 	ret ; test_add32_sub32
 
 :test_add64_sub64
 
 	; Test that add64 has a zero identity
-	push64 $IO_URAND_ADDR
-	loadpop64    ; a64
-	dup64        ; a64, a64
-	dup64        ; a64, a64, a64
-	push64 0     ; a64, a64, a64, 0_64
-	add64        ; a64, a64, a64 + 0_64
-	ceq64        ; a64, a64 == a64 + 0_64
-	push64 $IO_ASSERT_ADDR
-	storerpop64  ; assert(a64 == a64 + 0_64)
+	push64 [$IO_URAND_ADDR]   ; a64
+	dup64                     ; a64, a64
+	dup64                     ; a64, a64, a64
+	push64 0                  ; a64, a64, a64, 0_64
+	add64                     ; a64, a64, a64 + 0_64
+	ceq64                     ; a64, a64 == a64 + 0_64
+	store64 [$IO_ASSERT_ADDR] ; assert(a64 == a64 + 0_64)
+	pop64                     ; a64
 
 	; Test that sub64 has a zero identity
-	pop64        ; a64
-	dup64        ; a64, a64
-	dup64        ; a64, a64, a64
-	push64 0     ; a64, a64, a64, 0_64
-	sub64        ; a64, a64, a64 - 0_64
-	ceq64        ; a64, a64 == a64 - 0_64
-	push64 $IO_ASSERT_ADDR
-	storerpop64  ; assert(a64 == a64 - 0_64)
-	pop64        ; a64
+	dup64                     ; a64, a64
+	dup64                     ; a64, a64, a64
+	push64 0                  ; a64, a64, a64, 0_64
+	sub64                     ; a64, a64, a64 - 0_64
+	ceq64                     ; a64, a64 == a64 - 0_64
+	store64 [$IO_ASSERT_ADDR] ; assert(a64 == a64 - 0_64)
+	pop64                     ; a64
 
 	; Test that add64 is inverse to sub64
-	push64 $IO_URAND_ADDR
-	loadpop64    ; a64, b64
-	push64 0
-	loadpopsfp64 ; a64, b64, a64
-	dup64        ; a64, b64, a64, a64
-	push64 8
-	loadpopsfp64 ; a64, b64, a64, a64, b64
-	add64        ; a64, b64, a64, a64 + b64
-	push64 8
-	loadpopsfp64 ; a64, b64, a64, a64 + b64, b64
-	sub64        ; a64, b64, a64, a64 + b64 - b64
-	ceq64        ; a64, b64, a64 == a64 + b64 - b64
-	push64 $IO_ASSERT_ADDR
-	storerpop64  ; assert(a64 == a64 + b64 - b64)
-	pop64        ; a64, b64
+	push64 [$IO_URAND_ADDR]   ; a64, b64
+	push64 [SFP]              ; a64, b64, a64
+	dup64                     ; a64, b64, a64, a64
+	push64 [SFP+8]            ; a64, b64, a64, a64, b64
+	add64                     ; a64, b64, a64, a64 + b64
+	push64 [SFP+8]            ; a64, b64, a64, a64 + b64, b64
+	sub64                     ; a64, b64, a64, a64 + b64 - b64
+	ceq64                     ; a64, b64, a64 == a64 + b64 - b64
+	store64 [$IO_ASSERT_ADDR] ; assert(a64 == a64 + b64 - b64)
+	pop64                     ; a64, b64
 
 	; Test that add64 is commutative
-	push64 0
-	loadpopsfp64 ; a64, b64, a64
-	push64 8
-	loadpopsfp64 ; a64, b64, a64, b64
-	add64        ; a64, b64, a64 + b64
-	push64 8
-	loadpopsfp64 ; a64, b64, a64 + b64, b64
-	push64 0
-	loadpopsfp64 ; a64, b64, a64 + b64, b64, a64
-	add64        ; a64, b64, a64 + b64, b64 + a64
-	ceq64        ; a64, b64, a64 + b64 == b64 + a64
-	push64 $IO_ASSERT_ADDR
-	storerpop64  ; assert(a64 + b64 == b64 + a64)
-	pop64        ; a64, b64
+	push64 [SFP]              ; a64, b64, a64
+	push64 [SFP+8]            ; a64, b64, a64, b64
+	add64                     ; a64, b64, a64 + b64
+	push64 [SFP+8]            ; a64, b64, a64 + b64, b64
+	push64 [SFP]              ; a64, b64, a64 + b64, b64, a64
+	add64                     ; a64, b64, a64 + b64, b64 + a64
+	ceq64                     ; a64, b64, a64 + b64 == b64 + a64
+	store64 [$IO_ASSERT_ADDR] ; assert(a64 + b64 == b64 + a64)
+	pop64                     ; a64, b64
 
 	; Test that subr64 is converse to sub64
-	push64 0
-	loadpopsfp64 ; a64, b64, a64
-	push64 8
-	loadpopsfp64 ; a64, b64, a64, b64
-	sub64        ; a64, b64, a64 - b64
-	push64 8
-	loadpopsfp64 ; a64, b64, a64 - b64, b64
-	push64 0
-	loadpopsfp64 ; a64, b64, a64 - b64, b64, a64
-	subr64       ; a64, b64, a64 - b64, a64 - b64
-	ceq64        ; a64, b64, a64 - b64 == a64 - b64
-	push64 $IO_ASSERT_ADDR
-	storerpop64  ; assert(a64 - b64 == a64 - b64)
+	push64 [SFP]              ; a64, b64, a64
+	push64 [SFP+8]            ; a64, b64, a64, b64
+	sub64                     ; a64, b64, a64 - b64
+	push64 [SFP+8]            ; a64, b64, a64 - b64, b64
+	push64 [SFP]              ; a64, b64, a64 - b64, b64, a64
+	subr64                    ; a64, b64, a64 - b64, a64 - b64
+	ceq64                     ; a64, b64, a64 - b64 == a64 - b64
+	store64 [$IO_ASSERT_ADDR] ; assert(a64 - b64 == a64 - b64)
 
 	ret ; test_add64_sub64
