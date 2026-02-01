@@ -92,7 +92,7 @@ loadpopsfp32
 
 This allows the developer to more consisely write the common operation of bringing a local variable or function parameter to the top of the stack.
 
-The store8, store16, store32, and store64 instructions can also take bracket notation, allowing the developer to concisely notate storing the local variable at the top of the stack to the address in brackets.
+The store8, store16, store32, and store64 pseudo-ops can also take bracket notation, allowing the developer to concisely notate storing the local variable at the top of the stack to the address in brackets.
 
 Examples:
 ```
@@ -111,6 +111,8 @@ store32 [SFP]
 push64 0
 storerpopsfp32
 ```
+
+The pop8, pop16, pop32, and pop64 pseudo-ops evaluate to the same instructions as the store pseudo-ops, except that they are followed by a pop instruction that removes the stored data from the stack.
 
 ### Label Definitions
 
