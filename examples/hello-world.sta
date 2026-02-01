@@ -29,26 +29,21 @@ section $INIT_PC_VAL
 ; Write buffer to constant IO address
 ;
 :write_io ; void write_io(ioa64, bufa64, lenu64)
-	push64 -16
-	loadpopsfp64 ; bufa64
-	push64 -24
-	loadpopsfp64 ; bufa64, lenu64
-	add64        ; enda64
-	push64 -16
-	loadpopsfp64 ; enda64, bufa64
+	push64 [SFP-16] ; bufa64
+	push64 [SFP-24] ; bufa64, lenu64
+	add64           ; enda64
+	push64 [SFP-16] ; enda64, bufa64
 :write_io:loop
-	dup64        ; enda64, bufa64, bufa64
-	push64 0
-	loadpopsfp64 ; enda64, bufa64, bufa64, enda64
-	cltu64       ; enda64, bufa64, bufa64 < enda64
+	dup64           ; enda64, bufa64, bufa64
+	push64 [SFP]    ; enda64, bufa64, bufa64, enda64
+	cltu64          ; enda64, bufa64, bufa64 < enda64
 	brz64 :write_io:end
-	load8        ; enda64, bufa64, data8
-	push64 -8
-	loadpopsfp64 ; enda64, bufa64, data8, ioa64
-	storerpop8   ; *ioa64 = data8
-	pop8         ; enda64, bufa64
+	load8           ; enda64, bufa64, data8
+	push64 [SFP-8]  ; enda64, bufa64, data8, ioa64
+	storerpop8      ; *ioa64 = data8
+	pop8            ; enda64, bufa64
 	push64 1
-	add64        ; enda64, bufa64 + 1
+	add64           ; enda64, bufa64 + 1
 	rjmp :write_io:loop
 :write_io:end
 	ret

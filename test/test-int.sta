@@ -40,18 +40,15 @@ setslp $STACK_LIMIT
 ; Main program loop
 ;
 :begin
-	push64 :rep64_data
-	loadpop64        ; rep64
-	dup64            ; rep64, rep64
-	push64 $MAX_REPS ; rep64, rep64, $MAX_REPS
-	cltu64           ; rep64, rep64 < $MAX_REPS
-	brz64 :end       ; rep64
+	push64 [:rep64_data] ; rep64
+	dup64                ; rep64, rep64
+	push64 $MAX_REPS     ; rep64, rep64, $MAX_REPS
+	cltu64               ; rep64, rep64 < $MAX_REPS
+	brz64 :end           ; rep64
 	call :test_int
-	push64 1         ; rep64, 1_64
-	add64            ; rep64 + 1_64
-	push64 :rep64_data
-	storerpop64      ; rep64 = rep64 + 1
-	pop64
+	push64 1             ; rep64, 1_64
+	add64                ; rep64 + 1_64
+	pop64 [:rep64_data]  ; rep64 = rep64 + 1
 	rjmp :begin
 :end
 	halt 0
@@ -60,36 +57,32 @@ setslp $STACK_LIMIT
 ; Set the given interrupt handler to jump to the given address
 ;
 :set_int_addr ; void set_int_addr(intu8, addr64)
-	push64 -9
-	loadpopsfp64  ; addr64
-	push64 -1
-	loadpopsfp8   ; addr64, intu8
-	prom8u64      ; addr64, intu64
+	push64 [SFP-9] ; addr64
+	push8 [SFP-1]  ; addr64, intu8
+	prom8u64       ; addr64, intu64
 	push64 16
-	mul64         ; addr64, intu64 * 16
+	mul64          ; addr64, intu64 * 16
 	push64 $BEGIN_INT_ADDR
-	add64         ; addr64, intu64 * 16 + $BEGIN_INT_ADDR
+	add64          ; addr64, intu64 * 16 + $BEGIN_INT_ADDR
 	push8 $OP_JMP
 	storepop8
 	push64 1
-	add64         ; addr64, intu64 * 16 + $BEGIN_INT_ADDR + 1
-	storerpop64   ; addr64
+	add64          ; addr64, intu64 * 16 + $BEGIN_INT_ADDR + 1
+	storerpop64    ; addr64
 	ret
 
 ;
 ; Restore the default handler for the given interrupt, which halts with the interrupt code
 ;
 :restore_int_handler ; void restore_int_handler(intu8)
-	push64 -1
-	loadpopsfp8 ; intu8
-	dup8        ; intu8, intu8
-	prom8u64    ; intu8, intu64
-	push64 16   ; intu8, intu64, 16_64
-	mul64       ; intu8, intu64 * 16
+	push8 [SFP-1] ; intu8
+	prom8u64      ; intu64
+	push64 16     ; intu64, 16_64
+	mul64         ; intu64 * 16
 	push64 $BEGIN_INT_ADDR
-	add64       ; intu8, intu64 * 16 + $BEGIN_INT_ADDR
+	add64         ; intu64 * 16 + $BEGIN_INT_ADDR
 	push8 $OP_HALT
-	storepop8
+	storepop8     ; *(intu64 * 16 + $BEGIN_INT_ADDR) = $OP_HALT
 	ret
 
 ;
@@ -201,8 +194,7 @@ setslp $STACK_LIMIT
 	call :set_int_addr
 	pop8
 	pop64
-	push64 $IO_URAND_ADDR
-	loadpop8 ; a8
+	push8 [$IO_URAND_ADDR] ; a8
 	push8 0  ; a8, 0_8
 	divu8
 	halt 1
@@ -215,8 +207,7 @@ setslp $STACK_LIMIT
 	call :set_int_addr
 	pop8
 	pop64
-	push64 $IO_URAND_ADDR
-	loadpop16 ; a16
+	push16 [$IO_URAND_ADDR] ; a16
 	push16 0  ; a16, 0_16
 	divu16
 	halt 1
@@ -229,8 +220,7 @@ setslp $STACK_LIMIT
 	call :set_int_addr
 	pop8
 	pop64
-	push64 $IO_URAND_ADDR
-	loadpop32 ; a32
+	push32 [$IO_URAND_ADDR] ; a32
 	push32 0  ; a32, 0_32
 	divu32
 	halt 1
@@ -243,8 +233,7 @@ setslp $STACK_LIMIT
 	call :set_int_addr
 	pop8
 	pop64
-	push64 $IO_URAND_ADDR
-	loadpop64 ; a64
+	push64 [$IO_URAND_ADDR] ; a64
 	push64 0  ; a64, 0_64
 	divu64
 	halt 1
@@ -259,8 +248,7 @@ setslp $STACK_LIMIT
 	pop8
 	pop64
 	push8 0  ; 0_8
-	push64 $IO_URAND_ADDR
-	loadpop8 ; 0_8, a8
+	push8 [$IO_URAND_ADDR] ; 0_8, a8
 	divru8
 	halt 1
 :after_divru8
@@ -273,8 +261,7 @@ setslp $STACK_LIMIT
 	pop8
 	pop64
 	push16 0  ; 0_16
-	push64 $IO_URAND_ADDR
-	loadpop16 ; 0_16, a16
+	push16 [$IO_URAND_ADDR] ; 0_16, a16
 	divru16
 	halt 1
 :after_divru16
@@ -287,8 +274,7 @@ setslp $STACK_LIMIT
 	pop8
 	pop64
 	push32 0  ; 0_32
-	push64 $IO_URAND_ADDR
-	loadpop32 ; 0_32, a32
+	push32 [$IO_URAND_ADDR] ; 0_32, a32
 	divru32
 	halt 1
 :after_divru32
@@ -301,8 +287,7 @@ setslp $STACK_LIMIT
 	pop8
 	pop64
 	push64 0  ; 0_64
-	push64 $IO_URAND_ADDR
-	loadpop64 ; 0_64, a64
+	push64 [$IO_URAND_ADDR] ; 0_64, a64
 	divru64
 	halt 1
 :after_divru64
@@ -315,8 +300,7 @@ setslp $STACK_LIMIT
 	call :set_int_addr
 	pop8
 	pop64
-	push64 $IO_URAND_ADDR
-	loadpop8 ; a8
+	push8 [$IO_URAND_ADDR] ; a8
 	push8 0  ; a8, 0_8
 	divi8
 	halt 1
@@ -329,8 +313,7 @@ setslp $STACK_LIMIT
 	call :set_int_addr
 	pop8
 	pop64
-	push64 $IO_URAND_ADDR
-	loadpop16 ; a16
+	push16 [$IO_URAND_ADDR] ; a16
 	push16 0  ; a16, 0_16
 	divi16
 	halt 1
@@ -343,8 +326,7 @@ setslp $STACK_LIMIT
 	call :set_int_addr
 	pop8
 	pop64
-	push64 $IO_URAND_ADDR
-	loadpop32 ; a32
+	push32 [$IO_URAND_ADDR] ; a32
 	push32 0  ; a32, 0_32
 	divi32
 	halt 1
@@ -357,8 +339,7 @@ setslp $STACK_LIMIT
 	call :set_int_addr
 	pop8
 	pop64
-	push64 $IO_URAND_ADDR
-	loadpop64 ; a64
+	push64 [$IO_URAND_ADDR] ; a64
 	push64 0  ; a64, 0_64
 	divi64
 	halt 1
@@ -373,8 +354,7 @@ setslp $STACK_LIMIT
 	pop8
 	pop64
 	push8 0  ; 0_8
-	push64 $IO_URAND_ADDR
-	loadpop8 ; 0_8, a8
+	push8 [$IO_URAND_ADDR] ; 0_8, a8
 	divri8
 	halt 1
 :after_divri8
@@ -387,8 +367,7 @@ setslp $STACK_LIMIT
 	pop8
 	pop64
 	push16 0  ; 0_16
-	push64 $IO_URAND_ADDR
-	loadpop16 ; 0_16, a16
+	push16 [$IO_URAND_ADDR] ; 0_16, a16
 	divri16
 	halt 1
 :after_divri16
@@ -401,8 +380,7 @@ setslp $STACK_LIMIT
 	pop8
 	pop64
 	push32 0  ; 0_32
-	push64 $IO_URAND_ADDR
-	loadpop32 ; 0_32, a32
+	push32 [$IO_URAND_ADDR] ; 0_32, a32
 	divri32
 	halt 1
 :after_divri32
@@ -415,8 +393,7 @@ setslp $STACK_LIMIT
 	pop8
 	pop64
 	push64 0  ; 0_64
-	push64 $IO_URAND_ADDR
-	loadpop64 ; 0_64, a64
+	push64 [$IO_URAND_ADDR] ; 0_64, a64
 	divri64
 	halt 1
 :after_divri64
@@ -432,8 +409,7 @@ setslp $STACK_LIMIT
 	call :set_int_addr
 	pop8
 	pop64
-	push64 $IO_URAND_ADDR
-	loadpop8 ; a8
+	push8 [$IO_URAND_ADDR] ; a8
 	push8 0  ; a8, 0_8
 	modu8
 	halt 1
@@ -446,8 +422,7 @@ setslp $STACK_LIMIT
 	call :set_int_addr
 	pop8
 	pop64
-	push64 $IO_URAND_ADDR
-	loadpop16 ; a16
+	push16 [$IO_URAND_ADDR] ; a16
 	push16 0  ; a16, 0_16
 	modu16
 	halt 1
@@ -460,8 +435,7 @@ setslp $STACK_LIMIT
 	call :set_int_addr
 	pop8
 	pop64
-	push64 $IO_URAND_ADDR
-	loadpop32 ; a32
+	push32 [$IO_URAND_ADDR] ; a32
 	push32 0  ; a32, 0_32
 	modu32
 	halt 1
@@ -474,8 +448,7 @@ setslp $STACK_LIMIT
 	call :set_int_addr
 	pop8
 	pop64
-	push64 $IO_URAND_ADDR
-	loadpop64 ; a64
+	push64 [$IO_URAND_ADDR] ; a64
 	push64 0  ; a64, 0_64
 	modu64
 	halt 1
@@ -490,8 +463,7 @@ setslp $STACK_LIMIT
 	pop8
 	pop64
 	push8 0  ; 0_8
-	push64 $IO_URAND_ADDR
-	loadpop8 ; 0_8, a8
+	push8 [$IO_URAND_ADDR] ; 0_8, a8
 	modru8
 	halt 1
 :after_modru8
@@ -504,8 +476,7 @@ setslp $STACK_LIMIT
 	pop8
 	pop64
 	push16 0  ; 0_16
-	push64 $IO_URAND_ADDR
-	loadpop16 ; 0_16, a16
+	push16 [$IO_URAND_ADDR] ; 0_16, a16
 	modru16
 	halt 1
 :after_modru16
@@ -518,8 +489,7 @@ setslp $STACK_LIMIT
 	pop8
 	pop64
 	push32 0  ; 0_32
-	push64 $IO_URAND_ADDR
-	loadpop32 ; 0_32, a32
+	push32 [$IO_URAND_ADDR] ; 0_32, a32
 	modru32
 	halt 1
 :after_modru32
@@ -532,8 +502,7 @@ setslp $STACK_LIMIT
 	pop8
 	pop64
 	push64 0  ; 0_64
-	push64 $IO_URAND_ADDR
-	loadpop64 ; 0_64, a64
+	push64 [$IO_URAND_ADDR] ; 0_64, a64
 	modru64
 	halt 1
 :after_modru64
@@ -546,8 +515,7 @@ setslp $STACK_LIMIT
 	call :set_int_addr
 	pop8
 	pop64
-	push64 $IO_URAND_ADDR
-	loadpop8 ; a8
+	push8 [$IO_URAND_ADDR] ; a8
 	push8 0  ; a8, 0_8
 	modi8
 	halt 1
@@ -560,8 +528,7 @@ setslp $STACK_LIMIT
 	call :set_int_addr
 	pop8
 	pop64
-	push64 $IO_URAND_ADDR
-	loadpop16 ; a16
+	push16 [$IO_URAND_ADDR] ; a16
 	push16 0  ; a16, 0_16
 	modi16
 	halt 1
@@ -574,8 +541,7 @@ setslp $STACK_LIMIT
 	call :set_int_addr
 	pop8
 	pop64
-	push64 $IO_URAND_ADDR
-	loadpop32 ; a32
+	push32 [$IO_URAND_ADDR] ; a32
 	push32 0  ; a32, 0_32
 	modi32
 	halt 1
@@ -588,8 +554,7 @@ setslp $STACK_LIMIT
 	call :set_int_addr
 	pop8
 	pop64
-	push64 $IO_URAND_ADDR
-	loadpop64 ; a64
+	push64 [$IO_URAND_ADDR] ; a64
 	push64 0  ; a64, 0_64
 	modi64
 	halt 1
@@ -604,8 +569,7 @@ setslp $STACK_LIMIT
 	pop8
 	pop64
 	push8 0  ; 0_8
-	push64 $IO_URAND_ADDR
-	loadpop8 ; 0_8, a8
+	push8 [$IO_URAND_ADDR] ; 0_8, a8
 	modri8
 	halt 1
 :after_modri8
@@ -618,8 +582,7 @@ setslp $STACK_LIMIT
 	pop8
 	pop64
 	push16 0  ; 0_16
-	push64 $IO_URAND_ADDR
-	loadpop16 ; 0_16, a16
+	push16 [$IO_URAND_ADDR] ; 0_16, a16
 	modri16
 	halt 1
 :after_modri16
@@ -632,8 +595,7 @@ setslp $STACK_LIMIT
 	pop8
 	pop64
 	push32 0  ; 0_32
-	push64 $IO_URAND_ADDR
-	loadpop32 ; 0_32, a32
+	push32 [$IO_URAND_ADDR] ; 0_32, a32
 	modri32
 	halt 1
 :after_modri32
@@ -646,8 +608,7 @@ setslp $STACK_LIMIT
 	pop8
 	pop64
 	push64 0  ; 0_64
-	push64 $IO_URAND_ADDR
-	loadpop64 ; 0_64, a64
+	push64 [$IO_URAND_ADDR] ; 0_64, a64
 	modri64
 	halt 1
 :after_modri64
