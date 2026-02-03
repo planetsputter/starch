@@ -1,10 +1,14 @@
 // stem.c
 
 #include <errno.h>
+#include <inttypes.h>
+#include <stdint.h>
 #include <stdlib.h>
 
+#include "bpmap.h"
 #include "core.h"
 #include "mem.h"
+#include "menu.h"
 #include "starch.h"
 #include "carg.h"
 #include "stub.h"
@@ -15,6 +19,7 @@ const char *arg_dump = NULL;
 const char *arg_help = NULL;
 const char *arg_image = NULL;
 const char *arg_mem_size = NULL;
+const char *arg_bp = NULL;
 
 struct carg_desc arg_descs[] = {
 	{
@@ -54,6 +59,15 @@ struct carg_desc arg_descs[] = {
 		"dump"
 	},
 	{
+		CARG_TYPE_NAMED,
+		'b',
+		"--break",
+		&arg_bp,
+		false,
+		"breakpoint",
+		"addr"
+	},
+	{
 		CARG_TYPE_POSITIONAL,
 		'\0',
 		NULL,
@@ -65,12 +79,29 @@ struct carg_desc arg_descs[] = {
 	{ CARG_TYPE_NONE }
 };
 
-bool non_help_arg = false;
-void detect_non_help_arg(struct carg_desc *desc, const char *arg)
+struct bpmap *bpmap = NULL;
+
+bool non_help_arg = false, arg_error = false;
+void handle_arg(struct carg_desc *desc, const char *arg)
 {
-	(void)arg;
 	if (desc->value != &arg_help) {
 		non_help_arg = true;
+	}
+
+	if (!arg_help) {
+		if (desc->value == &arg_bp) {
+			char *end = NULL;
+			long addr = strtol(arg, &end, 0);
+			if (end == NULL || *end != '\0' || end == arg) {
+				fprintf(stderr, "error: failed to parse BP address: %s\n", arg);
+				arg_error = true;
+			}
+			else {
+				if (bpmap == NULL) bpmap = bpmap_create();
+				// Note: For now all counts are 1
+				bpmap = bpmap_insert(bpmap, addr, 1);
+			}
+		}
 	}
 }
 
@@ -79,7 +110,7 @@ int main(int argc, const char *argv[])
 	// Parse command-line arguments
 	enum carg_error parse_error = carg_parse_args(
 		arg_descs,
-		detect_non_help_arg,
+		handle_arg,
 		NULL,
 		argc,
 		argv
@@ -91,6 +122,10 @@ int main(int argc, const char *argv[])
 		}
 		carg_print_usage(argv[0], arg_descs);
 		return parse_error != CARG_ERROR_NONE;
+	}
+	if (arg_error) {
+		// Error message has already been printed
+		return 1;
 	}
 	if (parse_error != CARG_ERROR_NONE) {
 		// Parse arguments again, printing errors
@@ -115,7 +150,7 @@ int main(int argc, const char *argv[])
 		}
 	}
 
-	// Parse max memory size
+	// Parse max memory size. Default is 1 GiB.
 	long int mem_size = 0x40000000;
 	if (arg_mem_size) {
 		char *endptr = NULL;
@@ -150,7 +185,7 @@ int main(int argc, const char *argv[])
 		return ret;
 	}
 
-	// Initialize emulated memory. Give ourselves 1 GiB emulated physical memory.
+	// Initialize emulated memory
 	struct mem memory;
 	mem_init(&memory, mem_size);
 
@@ -186,6 +221,15 @@ int main(int argc, const char *argv[])
 	if (ret == 0) {
 		// Sections loaded. Emulate.
 		for (int cycles = 0; (max_cycles < 0 || cycles < max_cycles) && ret >= 0 && ret < 256; cycles++) {
+			// Check for hit breakpoint
+			int count = 0; // Note: Unused for now
+			int hit = bpmap_get(bpmap, core.pc, &count);
+			if (hit) {
+				printf("stem: bp hit at address %"PRIx64"\n", core.pc);
+				// Present menu to user
+				ret = do_menu();
+				if (ret != 0) break;
+			}
 			ret = core_step(&core, &memory);
 		}
 		if (ret < 0) {
@@ -216,5 +260,6 @@ int main(int argc, const char *argv[])
 	mem_destroy(&memory);
 	core_destroy(&core);
 	fclose(infile);
+	bpmap_delete(bpmap);
 	return ret;
 }
