@@ -90,12 +90,28 @@ static int do_quit(const char *argv[], size_t argc)
 	return 512; // Exits menu loop and emulation loop
 }
 
+static int do_reg(const char *argv[], size_t argc)
+{
+	(void)argv;
+	(void)argc;
+	for (int i = 0; i < STEM_NUM_CORES; i++) {
+		printf("core %d:\n", i);
+		printf("pc:  0x%016"PRIx64"\n", cores[i].pc);
+		printf("sbp: 0x%016"PRIx64"\n", cores[i].sbp);
+		printf("sfp: 0x%016"PRIx64"\n", cores[i].sfp);
+		printf("sp:  0x%016"PRIx64"\n", cores[i].sp);
+		printf("slp: 0x%016"PRIx64"\n", cores[i].slp);
+	}
+	return 0;
+}
+
 static struct menu_item {
 	const char *name; // Menu item name
 	const char *helptext; // Help text
 	int (*func)(const char *argv[], size_t argc); // Menu item function
 } menu_items[] = {
 	// List main menu items in alphabetical order
+	// @todo: Add option to take a single step.
 	{ "?", "- print help", do_help },
 	{ "break", "<addr> - set breakpoint at addr", do_break },
 	{ "continue", "- continue program execution", do_continue },
@@ -104,6 +120,7 @@ static struct menu_item {
 	{ "help", "- print help", do_help },
 	{ "list", "- list source code", do_list },
 	{ "quit", "- terminate program", do_quit },
+	{ "reg", "- show register values", do_reg },
 };
 
 static void print_menu_help(const struct menu_item *items, size_t count)
