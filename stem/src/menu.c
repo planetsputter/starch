@@ -5,25 +5,25 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "core.h"
 #include "bpmap.h"
 #include "menu.h"
+#include "stem.h"
 
-extern struct bpmap *bpmap;
+static int do_help(const char *argv[], size_t argc);
 
-static int do_help(const char *arg);
-
-static int do_break(const char *arg)
+static int do_break(const char *argv[], size_t argc)
 {
-	if (!arg) {
+	if (argc == 0) {
 		printf("error: expected address argument\n");
 		return 0;
 	}
 
 	// Parse BP address
 	char *end = NULL;
-	long long addr = strtoll(arg, &end, 0);
-	if (end == NULL || end == arg || *end != '\0') {
-		printf("error: unable to parse BP address \"%s\"\n", arg);
+	long long addr = strtoll(argv[0], &end, 0);
+	if (end == NULL || end == argv[0] || *end != '\0') {
+		printf("error: unable to parse BP address \"%s\"\n", argv[0]);
 	}
 	else {
 		// Add new breakpoint
@@ -33,44 +33,74 @@ static int do_break(const char *arg)
 	return 0;
 }
 
-static int do_continue(const char *arg)
+static int do_continue(const char *argv[], size_t argc)
 {
-	(void)arg;
+	(void)argv;
+	(void)argc;
 	return 256; // Exits menu loop
 }
 
-static int do_delete(const char *arg)
+static int do_delete(const char *argv[], size_t argc)
 {
 	// @todo: implement
-	(void)arg;
+	(void)argv;
+	(void)argc;
 	printf("unimplemented\n");
 	return 0;
 }
 
-static int do_list(const char *arg)
+static int do_dump(const char *argv[], size_t argc)
+{
+	if (argc < 2) {
+		printf("error: expected <addr> <size>\n");
+		return 0;
+	}
+
+	// Parse address
+	char *end = NULL;
+	long long addr = strtoll(argv[0], &end, 0);
+	if (end == NULL || end == argv[0] || *end != '\0') {
+		printf("error: unable to parse address \"%s\"\n", argv[0]);
+		return 0;
+	}
+	end = NULL;
+	long long size = strtoll(argv[1], &end, 0);
+	if (end == NULL || end == argv[1] || *end != '\0') {
+		printf("error: unable to parse size \"%s\"\n", argv[1]);
+		return 0;
+	}
+
+	// Dump memory to stdout
+	return mem_dump_hex(&main_mem, addr, size, stdout);
+}
+
+static int do_list(const char *argv[], size_t argc)
 {
 	// @todo: implement
-	(void)arg;
+	(void)argv;
+	(void)argc;
 	printf("unimplemented\n");
 	return 0;
 }
 
-static int do_quit(const char *arg)
+static int do_quit(const char *argv[], size_t argc)
 {
-	(void)arg;
+	(void)argv;
+	(void)argc;
 	return 512; // Exits menu loop and emulation loop
 }
 
 static struct menu_item {
 	const char *name; // Menu item name
 	const char *helptext; // Help text
-	int (*func)(const char *arg); // Menu item function
+	int (*func)(const char *argv[], size_t argc); // Menu item function
 } menu_items[] = {
 	// List main menu items in alphabetical order
 	{ "?", "- print help", do_help },
 	{ "break", "<addr> - set breakpoint at addr", do_break },
 	{ "continue", "- continue program execution", do_continue },
 	{ "delete", "<addr> - delete breakpoint at addr", do_delete },
+	{ "dump", "<addr> <size> - dump size bytes of memory at addr", do_dump },
 	{ "help", "- print help", do_help },
 	{ "list", "- list source code", do_list },
 	{ "quit", "- terminate program", do_quit },
@@ -85,22 +115,23 @@ static void print_menu_help(const struct menu_item *items, size_t count)
 	printf("unambiguous abbreviations of commands can also be used\n");
 }
 
-static int do_help(const char *arg)
+static int do_help(const char *argv[], size_t argc)
 {
 	// @todo: add ability to print more help on a certain topic
-	(void)arg;
+	(void)argv;
+	(void)argc;
 	print_menu_help(menu_items, sizeof(menu_items) / sizeof(*menu_items));
 	return 0;
 }
 
 // Looks up a menu item from the list of menu items by name or unambiguous prefix.
 // Returns a pointer to the menu item or NULL.
-static struct menu_item *menu_item_lookup(struct menu_item *items, size_t count, const char *name)
+static struct menu_item *menu_item_lookup(struct menu_item *items, int count, const char *name)
 {
 	if (count == 0) return NULL;
 
 	// Use binary search for efficiency
-	size_t low = 0, high = count - 1, mid;
+	int low = 0, high = count - 1, mid;
 	while (low <= high) {
 		mid = (low + high) / 2;
 		int comp = strcmp(name, items[mid].name);
@@ -138,6 +169,7 @@ int do_menu()
 		printf("> ");
 
 		// Read line from user
+		// @todo: Handle common terminal escape sequences such as those for arrow keys
 		ssize_t nread = getline(&line, &linesize, stdin);
 		if (nread <= 0) {
 			if (ferror(stdin)) { // error
@@ -151,7 +183,7 @@ int do_menu()
 		}
 
 		// Get tokens from line
-		enum { MAX_TOKENS = 2 };
+		enum { MAX_TOKENS = 3 };
 		const char *ws = " \t\n";
 		const char *tokens[MAX_TOKENS] = {};
 		char *tokptr = line;
@@ -175,7 +207,7 @@ int do_menu()
 		}
 
 		// Execute menu function
-		ret = item->func(tokens[1]);
+		ret = item->func(tokens + 1, token_count - 1);
 	}
 	if (ret >= 256) ret -= 256;
 

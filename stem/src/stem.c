@@ -11,6 +11,7 @@
 #include "menu.h"
 #include "starch.h"
 #include "carg.h"
+#include "stem.h"
 #include "stub.h"
 
 // Variables set by command-line arguments
@@ -79,6 +80,13 @@ struct carg_desc arg_descs[] = {
 	{ CARG_TYPE_NONE }
 };
 
+// The cores of the Starch virtual machine
+struct core cores[STEM_NUM_CORES];
+
+// The main memory of the Starch virtual machine (shared among cores)
+struct mem main_mem;
+
+// Breakpoint map
 struct bpmap *bpmap = NULL;
 
 bool non_help_arg = false, arg_error = false;
@@ -186,18 +194,18 @@ int main(int argc, const char *argv[])
 	}
 
 	// Initialize emulated memory
-	struct mem memory;
-	mem_init(&memory, mem_size);
+	mem_init(&main_mem, mem_size);
 
 	// Prepare hard-coded interrupt handlers, which just halt with the interrupt number
 	for (int i = 1; i < 256; i++) {
-		mem_write8(&memory, BEGIN_INT_ADDR + i * 16, op_halt);
-		mem_write8(&memory, BEGIN_INT_ADDR + i * 16 + 1, i);
+		mem_write8(&main_mem, BEGIN_INT_ADDR + i * 16, op_halt);
+		mem_write8(&main_mem, BEGIN_INT_ADDR + i * 16 + 1, i);
 	}
 
-	// Initialize a core
-	struct core core;
-	core_init(&core);
+	// Initialize the emulated cores
+	for (int i = 0; i < STEM_NUM_CORES; i++) {
+		core_init(cores + i);
+	}
 
 	// Load all sections in input file into memory
 	struct stub_sec sec;
@@ -210,7 +218,7 @@ int main(int argc, const char *argv[])
 		}
 
 		// Load section into memory
-		ret = mem_load_image(&memory, sec.addr, sec.size, infile);
+		ret = mem_load_image(&main_mem, sec.addr, sec.size, infile);
 		if (ret) {
 			fprintf(stderr, "error: failed to load memory from \"%s\" to address %#"PRIx64"\n",
 				arg_image, sec.addr);
@@ -221,16 +229,25 @@ int main(int argc, const char *argv[])
 	if (ret == 0) {
 		// Sections loaded. Emulate.
 		for (int cycles = 0; (max_cycles < 0 || cycles < max_cycles) && ret >= 0 && ret < 256; cycles++) {
-			// Check for hit breakpoint
+			// Check for hit breakpoint on all cores
 			int count = 0; // Note: Unused for now
-			int hit = bpmap_get(bpmap, core.pc, &count);
+			int hit = 0;
+			int corei;
+			for (corei = 0; corei < STEM_NUM_CORES; corei++) {
+				hit |= bpmap_get(bpmap, cores[corei].pc, &count);
+				if (hit) break;
+			}
 			if (hit) {
-				printf("stem: bp hit at address %"PRIx64"\n", core.pc);
+				printf("stem: bp hit on core %d at address %#"PRIx64"\n", corei, cores[corei].pc);
 				// Present menu to user
 				ret = do_menu();
 				if (ret != 0) break;
 			}
-			ret = core_step(&core, &memory);
+
+			// Step all cores
+			for (corei = 0; corei < STEM_NUM_CORES; corei++) {
+				ret = core_step(cores + corei, &main_mem);
+			}
 		}
 		if (ret < 0) {
 			fprintf(stderr, "error: an error occurred during emulation\n");
@@ -247,7 +264,7 @@ int main(int argc, const char *argv[])
 				ret = 1;
 			}
 			else {
-				int err = mem_dump_hex(&memory, 0, 0, dumpfile);
+				int err = mem_dump_hex(&main_mem, 0, 0, dumpfile);
 				if (err) {
 					ret = err;
 				}
@@ -257,8 +274,10 @@ int main(int argc, const char *argv[])
 	}
 
 	// Clean up
-	mem_destroy(&memory);
-	core_destroy(&core);
+	mem_destroy(&main_mem);
+	for (int i = 0; i < STEM_NUM_CORES; i++) {
+		core_destroy(cores + i);
+	}
 	fclose(infile);
 	bpmap_delete(bpmap);
 	return ret;
