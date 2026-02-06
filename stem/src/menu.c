@@ -8,30 +8,59 @@
 #include "core.h"
 #include "bpmap.h"
 #include "menu.h"
+#include "starch.h"
 #include "stem.h"
 
 static int do_help(size_t argc, const char *argv[], int *flags);
+
+// Helper function to parse an initial address argument.
+// Returns zero on success.
+static int get_addr(size_t argc, const char *argv[], uint64_t *addr)
+{
+	if (argc < 1) {
+		printf("error: expected address argument\n");
+		return 1;
+	}
+
+	// Parse address
+	char *end = NULL;
+	*addr = strtoll(argv[0], &end, 0);
+	if (end == NULL || end == argv[0] || *end != '\0') {
+		printf("error: unable to parse address \"%s\"\n", argv[0]);
+		return 1;
+	}
+	return 0;
+}
+
+// Helper function to parse a second value argument.
+// Returns zero on success.
+static int get_val(size_t argc, const char *argv[], int64_t *val, const char *valname)
+{
+	if (argc < 2) {
+		printf("error: expected %s argument\n", valname);
+		return 1;
+	}
+
+	// Parse address
+	char *end = NULL;
+	*val = strtoll(argv[1], &end, 0);
+	if (end == NULL || end == argv[1] || *end != '\0') {
+		printf("error: unable to parse %s \"%s\"\n", valname, argv[1]);
+		return 1;
+	}
+	return 0;
+}
 
 // Set a breakpoint at address
 static int do_break(size_t argc, const char *argv[], int *flags)
 {
 	(void)flags;
-	if (argc == 0) {
-		printf("error: expected address argument\n");
-		return 0;
-	}
+	uint64_t addr = 0;
+	if (get_addr(argc, argv, &addr)) return 0;
 
-	// Parse BP address
-	char *end = NULL;
-	long long addr = strtoll(argv[0], &end, 0);
-	if (end == NULL || end == argv[0] || *end != '\0') {
-		printf("error: unable to parse BP address \"%s\"\n", argv[0]);
-	}
-	else {
-		// Add new breakpoint
-		bpmap = bpmap_insert(bpmap, addr, 1);
-		printf("breakpoint set at address %#llx\n", addr);
-	}
+	// Add new breakpoint
+	bpmap = bpmap_insert(bpmap, addr, 1);
+	printf("breakpoint set at address %#"PRIx64"\n", addr);
 	return 0;
 }
 
@@ -59,24 +88,14 @@ static int do_delete(size_t argc, const char *argv[], int *flags)
 static int do_dump(size_t argc, const char *argv[], int *flags)
 {
 	(void)flags;
-	if (argc < 2) {
-		printf("error: expected <addr> <size>\n");
-		return 0;
-	}
 
 	// Parse address
-	char *end = NULL;
-	long long addr = strtoll(argv[0], &end, 0);
-	if (end == NULL || end == argv[0] || *end != '\0') {
-		printf("error: unable to parse address \"%s\"\n", argv[0]);
-		return 0;
-	}
-	end = NULL;
-	long long size = strtoll(argv[1], &end, 0);
-	if (end == NULL || end == argv[1] || *end != '\0') {
-		printf("error: unable to parse size \"%s\"\n", argv[1]);
-		return 0;
-	}
+	uint64_t addr = 0;
+	if (get_addr(argc, argv, &addr)) return 0;
+
+	// Parse size
+	int64_t size = 0;
+	if (get_val(argc, argv, &size, "size")) return 0;
 
 	// Dump memory to stdout
 	return mem_dump_hex(&main_mem, addr, size, stdout);
@@ -99,25 +118,6 @@ static int do_quit(size_t argc, const char *argv[], int *flags)
 	(void)argv;
 	(void)argc;
 	*flags |= SF_EXIT; // Exits menu loop and emulation loop
-	return 0;
-}
-
-// Helper function to parse an initial address argument.
-// Returns zero on success.
-static int get_addr(size_t argc, const char *argv[], uint64_t *addr)
-{
-	if (argc < 1) {
-		printf("error: expected address argument\n");
-		return 1;
-	}
-
-	// Parse address
-	char *end = NULL;
-	*addr = strtoll(argv[0], &end, 0);
-	if (end == NULL || end == argv[0] || *end != '\0') {
-		printf("error: unable to parse address \"%s\"\n", argv[0]);
-		return 1;
-	}
 	return 0;
 }
 
@@ -219,6 +219,102 @@ static int do_step(size_t argc, const char *argv[], int *flags)
 	return 0;
 }
 
+// Write 8 bits to address
+static int do_w8(size_t argc, const char *argv[], int *flags)
+{
+	(void)flags;
+
+	// Parse address
+	uint64_t addr = 0;
+	if (get_addr(argc, argv, &addr)) return 0;
+
+	// Parse value
+	int64_t data = 0;
+	if (get_val(argc, argv, &data, "value")) return 0;
+	if (!sdt_contains(SDT_A8, data)) { // Check bounds
+		printf("error: value out of bounds\n");
+		return 0;
+	}
+
+	int ret = mem_write8(&main_mem, addr, data);
+	if (ret) {
+		printf("error: address out of bounds\n");
+		return 0;
+	}
+	return 0;
+}
+
+// Write 16 bits to address
+static int do_w16(size_t argc, const char *argv[], int *flags)
+{
+	(void)flags;
+
+	// Parse address
+	uint64_t addr = 0;
+	if (get_addr(argc, argv, &addr)) return 0;
+
+	// Parse value
+	int64_t data = 0;
+	if (get_val(argc, argv, &data, "value")) return 0;
+	if (sdt_contains(SDT_A16, data)) { // Check bounds
+		printf("error: value out of bounds\n");
+		return 0;
+	}
+
+	int ret = mem_write16(&main_mem, addr, data);
+	if (ret) {
+		printf("error: address out of bounds\n");
+		return 0;
+	}
+	return 0;
+}
+
+// Write 32 bits to address
+static int do_w32(size_t argc, const char *argv[], int *flags)
+{
+	(void)flags;
+
+	// Parse address
+	uint64_t addr = 0;
+	if (get_addr(argc, argv, &addr)) return 0;
+
+	// Parse value
+	int64_t data = 0;
+	if (get_val(argc, argv, &data, "value")) return 0;
+	if (!sdt_contains(SDT_A32, data)) { // Check bounds
+		printf("error: value out of bounds\n");
+		return 0;
+	}
+
+	int ret = mem_write32(&main_mem, addr, data);
+	if (ret) {
+		printf("error: address out of bounds\n");
+		return 0;
+	}
+	return 0;
+}
+
+// Write 64 bits to address
+static int do_w64(size_t argc, const char *argv[], int *flags)
+{
+	(void)flags;
+
+	// Parse address
+	uint64_t addr = 0;
+	if (get_addr(argc, argv, &addr)) return 0;
+
+	// Parse value
+	int64_t data = 0;
+	if (get_val(argc, argv, &data, "value")) return 0;
+
+	int ret = mem_write64(&main_mem, addr, data);
+	if (ret) {
+		printf("error: address out of bounds\n");
+		return 0;
+	}
+	return 0;
+}
+
 static struct menu_item {
 	const char *name; // Menu item name
 	const char *helptext; // Help text
@@ -239,10 +335,10 @@ static struct menu_item {
 	{ "r8", "<addr> - read 8 bits at addr", do_r8 },
 	{ "reg", "- show register values", do_reg },
 	{ "step", "- execute a single instruction", do_step },
-	//{ "w16", "<addr> <val> - write 16 bits at addr", do_w16 },
-	//{ "w32", "<addr> <val> - write 32 bits at addr", do_w32 },
-	//{ "w64", "<addr> <val> - write 64 bits at addr", do_w64 },
-	//{ "w8", "<addr> <val> - write 8 bits at addr", do_w8 },
+	{ "w16", "<addr> <val> - write 16 bits at addr", do_w16 },
+	{ "w32", "<addr> <val> - write 32 bits at addr", do_w32 },
+	{ "w64", "<addr> <val> - write 64 bits at addr", do_w64 },
+	{ "w8", "<addr> <val> - write 8 bits at addr", do_w8 },
 };
 
 static void print_menu_help(const struct menu_item *items, size_t count)

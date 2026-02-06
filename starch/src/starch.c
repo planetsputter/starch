@@ -419,6 +419,8 @@ void sdt_min_max(int dt, int64_t *min, int64_t *max)
 		break;
 	case SDT_A64:
 	case SDT_U64:
+		// @todo: In this case the caller must cast *max to uint64_t
+		// or value will be incorrect (-1). Is this always done?
 		*max = 0xfffffffffffffffflu;
 		break;
 	case SDT_I64:
@@ -497,6 +499,13 @@ int sdt_ucontain(uint64_t val)
 		else sdt = SDT_U8;
 	}
 	return sdt;
+}
+
+int sdt_contains(int sdt, int64_t val)
+{
+	int64_t min = 0, max = -1;
+	sdt_min_max(sdt, &min, &max);
+	return val >= min && val <= max;
 }
 
 int imm_type_for_opcode(int opcode)

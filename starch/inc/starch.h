@@ -362,6 +362,9 @@ int sdt_icontain(int64_t val);
 // Returns the smallest unsigned data type to contain the given value
 int sdt_ucontain(uint64_t val);
 
+// Returns whether (1) or not (0) the given data type contains the given value
+int sdt_contains(int sdt, int64_t val);
+
 // Returns the data type of the immediate argument for the given opcode.
 // Returns negative on failure.
 int imm_type_for_opcode(int opcode);
