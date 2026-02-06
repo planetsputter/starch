@@ -10,9 +10,10 @@
 #include "menu.h"
 #include "stem.h"
 
-static int do_help(const char *argv[], size_t argc, int *flags);
+static int do_help(size_t argc, const char *argv[], int *flags);
 
-static int do_break(const char *argv[], size_t argc, int *flags)
+// Set a breakpoint at address
+static int do_break(size_t argc, const char *argv[], int *flags)
 {
 	(void)flags;
 	if (argc == 0) {
@@ -34,7 +35,8 @@ static int do_break(const char *argv[], size_t argc, int *flags)
 	return 0;
 }
 
-static int do_continue(const char *argv[], size_t argc, int *flags)
+// Un-pause processor execution
+static int do_continue(size_t argc, const char *argv[], int *flags)
 {
 	(void)argv;
 	(void)argc;
@@ -42,7 +44,8 @@ static int do_continue(const char *argv[], size_t argc, int *flags)
 	return 0;
 }
 
-static int do_delete(const char *argv[], size_t argc, int *flags)
+// Delete a breakpoint at address
+static int do_delete(size_t argc, const char *argv[], int *flags)
 {
 	// @todo: implement
 	(void)argv;
@@ -52,7 +55,8 @@ static int do_delete(const char *argv[], size_t argc, int *flags)
 	return 0;
 }
 
-static int do_dump(const char *argv[], size_t argc, int *flags)
+// Dump memory from given address and size
+static int do_dump(size_t argc, const char *argv[], int *flags)
 {
 	(void)flags;
 	if (argc < 2) {
@@ -78,7 +82,8 @@ static int do_dump(const char *argv[], size_t argc, int *flags)
 	return mem_dump_hex(&main_mem, addr, size, stdout);
 }
 
-static int do_list(const char *argv[], size_t argc, int *flags)
+// List all breakpoints
+static int do_list(size_t argc, const char *argv[], int *flags)
 {
 	// @todo: implement
 	(void)argv;
@@ -88,7 +93,8 @@ static int do_list(const char *argv[], size_t argc, int *flags)
 	return 0;
 }
 
-static int do_quit(const char *argv[], size_t argc, int *flags)
+// Quit application
+static int do_quit(size_t argc, const char *argv[], int *flags)
 {
 	(void)argv;
 	(void)argc;
@@ -96,7 +102,99 @@ static int do_quit(const char *argv[], size_t argc, int *flags)
 	return 0;
 }
 
-static int do_reg(const char *argv[], size_t argc, int *flags)
+// Helper function to parse an initial address argument.
+// Returns zero on success.
+static int get_addr(size_t argc, const char *argv[], uint64_t *addr)
+{
+	if (argc < 1) {
+		printf("error: expected address argument\n");
+		return 1;
+	}
+
+	// Parse address
+	char *end = NULL;
+	*addr = strtoll(argv[0], &end, 0);
+	if (end == NULL || end == argv[0] || *end != '\0') {
+		printf("error: unable to parse address \"%s\"\n", argv[0]);
+		return 1;
+	}
+	return 0;
+}
+
+// Read 8 bits from address
+static int do_r8(size_t argc, const char *argv[], int *flags)
+{
+	(void)flags;
+	uint64_t addr = 0;
+	if (get_addr(argc, argv, &addr)) return 0;
+
+	uint8_t data = 0;
+	int ret = mem_read8(&main_mem, addr, &data);
+	if (ret) {
+		printf("error: address out of bounds\n");
+		return 0;
+	}
+
+	printf("%#x\n", data);
+	return 0;
+}
+
+// Read 16 bits from address
+static int do_r16(size_t argc, const char *argv[], int *flags)
+{
+	(void)flags;
+	uint64_t addr = 0;
+	if (get_addr(argc, argv, &addr)) return 0;
+
+	uint16_t data = 0;
+	int ret = mem_read16(&main_mem, addr, &data);
+	if (ret) {
+		printf("error: address out of bounds\n");
+		return 0;
+	}
+
+	printf("%#x\n", data);
+	return 0;
+}
+
+// Read 32 bits from address
+static int do_r32(size_t argc, const char *argv[], int *flags)
+{
+	(void)flags;
+	uint64_t addr = 0;
+	if (get_addr(argc, argv, &addr)) return 0;
+
+	uint32_t data = 0;
+	int ret = mem_read32(&main_mem, addr, &data);
+	if (ret) {
+		printf("error: address out of bounds\n");
+		return 0;
+	}
+
+	printf("%#x\n", data);
+	return 0;
+}
+
+// Read 64 bits from address
+static int do_r64(size_t argc, const char *argv[], int *flags)
+{
+	(void)flags;
+	uint64_t addr = 0;
+	if (get_addr(argc, argv, &addr)) return 0;
+
+	uint64_t data = 0;
+	int ret = mem_read64(&main_mem, addr, &data);
+	if (ret) {
+		printf("error: address out of bounds\n");
+		return 0;
+	}
+
+	printf("%#"PRIx64"\n", data);
+	return 0;
+}
+
+// Print all register values
+static int do_reg(size_t argc, const char *argv[], int *flags)
 {
 	(void)argv;
 	(void)argc;
@@ -112,7 +210,8 @@ static int do_reg(const char *argv[], size_t argc, int *flags)
 	return 0;
 }
 
-static int do_step(const char *argv[], size_t argc, int *flags)
+// Take a single step
+static int do_step(size_t argc, const char *argv[], int *flags)
 {
 	(void)argv;
 	(void)argc;
@@ -123,7 +222,7 @@ static int do_step(const char *argv[], size_t argc, int *flags)
 static struct menu_item {
 	const char *name; // Menu item name
 	const char *helptext; // Help text
-	int (*func)(const char *argv[], size_t argc, int *flags); // Menu item function
+	int (*func)(size_t argc, const char *argv[], int *flags); // Menu item function
 } menu_items[] = {
 	// List main menu items in alphabetical order
 	{ "?", "- print help", do_help },
@@ -134,8 +233,16 @@ static struct menu_item {
 	{ "help", "- print help", do_help },
 	{ "list", "- list source code", do_list },
 	{ "quit", "- terminate program", do_quit },
+	{ "r16", "<addr> - read 16 bits at addr", do_r16 },
+	{ "r32", "<addr> - read 32 bits at addr", do_r32 },
+	{ "r64", "<addr> - read 64 bits at addr", do_r64 },
+	{ "r8", "<addr> - read 8 bits at addr", do_r8 },
 	{ "reg", "- show register values", do_reg },
 	{ "step", "- execute a single instruction", do_step },
+	//{ "w16", "<addr> <val> - write 16 bits at addr", do_w16 },
+	//{ "w32", "<addr> <val> - write 32 bits at addr", do_w32 },
+	//{ "w64", "<addr> <val> - write 64 bits at addr", do_w64 },
+	//{ "w8", "<addr> <val> - write 8 bits at addr", do_w8 },
 };
 
 static void print_menu_help(const struct menu_item *items, size_t count)
@@ -147,7 +254,7 @@ static void print_menu_help(const struct menu_item *items, size_t count)
 	printf("unambiguous abbreviations of commands may be used\n");
 }
 
-static int do_help(const char *argv[], size_t argc, int *flags)
+static int do_help(size_t argc, const char *argv[], int *flags)
 {
 	// @todo: add ability to print more help on a certain topic
 	(void)argv;
@@ -263,7 +370,7 @@ int do_menu(int *flags)
 			}
 
 			// Execute menu function
-			ret = item->func(tokens + 1, token_count - 1, flags);
+			ret = item->func(token_count - 1, tokens + 1, flags);
 		} while (ret == 0 && !(*flags & (SF_RUN | SF_EXIT | SF_STEP)));
 
 		free(line);
