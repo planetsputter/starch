@@ -228,21 +228,21 @@ int main(int argc, const char *argv[])
 
 	if (ret == 0) {
 		// Sections loaded. Emulate.
-		for (int cycles = 0; (max_cycles < 0 || cycles < max_cycles) && ret >= 0 && ret < 256; cycles++) {
+		int flags = SF_RUN;
+		for (int cycles = 0; (max_cycles < 0 || cycles < max_cycles) && ret >= 0 && ret < 256 && !(flags & SF_EXIT); cycles++) {
 			// Check for hit breakpoint on all cores
 			int count = 0; // Note: Unused for now
-			int hit = 0;
 			int corei;
 			for (corei = 0; corei < STEM_NUM_CORES; corei++) {
-				hit |= bpmap_get(bpmap, cores[corei].pc, &count);
-				if (hit) break;
+				int hit = bpmap_get(bpmap, cores[corei].pc, &count);
+				if (hit) {
+					printf("stem: bp hit on core %d at address %#"PRIx64"\n", corei, cores[corei].pc);
+					flags &= ~SF_RUN; // Pause processor
+					break;
+				}
 			}
-			if (hit) {
-				printf("stem: bp hit on core %d at address %#"PRIx64"\n", corei, cores[corei].pc);
-				// Present menu to user
-				ret = do_menu();
-				if (ret != 0) break;
-			}
+			ret = do_menu(&flags); // Present debug menu if appropriate
+			if (ret != 0) break;
 
 			// Step all cores
 			for (corei = 0; corei < STEM_NUM_CORES; corei++) {

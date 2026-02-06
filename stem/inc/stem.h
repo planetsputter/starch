@@ -20,3 +20,8 @@ extern struct mem main_mem;
 // Breakpoint map
 extern struct bpmap *bpmap;
 
+enum { // stem flags
+	SF_RUN = 1,  // Whether to run (else pause and enter debug menu)
+	SF_EXIT = 2, // Whether to exit
+	SF_STEP = 4, // Single-step
+};
