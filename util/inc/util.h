@@ -24,3 +24,8 @@ uint64_t get_little64(const uint8_t *data);
 
 // Returns the minimum number of bytes required to represent the given value
 int min_bytes_for_val(int64_t val);
+
+// Compares the two string in "lexi-numeric" order. In this order, decimal portions
+// of the strings are compared numerically, while other portions are compared lexically.
+// For instance, "pop8" sorts before "pop64".
+int lexinum_cmp(const char *a, const char *b);

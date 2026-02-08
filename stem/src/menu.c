@@ -10,6 +10,7 @@
 #include "menu.h"
 #include "starch.h"
 #include "stem.h"
+#include "util.h"
 
 static int do_help(size_t argc, const char *argv[], int *flags);
 
@@ -320,7 +321,7 @@ static struct menu_item {
 	const char *helptext; // Help text
 	int (*func)(size_t argc, const char *argv[], int *flags); // Menu item function
 } menu_items[] = {
-	// List main menu items in alphabetical order
+	// List main menu items in "lexi-numeric" order, as in lexinum_cmp()
 	{ "?", "- print help", do_help },
 	{ "break", "<addr> - set breakpoint at addr", do_break },
 	{ "continue", "- continue program execution", do_continue },
@@ -329,16 +330,16 @@ static struct menu_item {
 	{ "help", "- print help", do_help },
 	{ "list", "- list source code", do_list },
 	{ "quit", "- terminate program", do_quit },
+	{ "r8", "<addr> - read 8 bits at addr", do_r8 },
 	{ "r16", "<addr> - read 16 bits at addr", do_r16 },
 	{ "r32", "<addr> - read 32 bits at addr", do_r32 },
 	{ "r64", "<addr> - read 64 bits at addr", do_r64 },
-	{ "r8", "<addr> - read 8 bits at addr", do_r8 },
 	{ "reg", "- show register values", do_reg },
 	{ "step", "- execute a single instruction", do_step },
+	{ "w8", "<addr> <val> - write 8 bits at addr", do_w8 },
 	{ "w16", "<addr> <val> - write 16 bits at addr", do_w16 },
 	{ "w32", "<addr> <val> - write 32 bits at addr", do_w32 },
 	{ "w64", "<addr> <val> - write 64 bits at addr", do_w64 },
-	{ "w8", "<addr> <val> - write 8 bits at addr", do_w8 },
 };
 
 static void print_menu_help(const struct menu_item *items, size_t count)
@@ -370,7 +371,7 @@ static struct menu_item *menu_item_lookup(struct menu_item *items, int count, co
 	int low = 0, high = count - 1, mid;
 	while (low <= high) {
 		mid = (low + high) / 2;
-		int comp = strcmp(name, items[mid].name);
+		int comp = lexinum_cmp(name, items[mid].name);
 		if (comp < 0) {
 			high = mid - 1;
 		}
