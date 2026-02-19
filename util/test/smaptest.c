@@ -35,6 +35,7 @@ static void test_depth(const struct smap *node)
 
 static void test_bdepth(const struct bmap *node)
 {
+	if (node == NULL) return;
 	int maxd = -1, leftd = -1, rightd = -1;
 	if (node->left) {
 		test_bdepth(node->left);
@@ -48,6 +49,12 @@ static void test_bdepth(const struct bmap *node)
 	}
 	int diffd = leftd - rightd;
 	assert(node->depth == maxd + 1 && diffd <= 1 && diffd >= -1);
+}
+
+static int get_bcount(const struct bmap *node)
+{
+	if (node == NULL) return 0;
+	return 1 + get_bcount(node->left) + get_bcount(node->right);
 }
 
 int main()
@@ -124,6 +131,26 @@ int main()
 		ret = bmap_get(bmap, name, &val);
 		bfree(name);
 		assert(ret && val != NULL && strcmp(val, testvals + j) == 0);
+	}
+
+	//
+	// Test deletion of keys in random order
+	//
+	for (int i = 0; i < TEST_SIZE * 2; i++) {
+		// Check whether key exists
+		int j = random() % TEST_SIZE;
+		bchar *key = bstrdupc(testkeys + j);
+		bchar *val = NULL;
+		int has = bmap_get(bmap, key, &val);
+		assert(has == (val != NULL));
+		int count_before = get_bcount(bmap);
+		// Attempt to remove key
+		bmap = bmap_remove(bmap, key);
+		bfree(key);
+		// Check depth of all nodes
+		test_bdepth(bmap);
+		// Assert node removed only if key existed
+		assert(get_bcount(bmap) + has == count_before);
 	}
 
 	bmap_delete(bmap);

@@ -33,8 +33,8 @@
 #ifdef MAPGET
 #error MAPGET must not be defined
 #endif
-#ifdef MAPUPDATE
-#error MAPUPDATE must not be defined
+#ifdef MAPUPDATEDEPTH
+#error MAPUPDATEDEPTH must not be defined
 #endif
 #ifdef MAPLROTATE
 #error MAPLROTATE must not be defined
@@ -102,8 +102,8 @@ int MAPGET(const struct MNAME *node, KEYT key, VALT *val)
 }
 
 // Updates the depth of the given node based on the depths of its children
-#define MAPUPDATE CONCAT(MNAME, _update)
-static void MAPUPDATE(struct MNAME *node)
+#define MAPUPDATEDEPTH CONCAT(MNAME, _update)
+static void MAPUPDATEDEPTH(struct MNAME *node)
 {
 	if (node->left) {
 		unsigned char leftdepth = node->left->depth;
@@ -133,8 +133,8 @@ static struct MNAME *MAPLROTATE(struct MNAME *node)
 	struct MNAME *mid = newroot->left;
 	newroot->left = node;
 	node->right = mid;
-	MAPUPDATE(node);
-	MAPUPDATE(newroot);
+	MAPUPDATEDEPTH(node);
+	MAPUPDATEDEPTH(newroot);
 	return newroot;
 }
 
@@ -146,8 +146,8 @@ static struct MNAME *MAPRROTATE(struct MNAME *node)
 	struct MNAME *mid = newroot->right;
 	newroot->right = node;
 	node->left = mid;
-	MAPUPDATE(node);
-	MAPUPDATE(newroot);
+	MAPUPDATEDEPTH(node);
+	MAPUPDATEDEPTH(newroot);
 	return newroot;
 }
 
@@ -180,7 +180,7 @@ static struct MNAME *MAPREBALANCE(struct MNAME *node)
 	}
 	else {
 		// No rotation necessary
-		MAPUPDATE(node);
+		MAPUPDATEDEPTH(node);
 		newroot = node;
 	}
 	return newroot;
@@ -224,10 +224,90 @@ struct MNAME *MAPINSERT(struct MNAME *node, KEYT key, VALT val)
 	return retnode;
 }
 
+// Unlink the leftmost node from the given node and set *pruned to it
+#define MAPPRUNELEFT CONCAT(MNAME, _prune_left)
+static struct MNAME *MAPPRUNELEFT(struct MNAME *node, struct MNAME **pruned)
+{
+	struct MNAME *retnode;
+	if (!node->left) {
+		*pruned = node;
+		retnode = node->right;
+		node->right = NULL;
+		node->depth = 0;
+	}
+	else {
+		node->left = MAPPRUNELEFT(node->left, pruned);
+		MAPUPDATEDEPTH(node);
+		retnode = MAPREBALANCE(node);
+	}
+	return retnode;
+}
+
+// Unlink the rightmost node from the given node and set *pruned to it
+#define MAPPRUNERIGHT CONCAT(MNAME, _prune_right)
+static struct MNAME *MAPPRUNERIGHT(struct MNAME *node, struct MNAME **pruned)
+{
+	struct MNAME *retnode;
+	if (!node->right) {
+		*pruned = node;
+		retnode = node->left;
+		node->left = NULL;
+		node->depth = 0;
+	}
+	else {
+		node->right = MAPPRUNERIGHT(node->right, pruned);
+		MAPUPDATEDEPTH(node);
+		retnode = MAPREBALANCE(node);
+	}
+	return retnode;
+}
+
+#define MAPREMOVE CONCAT(MNAME, _remove)
+struct MNAME *MAPREMOVE(struct MNAME *node, KEYT key)
+{
+	struct MNAME *retnode = NULL;
+	if (node != NULL) {
+		int comp = COMPF(key, node->key);
+		if (comp == 0) { // This key matches
+			if (!node->left || (node->right && node->left->depth <= node->right->depth)) { // Right has more or equal depth
+				if (node->right) {
+					node->right = MAPPRUNELEFT(node->right, &retnode);
+					retnode->right = node->right;
+					retnode->left = node->left;
+					MAPUPDATEDEPTH(retnode);
+					retnode = MAPREBALANCE(retnode);
+				}
+			}
+			else if (node->left) { // Left has more depth
+				node->left = MAPPRUNERIGHT(node->left, &retnode);
+				retnode->right = node->right;
+				retnode->left = node->left;
+				MAPUPDATEDEPTH(retnode);
+				retnode = MAPREBALANCE(retnode);
+			}
+			node->left = NULL;
+			node->right = NULL;
+			MAPDELETE(node);
+		}
+		else {
+			if (comp < 0) {
+				node->left = MAPREMOVE(node->left, key);
+			}
+			else {
+				node->right = MAPREMOVE(node->right, key);
+			}
+			// Correct depth
+			MAPUPDATEDEPTH(node);
+			retnode = MAPREBALANCE(node);
+		}
+	}
+	return retnode;
+}
+
 #undef MAPCREATE
 #undef MAPDELETE
 #undef MAPGET
-#undef MAPUPDATE
+#undef MAPUPDATEDEPTH
 #undef MAPLROTATE
 #undef MAPRROTATE
 #undef MAPREBALANCE

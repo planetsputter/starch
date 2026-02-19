@@ -77,11 +77,20 @@ static int do_continue(size_t argc, const char *argv[], int *flags)
 // Delete a breakpoint at address
 static int do_delete(size_t argc, const char *argv[], int *flags)
 {
-	// @todo: implement
-	(void)argv;
-	(void)argc;
 	(void)flags;
-	printf("unimplemented\n");
+	uint64_t addr = 0;
+	if (get_addr(argc, argv, &addr)) return 0;
+
+	// See if a breakpoint exists for the given address
+	int count = 0;
+	int has = bpmap_get(bpmap, addr, &count);
+	if (!has) {
+		printf("no breakpoint at address %#"PRIx64"\n", addr);
+		return 0;
+	}
+
+	// Remove the breakpoint
+	bpmap = bpmap_remove(bpmap, addr);
 	return 0;
 }
 

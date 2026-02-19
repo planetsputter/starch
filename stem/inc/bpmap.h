@@ -24,3 +24,6 @@ int bpmap_get(const struct bpmap*, uint64_t addr, int *count);
 // Inserts the given addr/count pair into the given BP map, returning
 // the modified BP map.
 struct bpmap *bpmap_insert(struct bpmap*, uint64_t addr, int count);
+
+// Remove the breakpoint at the given address, returning the modified map
+struct bpmap *bpmap_remove(struct bpmap*, uint64_t addr);
