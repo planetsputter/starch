@@ -57,6 +57,30 @@ static int get_bcount(const struct bmap *node)
 	return 1 + get_bcount(node->left) + get_bcount(node->right);
 }
 
+static const char *last_key = NULL;
+static int iter_func(char *key, char *val, void *user_ptr)
+{
+	(void)val;
+	(void)user_ptr;
+	if (last_key) {
+		assert(strcmp(last_key, key) < 0);
+	}
+	last_key = key;
+	return 0;
+}
+
+static const char *last_bkey = NULL;
+static int biter_func(bchar *key, bchar *val, void *user_ptr)
+{
+	(void)val;
+	(void)user_ptr;
+	if (last_bkey) {
+		assert(bstrcmpb(last_bkey, key) < 0);
+	}
+	last_bkey = key;
+	return 0;
+}
+
 int main()
 {
 	// Initialize test keys and values arrays
@@ -102,6 +126,9 @@ int main()
 		char *val = NULL;
 		ret = smap_get(smap, testkeys + j, &val);
 		assert(ret && val != NULL && strcmp(val, testvals + j) == 0);
+		// Test order
+		last_key = NULL;
+		assert(smap_iter(smap, NULL, iter_func) == 0);
 	}
 
 	smap_delete(smap);
@@ -131,6 +158,9 @@ int main()
 		ret = bmap_get(bmap, name, &val);
 		bfree(name);
 		assert(ret && val != NULL && strcmp(val, testvals + j) == 0);
+		// Test order
+		last_bkey = NULL;
+		assert(bmap_iter(bmap, NULL, biter_func) == 0);
 	}
 
 	//
@@ -151,6 +181,9 @@ int main()
 		test_bdepth(bmap);
 		// Assert node removed only if key existed
 		assert(get_bcount(bmap) + has == count_before);
+		// Test order
+		last_bkey = NULL;
+		assert(bmap_iter(bmap, NULL, biter_func) == 0);
 	}
 
 	bmap_delete(bmap);

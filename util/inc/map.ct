@@ -48,6 +48,18 @@
 #ifdef MAPINSERT
 #error MAPINSERT must not be defined
 #endif
+#ifdef MAPPRUNELEFT
+#error MAPPRUNELEFT must not be defined
+#endif
+#ifdef MAPPRUNERIGHT
+#error MAPPRUNERIGHT must not be defined
+#endif
+#ifdef MAPREMOVE
+#error MAPREMOVE must not be defined
+#endif
+#ifdef MAPITER
+#error MAPITER must not be defined
+#endif
 #ifdef CONCAT1
 #error CONCAT1 must not be defined
 #endif
@@ -138,7 +150,7 @@ static struct MNAME *MAPLROTATE(struct MNAME *node)
 	return newroot;
 }
 
-// Performs a binary tree right rotation. *node must have a non-NULL prev member.
+// Performs a binary tree right rotation. *node must have a non-NULL left member.
 #define MAPRROTATE CONCAT(MNAME, _rrot)
 static struct MNAME *MAPRROTATE(struct MNAME *node)
 {
@@ -304,6 +316,27 @@ struct MNAME *MAPREMOVE(struct MNAME *node, KEYT key)
 	return retnode;
 }
 
+// Iterates over all key-value pairs from leftmost to rightmost, calling the given function for each.
+// If the given function returns non-zero, stops iteration.
+#define MAPITER CONCAT(MNAME, _iter)
+int MAPITER(struct MNAME *node, void *user_ptr, int (*iter_func)(KEYT key, VALT val, void *user_ptr))
+{
+	int ret;
+	if (node == NULL) {
+		ret = 0;
+	}
+	else {
+		ret = MAPITER(node->left, user_ptr, iter_func);
+		if (ret == 0) {
+			ret = iter_func(node->key, node->val, user_ptr);
+		}
+		if (ret == 0) {
+			ret = MAPITER(node->right, user_ptr, iter_func);
+		}
+	}
+	return ret;
+}
+
 #undef MAPCREATE
 #undef MAPDELETE
 #undef MAPGET
@@ -312,5 +345,9 @@ struct MNAME *MAPREMOVE(struct MNAME *node, KEYT key)
 #undef MAPRROTATE
 #undef MAPREBALANCE
 #undef MAPINSERT
-#undef CONCAT
+#undef MAPPRUNELEFT
+#undef MAPPRUNERIGHT
+#undef MAPREMOVE
+#undef MAPITER
 #undef CONCAT1
+#undef CONCAT
