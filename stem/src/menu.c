@@ -325,6 +325,8 @@ static int do_w64(size_t argc, const char *argv[], int *flags)
 	return 0;
 }
 
+static int do_info(size_t argc, const char *argv[], int *flags);
+
 static struct menu_item {
 	const char *name; // Menu item name
 	const char *helptext; // Help text
@@ -337,6 +339,7 @@ static struct menu_item {
 	{ "delete", "<addr> - delete breakpoint at addr", do_delete },
 	{ "dump", "<addr> <size> - dump size bytes of memory at addr", do_dump },
 	{ "help", "- print help", do_help },
+	{ "info", "<arg> - print info on <arg>", do_info },
 	{ "list", "- list source code", do_list },
 	{ "quit", "- terminate program", do_quit },
 	{ "r8", "<addr> - read 8 bits at addr", do_r8 },
@@ -351,9 +354,9 @@ static struct menu_item {
 	{ "w64", "<addr> <val> - write 64 bits at addr", do_w64 },
 };
 
-static void print_menu_help(const struct menu_item *items, size_t count)
+static void print_menu_help(const char *pfx, const struct menu_item *items, size_t count)
 {
-	printf("commands:\n");
+	printf("%scommands:\n", pfx);
 	for (size_t i = 0; i < count; i++) {
 		printf("%s %s\n", items[i].name, items[i].helptext);
 	}
@@ -366,7 +369,7 @@ static int do_help(size_t argc, const char *argv[], int *flags)
 	(void)argv;
 	(void)argc;
 	(void)flags;
-	print_menu_help(menu_items, sizeof(menu_items) / sizeof(*menu_items));
+	print_menu_help("", menu_items, sizeof(menu_items) / sizeof(*menu_items));
 	return 0;
 }
 
@@ -418,6 +421,44 @@ static struct menu_item *menu_item_lookup(struct menu_item *items, int count, co
 		printf("error: unrecognized command \"%s\"\n", name);
 	}
 	return NULL;
+}
+
+static int print_bp(uint64_t addr, int count, void *user_ptr)
+{
+	(void)count;
+	(void)user_ptr;
+	printf("0x%"PRIx64"\n", addr);
+	return 0;
+}
+
+static int do_info_bp(size_t argc, const char *argv[], int *flags)
+{
+	(void)argc;
+	(void)argv;
+	(void)flags;
+	bpmap_iter(bpmap, NULL, print_bp);
+	return 0;
+}
+
+static struct menu_item info_menu_items[] = {
+	// List info menu items in "lexi-numeric" order, as in lexinum_cmp()
+	{ "breakpoints", "- list breakpoints", do_info_bp },
+};
+
+static int do_info(size_t argc, const char *argv[], int *flags)
+{
+	(void)flags;
+	struct menu_item *mi = NULL;
+	if (argc >= 1) {
+		mi = menu_item_lookup(info_menu_items, sizeof(info_menu_items) / sizeof(*info_menu_items), argv[0]);
+	}
+	if (argc < 1 || mi == NULL)  {
+		print_menu_help("info ", info_menu_items, sizeof(info_menu_items) / sizeof(*info_menu_items));
+	}
+	else {
+		mi->func(argc - 1, argv + 1, flags);
+	}
+	return 0;
 }
 
 int do_menu(int *flags)

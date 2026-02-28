@@ -27,3 +27,6 @@ struct bpmap *bpmap_insert(struct bpmap*, uint64_t addr, int count);
 
 // Remove the breakpoint at the given address, returning the modified map
 struct bpmap *bpmap_remove(struct bpmap*, uint64_t addr);
+
+// Iterate through breakpoints, calling the given function for each
+int bpmap_iter(struct bpmap*, void *user_ptr, int (*iter_func)(uint64_t, int, void*));
