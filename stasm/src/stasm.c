@@ -130,12 +130,8 @@ static const char *stasm_msg_types[] = {
 	ANSI_RED "error" ANSI_NORMAL,
 };
 
-int stasm_msgf(int msg_type, const char *format, ...)
+int stasm_vmsgf(int msg_type, int lineno, int charno, const char *format, va_list args)
 {
-	// Determine whether to use current or token line and character numbers
-	bool usetoknums = msg_type & SMF_USETOK;
-	msg_type &= ~SMF_USETOK;
-
 	// Prepend message type name
 	FILE *out_file = msg_type <= SMT_INFO ? stdout : stderr;
 	fprintf(out_file, "%s: ", stasm_msg_types[msg_type]);
@@ -143,16 +139,16 @@ int stasm_msgf(int msg_type, const char *format, ...)
 	// Prepend the current file and line if it is known
 	struct inc_link *link = inc_chain;
 	if (link) {
-		int line = usetoknums ? tlineno : link->lineno;
-		int ch = usetoknums ? tcharno : link->charno;
-		fprintf(out_file, "%s:%d:%d: ", link->filename, line, ch);
+		if (lineno) {
+			fprintf(out_file, "%s:%d:%d: ", link->filename, lineno, charno);
+		}
+		else {
+			fprintf(out_file, "%s: ", link->filename);
+		}
 	}
 
 	// Format and print the given message
-	va_list args;
-	va_start(args, format);
 	int ret = vfprintf(out_file, format, args);
-	va_end(args);
 	fprintf(out_file, "\n"); // Append newline
 
 	// Print the include chain
@@ -164,6 +160,24 @@ int stasm_msgf(int msg_type, const char *format, ...)
 	}
 
 	msg_counts[msg_type]++;
+	return ret;
+}
+
+int stasm_msgf(int msg_type, const char *format, ...)
+{
+	va_list args;
+	va_start(args, format);
+	int ret = stasm_vmsgf(msg_type, 0, 0, format, args);
+	va_end(args);
+	return ret;
+}
+
+int stasm_msgft(int msg_type, int lineno, int charno, const char *format, ...)
+{
+	va_list args;
+	va_start(args, format);
+	int ret = stasm_vmsgf(msg_type, lineno, charno, format, args);
+	va_end(args);
 	return ret;
 }
 
@@ -276,7 +290,7 @@ int main(int argc, const char *argv[])
 		if (token) {
 			tip = false;
 			// Assemble the token
-			ret = assembler_handle_token(&as, token);
+			ret = assembler_handle_token(&as, token, tlineno, tcharno);
 			if (ret) break;
 
 			// Check for included file
@@ -357,7 +371,7 @@ int main(int argc, const char *argv[])
 
 	if (!assembler_finish(&as)) {
 		if (ret == 0) {
-			stasm_msgf(SMT_ERROR | SMF_USETOK, "incomplete statement");
+			stasm_msgft(SMT_ERROR, tlineno, tcharno, "incomplete statement");
 			ret = 1;
 		}
 	}

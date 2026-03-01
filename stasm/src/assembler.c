@@ -59,14 +59,14 @@ static struct autosym *get_autosym(const char *name)
 // and sets *val to a string in the assembler symbol map on success.
 // Returns zero on success and sets *val non-NULL.
 // Returns non-zero on failure and sets *val to NULL.
-static int symbol_sub(struct assembler *as, bchar *token, bchar **val)
+static int symbol_sub(struct assembler *as, bchar *token, int tlineno, int tcharno, bchar **val)
 {
 	*val = NULL;
 	if (token[0] != '$') { // No symbolic substitution
 		*val = token;
 	}
 	else if (token[1] == '\0') { // Check for empty symbol name
-		stasm_msgf(SMT_ERROR | SMF_USETOK, "empty symbol name");
+		stasm_msgft(SMT_ERROR, tlineno, tcharno, "empty symbol name");
 	}
 	else {
 		// Look up an existing symbol definition
@@ -117,8 +117,8 @@ static int symbol_sub(struct assembler *as, bchar *token, bchar **val)
 				as->defs = bmap_insert(as->defs, name, symbol);
 			}
 			else {
+				stasm_msgft(SMT_ERROR, tlineno, tcharno, "undefined symbol \"%s\"", name);
 				bfree(name);
-				stasm_msgf(SMT_ERROR | SMF_USETOK, "undefined symbol \"%s\"", name);
 			}
 		}
 		else { // Symbol already defined
@@ -280,10 +280,10 @@ void assembler_destroy(struct assembler *as)
 }
 
 // Handles definition of the given label at the current position
-static int assembler_handle_label_def(struct assembler *as, bchar *token)
+static int assembler_handle_label_def(struct assembler *as, bchar *token, int tlineno, int tcharno)
 {
 	if (as->sec_count == 0) {
-		stasm_msgf(SMT_ERROR | SMF_USETOK, "expected section definition before label");
+		stasm_msgft(SMT_ERROR, tlineno, tcharno, "expected section definition before label");
 		return 1;
 	}
 
@@ -308,7 +308,7 @@ static int assembler_handle_label_def(struct assembler *as, bchar *token)
 	}
 	else if (rec->defined) {
 		// A definition already exists for this label
-		stasm_msgf(SMT_ERROR | SMF_USETOK, "definition already exists for label");
+		stasm_msgft(SMT_ERROR, tlineno, tcharno, "definition already exists for label");
 		ret = 1;
 	}
 	else {
@@ -419,7 +419,7 @@ static int assembler_handle_strings(struct assembler *as)
 
 // Handles the given token as part of the given opcode or pseudo-op.
 // token may be NULL if there is no immediate value for this opcode.
-static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int code, bchar *token)
+static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int code, bchar *token, int tlineno, int tcharno)
 {
 	if (as->sec_count == 0) {
 		stasm_msgf(SMT_ERROR, "expected section definition before first instruction");
@@ -530,7 +530,7 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 				contents = balloc();
 				if (!parse_string_lit(token, &contents)) {
 					bfree(contents);
-					stasm_msgf(SMT_ERROR | SMF_USETOK, "invalid string literal");
+					stasm_msgft(SMT_ERROR, tlineno, tcharno, "invalid string literal");
 					return 1;
 				}
 			}
@@ -755,7 +755,7 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 				assert(false);
 			}
 			if (oob) {
-				stasm_msgf(SMT_ERROR | SMF_USETOK, "immediate value out of range for opcode");
+				stasm_msgft(SMT_ERROR, tlineno, tcharno, "immediate value out of range for opcode");
 				return 1;
 			}
 			if (opcode >= 0) {
@@ -767,7 +767,7 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 
 		// Check that value fits into buffer
 		if (imm_bytes_reqd > imm_bytes) {
-			stasm_msgf(SMT_ERROR | SMF_USETOK, "immediate value \"%s\" is out of bounds for type", token);
+			stasm_msgft(SMT_ERROR, tlineno, tcharno, "immediate value \"%s\" is out of bounds for type", token);
 			return 1;
 		}
 
@@ -785,11 +785,11 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 	return 0;
 }
 
-int assembler_handle_token(struct assembler *as, bchar *token)
+int assembler_handle_token(struct assembler *as, bchar *token, int tlineno, int tcharno)
 {
 	// Perform symbolic substitution
 	bchar *symbol = NULL;
-	int ret = symbol_sub(as, token, &symbol);
+	int ret = symbol_sub(as, token, tlineno, tcharno, &symbol);
 
 	int nextstate = as->state;
 	if (ret == 0) switch (as->state) {
@@ -811,22 +811,22 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 			as->include = NULL;
 		}
 
-		if (token[0] == '\n') { // Allow empty lines
+		if (symbol[0] == '\n') { // Allow empty lines
 			break;
 		}
 		if (symbol[0] == ':') { // ':' introduces a label
 			if (symbol[1] == '\0') {
 				// Label name must not be empty
-				stasm_msgf(SMT_ERROR | SMF_USETOK, "invalid label name");
+				stasm_msgft(SMT_ERROR, tlineno, tcharno, "invalid label name");
 				ret = 1;
 				break;
 			}
-			ret = assembler_handle_label_def(as, symbol);
+			ret = assembler_handle_label_def(as, symbol, tlineno, tcharno);
 			break;
 		}
 
 		// Check for assembler command without substitution
-		int code = get_asm_cmd(token);
+		int code = get_asm_cmd(symbol);
 		switch (code) {
 		case ASM_CMD_BRZ16:
 		case ASM_CMD_BRZ32:
@@ -877,7 +877,7 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 			code = opcode_for_name(symbol);
 			if (code < 0) {
 				// Instruction is not an exact match for any opcode
-				stasm_msgf(SMT_ERROR | SMF_USETOK, "unrecognized opcode \"%s\"", symbol);
+				stasm_msgft(SMT_ERROR, tlineno, tcharno, "unrecognized opcode \"%s\"", symbol);
 				nextstate = APS_WAIT_EOL; // Don't attempt to process the rest of the line
 				ret = 1;
 				break;
@@ -912,7 +912,7 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 	case APS_STORE6_BRKT_SFP_OFF:
 	case APS_STORE7_BRKT_SFP_END:
 		// Disallow newlines
-		if (token[0] == '\n') {
+		if (symbol[0] == '\n') {
 			stasm_msgf(SMT_ERROR, "unexpected newline", symbol);
 			nextstate = APS_DEFAULT;
 			ret = 1;
@@ -929,6 +929,8 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 			else { // Substitution
 				as->word2 = bstrdupb(symbol);
 			}
+			as->tlineno2 = tlineno;
+			as->tcharno2 = tcharno;
 		}
 		else {
 			if (symbol == token) { // No substitution
@@ -938,6 +940,8 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 			else { // Substitution
 				as->word1 = bstrdupb(symbol);
 			}
+			as->tlineno1 = tlineno;
+			as->tcharno1 = tcharno;
 		}
 
 		// Check token type
@@ -945,7 +949,7 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 		case APS_INCLUDE1:
 			// Require quoted token
 			if (symbol[0] != '"') {
-				stasm_msgf(SMT_ERROR | SMF_USETOK, "expected quoted string");
+				stasm_msgft(SMT_ERROR, tlineno, tcharno, "expected quoted string");
 				ret = 1;
 				nextstate = APS_WAIT_EOL;
 				break;
@@ -955,7 +959,7 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 		case APS_DEFINE1:
 			// Disallow quoted token
 			if (symbol[0] == '"') {
-				stasm_msgf(SMT_ERROR | SMF_USETOK, "unexpected quoted string");
+				stasm_msgft(SMT_ERROR, tlineno, tcharno, "unexpected quoted string");
 				ret = 1;
 				nextstate = APS_WAIT_EOL;
 				break;
@@ -1032,7 +1036,7 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 				bret = as->pret1 = parse_int(symbol, &as->pval1);
 			}
 			if (!bret) {
-				stasm_msgf(SMT_ERROR | SMF_USETOK, "invalid integer literal");
+				stasm_msgft(SMT_ERROR, tlineno, tcharno, "invalid integer literal");
 				nextstate = APS_WAIT_EOL;
 				ret = 1;
 				break;
@@ -1048,7 +1052,7 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 		case APS_STORE3_BRKT_END:
 		case APS_STORE7_BRKT_SFP_END:
 			if (symbol[0] != ']') {
-				stasm_msgf(SMT_ERROR | SMF_USETOK, "expected \"]\"");
+				stasm_msgft(SMT_ERROR, tlineno, tcharno, "expected \"]\"");
 				nextstate = APS_WAIT_EOL;
 				ret = 1;
 				break;
@@ -1076,8 +1080,8 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 	case APS_STORE8_BRKT_SFP_EOL:
 	case APS_STRINGS:
 		// Expect end of line
-		if (token[0] != '\n') {
-			stasm_msgf(SMT_ERROR | SMF_USETOK, "expected eol");
+		if (symbol[0] != '\n') {
+			stasm_msgft(SMT_ERROR, tlineno, tcharno, "expected eol");
 			ret = 1;
 			nextstate = APS_WAIT_EOL;
 			break;
@@ -1106,7 +1110,7 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 		case APS_PUSH2_EOL:
 			// word1 will be NULL if the opcode expects no immediate value.
 			// Otherwise it will be a quoted string, label, or integer literal.
-			ret = assembler_handle_opcode(as, as->state != APS_OPCODE2, as->code, as->word1);
+			ret = assembler_handle_opcode(as, as->state != APS_OPCODE2, as->code, as->word1, as->tlineno1, as->tcharno1);
 			break;
 
 		case APS_PUSH5_BRKT_EOL:
@@ -1117,7 +1121,7 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 				as->pret1 = true;
 				as->pval1 = 0;
 			}
-			ret = assembler_handle_opcode(as, true, ASM_CMD_PUSH64, as->word1);
+			ret = assembler_handle_opcode(as, true, ASM_CMD_PUSH64, as->word1, as->tlineno1, as->tcharno1);
 			if (ret) break;
 
 			int opcode = -1;
@@ -1135,7 +1139,7 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 			case ASM_CMD_PUSH8: opcode = op_loadpopsfp8; break;
 			default: assert(false);
 			}
-			ret = assembler_handle_opcode(as, false, opcode, NULL);
+			ret = assembler_handle_opcode(as, false, opcode, NULL, 0, 0);
 			break;
 
 		case APS_SECTION2:
@@ -1143,7 +1147,7 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 			// @todo: Allow section flags
 			if (as->pret1) { // Address parsed successfully
 				if (as->pval1 < 0) {
-					stasm_msgf(SMT_ERROR | SMF_USETOK, "section address cannot be negative");
+					stasm_msgft(SMT_ERROR, tlineno, tcharno, "section address cannot be negative");
 					ret = 1;
 					break;
 				}
@@ -1160,7 +1164,7 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 				as->pval1 = 0;
 			}
 			// Emit the instruction to push a 64-bit offset
-			ret = assembler_handle_opcode(as, true, ASM_CMD_PUSH64, as->word1);
+			ret = assembler_handle_opcode(as, true, ASM_CMD_PUSH64, as->word1, as->tlineno1, as->tcharno1);
 			if (ret) break;
 
 			// Emit the instruction to store to that offset
@@ -1186,7 +1190,7 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 			default:
 				assert(false);
 			}
-			ret = assembler_handle_opcode(as, false, opcode, NULL);
+			ret = assembler_handle_opcode(as, false, opcode, NULL, 0, 0);
 			if (ret) break;
 
 			// For pop pseudo-ops, emit the instruction to pop the data stored
@@ -1204,7 +1208,7 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 			default: assert(false);
 			}
 			if (opcode > 0) {
-				ret = assembler_handle_opcode(as, false, opcode, NULL);
+				ret = assembler_handle_opcode(as, false, opcode, NULL, 0, 0);
 			}
 			break;
 
@@ -1219,7 +1223,7 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 
 	case APS_STORE1:
 		// Optional newline
-		if (token[0] == '\n') {
+		if (symbol[0] == '\n') {
 			// With no operand, the store and pop pseudo-ops evaluate to a single instruction
 			int opcode;
 			switch (as->code) {
@@ -1234,13 +1238,13 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 			default:
 				assert(false);
 			}
-			ret = assembler_handle_opcode(as, false, opcode, NULL);
+			ret = assembler_handle_opcode(as, false, opcode, NULL, 0, 0);
 			nextstate = APS_DEFAULT;
 			break;
 		}
 		// With an operand, the store and pop pseudo-ops accept bracket notation
-		if (token[0] != '[') {
-			stasm_msgf(SMT_ERROR | SMF_USETOK, "expected '[' or eol");
+		if (symbol[0] != '[') {
+			stasm_msgft(SMT_ERROR, tlineno, tcharno, "expected '[' or eol");
 			ret = 1;
 			nextstate = APS_WAIT_EOL;
 			break;
@@ -1250,7 +1254,7 @@ int assembler_handle_token(struct assembler *as, bchar *token)
 		break;
 
 	case APS_WAIT_EOL: // A parse error has occurred. Ignore further tokens until EOL.
-		if (token[0] == '\n') {
+		if (symbol[0] == '\n') {
 			nextstate = APS_DEFAULT;
 		}
 		break;

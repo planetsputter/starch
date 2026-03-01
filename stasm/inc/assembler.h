@@ -18,6 +18,7 @@ struct assembler {
 	struct bmap *defs; // Symbol definitions
 	int code; // Current opcode
 	bchar *word1, *word2, *include;
+	int tlineno1, tcharno1, tlineno2, tcharno2;
 	bool pret1, pret2; // Parse return values
 	int64_t pval1, pval2; // Parse values
 
@@ -37,7 +38,7 @@ void assembler_destroy(struct assembler*);
 
 // Parses and takes ownership of the given B-string token.
 // Returns zero on success.
-int assembler_handle_token(struct assembler*, bchar *token);
+int assembler_handle_token(struct assembler*, bchar *token, int tlineno, int tcharno);
 
 // Sets *filename to the B-string filename included as a result of the last parsed byte,
 // or NULL if there is none. Caller must release the B-string.
