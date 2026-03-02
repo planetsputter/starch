@@ -1,23 +1,23 @@
-; hello-world.sta
+// hello-world.sta
 
-; Memory map
-; 0x0000 - 0x1000: reserved
-; 0x1000 - 0x2000: IO
-; 0x2000 - 0x3000: interrupt
-; 0x3000 - 0x4000: program
-; 0x4000 - 0x5000: stack
-; 0x5000 - 0x6000: static
+// Memory map
+// 0x0000 - 0x1000: reserved
+// 0x1000 - 0x2000: IO
+// 0x2000 - 0x3000: interrupt
+// 0x3000 - 0x4000: program
+// 0x4000 - 0x5000: stack
+// 0x5000 - 0x6000: static
 
-;
-; Definitions
-;
+//
+// Definitions
+//
 define STACK_BOTTOM 0x4000
 define STACK_LIMIT  0x5000
 define STATIC_ADDR  0x5000
 
-;
-; Instruction section
-;
+//
+// Instruction section
+//
 section $INIT_PC_VAL
 	setsbp $STACK_BOTTOM
 	setsfp $STACK_BOTTOM
@@ -25,32 +25,32 @@ section $INIT_PC_VAL
 	setslp $STACK_LIMIT
 	rjmp :main
 
-;
-; Write buffer to constant IO address
-;
-:write_io ; void write_io(ioa64, bufa64, lenu64)
-	push64 [SFP-16] ; bufa64
-	push64 [SFP-24] ; bufa64, lenu64
-	add64           ; enda64
-	push64 [SFP-16] ; enda64, bufa64
+//
+// Write buffer to constant IO address
+//
+:write_io // void write_io(ioa64, bufa64, lenu64)
+	push64 [SFP-16] // bufa64
+	push64 [SFP-24] // bufa64, lenu64
+	add64           // enda64
+	push64 [SFP-16] // enda64, bufa64
 :write_io:loop
-	dup64           ; enda64, bufa64, bufa64
-	push64 [SFP]    ; enda64, bufa64, bufa64, enda64
-	cltu64          ; enda64, bufa64, bufa64 < enda64
+	dup64           // enda64, bufa64, bufa64
+	push64 [SFP]    // enda64, bufa64, bufa64, enda64
+	cltu64          // enda64, bufa64, bufa64 < enda64
 	brz64 :write_io:end
-	load8           ; enda64, bufa64, data8
-	push64 [SFP-8]  ; enda64, bufa64, data8, ioa64
-	storerpop8      ; *ioa64 = data8
-	pop8            ; enda64, bufa64
+	load8           // enda64, bufa64, data8
+	push64 [SFP-8]  // enda64, bufa64, data8, ioa64
+	storerpop8      // *ioa64 = data8
+	pop8            // enda64, bufa64
 	push64 1
-	add64           ; enda64, bufa64 + 1
+	add64           // enda64, bufa64 + 1
 	rjmp :write_io:loop
 :write_io:end
 	ret
 
-;
-; Main program
-;
+//
+// Main program
+//
 :main
 	push64 13
 	push64 "Hello world!\n"
@@ -61,8 +61,8 @@ section $INIT_PC_VAL
 	pop64
 	halt 0
 
-;
-; Static data section
-;
+//
+// Static data section
+//
 section $STATIC_ADDR
 strings

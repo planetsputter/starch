@@ -9,12 +9,14 @@ enum { // Tokenizer states
 	TZS_DEFAULT,
 	TZS_COMMENT,
 	TZS_SIGN,
+	TZS_SLASH,
 	TZS_QUOTED,
 	TZS_QUOTED_ESC,
+	TZS_MULTI_COMMENT,
 };
 
 // Single-character operators in numeric order
-static const char scos[] = "\n!#%&'()*,./<=>?@[\\]^`{|}~";
+static const char scos[] = "\n!#%&'()*,.;<=>?@[\\]^`{|}~";
 
 // Returns whether the given character is a single-character operator
 static bool is_sco(ucp c)
@@ -87,7 +89,7 @@ void tokenizer_parse(struct tokenizer *tz, ucp c)
 		int error = 0;
 		switch (tz->state) {
 		case TZS_DEFAULT:
-			if (c == 0 || isspace((int)c) || is_sco(c) || c == '"' || c == ';' || c == '-' || c == '+') {
+			if (c == 0 || isspace((int)c) || is_sco(c) || c == '"' || c == ';' || c == '-' || c == '+' || c == '/') {
 				// These characters end the current token, if any
 				tokenizer_enqueue(tz);
 				if (is_sco(c)) { // SCOs get their own token
@@ -98,12 +100,13 @@ void tokenizer_parse(struct tokenizer *tz, ucp c)
 					tz->ctoken = bstrdupu(&c, 1, &error);
 					tz->state = TZS_QUOTED;
 				}
-				else if (c == ';') { // Semicolon begins comment
-					tz->state = TZS_COMMENT;
-				}
 				else if (c == '-' || c == '+') { // Sign may become its own token, or start a literal
 					tz->ctoken = bstrdupu(&c, 1, &error);
 					tz->state = TZS_SIGN;
+				}
+				else if (c == '/') { // Slash may become its own token, or start a comment
+					tz->ctoken = bstrdupu(&c, 1, &error);
+					tz->state = TZS_SLASH;
 				}
 			}
 			else { // Other characters start a token or continue the current one
@@ -129,6 +132,23 @@ void tokenizer_parse(struct tokenizer *tz, ucp c)
 			}
 			tz->state = TZS_DEFAULT;
 			break;
+		case TZS_SLASH:
+			if (c == '/') { // Begins single-line comment
+				bfree(tz->ctoken);
+				tz->ctoken = NULL;
+				tz->state = TZS_COMMENT;
+			}
+			else if (c == '*') { // Begins multi-line comment
+				bfree(tz->ctoken);
+				tz->ctoken = NULL;
+				tz->state = TZS_MULTI_COMMENT;
+			}
+			else { // Slash is its own token
+				tokenizer_enqueue(tz);
+				tz->state = TZS_DEFAULT;
+				again = true;
+			}
+			break;
 		case TZS_QUOTED:
 			// Append quoted character
 			tz->ctoken = bstrcatu(tz->ctoken, &c, 1, &error);
@@ -144,6 +164,18 @@ void tokenizer_parse(struct tokenizer *tz, ucp c)
 			// Append escaped character
 			tz->ctoken = bstrcatu(tz->ctoken, &c, 1, &error);
 			tz->state = TZS_QUOTED;
+			break;
+		case TZS_MULTI_COMMENT:
+			if (tz->ctoken) {
+				if (c == '/') { // End of multi-line comment
+					tz->state = TZS_DEFAULT;
+				}
+				bfree(tz->ctoken);
+				tz->ctoken = NULL;
+			}
+			else if (c == '*') {
+				tz->ctoken = bstrdupu(&c, 1, &error);
+			}
 			break;
 		default:
 			assert(false);
@@ -168,7 +200,7 @@ void tokenizer_emit(struct tokenizer *tz, bchar **token)
 
 bool tokenizer_finish(struct tokenizer *tz)
 {
-	if (tz->state >= TZS_QUOTED) { // Cannot end stream within a quoted token
+	if (tz->state >= TZS_QUOTED) { // Cannot end stream within a quoted token or multi-line comment
 		return false;
 	}
 	// Finish current token, if any

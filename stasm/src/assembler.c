@@ -224,25 +224,25 @@ enum { // Assembler parse states
 	APS_PSOP1,
 	APS_PSOP2,
 	APS_PUSH1,
-	APS_PUSH2_EOL,
+	APS_PUSH2_EOS,
 	APS_PUSH3_BRKT,
 	APS_PUSH4_BRKT_END,
-	APS_PUSH5_BRKT_EOL,
+	APS_PUSH5_BRKT_EOS,
 	APS_PUSH6_BRKT_SFP_OFF,
 	APS_PUSH7_BRKT_SFP_OFF,
 	APS_PUSH8_BRKT_SFP_END,
-	APS_PUSH9_BRKT_SFP_EOL,
+	APS_PUSH9_BRKT_SFP_EOS,
 	APS_STORE1,
 	APS_STORE2_BRKT,
 	APS_STORE3_BRKT_END,
-	APS_STORE4_BRKT_EOL,
+	APS_STORE4_BRKT_EOS,
 	APS_STORE5_BRKT_SFP_OFF,
 	APS_STORE6_BRKT_SFP_OFF,
 	APS_STORE7_BRKT_SFP_END,
-	APS_STORE8_BRKT_SFP_EOL,
+	APS_STORE8_BRKT_SFP_EOS,
 	APS_OPCODE1,
 	APS_OPCODE2,
-	APS_WAIT_EOL,
+	APS_WAIT_EOS,
 };
 
 void assembler_init(struct assembler *as, FILE *outfile)
@@ -811,7 +811,7 @@ int assembler_handle_token(struct assembler *as, bchar *token, int tlineno, int 
 			as->include = NULL;
 		}
 
-		if (symbol[0] == '\n') { // Allow empty lines
+		if (symbol[0] == '\n' || symbol[0] == ';') { // Allow empty lines and empty statements
 			break;
 		}
 		if (symbol[0] == ':') { // ':' introduces a label
@@ -878,7 +878,7 @@ int assembler_handle_token(struct assembler *as, bchar *token, int tlineno, int 
 			if (code < 0) {
 				// Instruction is not an exact match for any opcode
 				stasm_msgft(SMT_ERROR, tlineno, tcharno, "unrecognized opcode \"%s\"", symbol);
-				nextstate = APS_WAIT_EOL; // Don't attempt to process the rest of the line
+				nextstate = APS_WAIT_EOS; // Don't attempt to process the rest of the statement
 				ret = 1;
 				break;
 			}
@@ -912,8 +912,8 @@ int assembler_handle_token(struct assembler *as, bchar *token, int tlineno, int 
 	case APS_STORE6_BRKT_SFP_OFF:
 	case APS_STORE7_BRKT_SFP_END:
 		// Disallow newlines
-		if (symbol[0] == '\n') {
-			stasm_msgf(SMT_ERROR, "unexpected newline", symbol);
+		if (symbol[0] == '\n' || symbol[0] == ';') {
+			stasm_msgf(SMT_ERROR, "unexpected end of statement", symbol);
 			nextstate = APS_DEFAULT;
 			ret = 1;
 			break;
@@ -951,7 +951,7 @@ int assembler_handle_token(struct assembler *as, bchar *token, int tlineno, int 
 			if (symbol[0] != '"') {
 				stasm_msgft(SMT_ERROR, tlineno, tcharno, "expected quoted string");
 				ret = 1;
-				nextstate = APS_WAIT_EOL;
+				nextstate = APS_WAIT_EOS;
 				break;
 			}
 			nextstate++;
@@ -961,7 +961,7 @@ int assembler_handle_token(struct assembler *as, bchar *token, int tlineno, int 
 			if (symbol[0] == '"') {
 				stasm_msgft(SMT_ERROR, tlineno, tcharno, "unexpected quoted string");
 				ret = 1;
-				nextstate = APS_WAIT_EOL;
+				nextstate = APS_WAIT_EOS;
 				break;
 			}
 			nextstate++;
@@ -996,7 +996,7 @@ int assembler_handle_token(struct assembler *as, bchar *token, int tlineno, int 
 			case APS_PUSH6_BRKT_SFP_OFF:
 			case APS_STORE5_BRKT_SFP_OFF:
 				if (symbol[0] == ']') { // "[SFP]" indicates zero offset
-					nextstate += 3; // Head to the "EOL" states
+					nextstate += 3; // Head to the "EOS" states
 					bfree(as->word1);
 					as->word1 = NULL;
 					done = true;
@@ -1037,7 +1037,7 @@ int assembler_handle_token(struct assembler *as, bchar *token, int tlineno, int 
 			}
 			if (!bret) {
 				stasm_msgft(SMT_ERROR, tlineno, tcharno, "invalid integer literal");
-				nextstate = APS_WAIT_EOL;
+				nextstate = APS_WAIT_EOS;
 				ret = 1;
 				break;
 			}
@@ -1053,7 +1053,7 @@ int assembler_handle_token(struct assembler *as, bchar *token, int tlineno, int 
 		case APS_STORE7_BRKT_SFP_END:
 			if (symbol[0] != ']') {
 				stasm_msgft(SMT_ERROR, tlineno, tcharno, "expected \"]\"");
-				nextstate = APS_WAIT_EOL;
+				nextstate = APS_WAIT_EOS;
 				ret = 1;
 				break;
 			}
@@ -1065,25 +1065,25 @@ int assembler_handle_token(struct assembler *as, bchar *token, int tlineno, int 
 		break;
 
 	//
-	// Last token (end of line)
+	// Last token (end of statement)
 	//
 	case APS_DATA2:
 	case APS_DEFINE3:
 	case APS_INCLUDE2:
 	case APS_OPCODE2:
 	case APS_PSOP2:
-	case APS_PUSH2_EOL:
-	case APS_PUSH5_BRKT_EOL:
-	case APS_PUSH9_BRKT_SFP_EOL:
+	case APS_PUSH2_EOS:
+	case APS_PUSH5_BRKT_EOS:
+	case APS_PUSH9_BRKT_SFP_EOS:
 	case APS_SECTION2:
-	case APS_STORE4_BRKT_EOL:
-	case APS_STORE8_BRKT_SFP_EOL:
+	case APS_STORE4_BRKT_EOS:
+	case APS_STORE8_BRKT_SFP_EOS:
 	case APS_STRINGS:
-		// Expect end of line
-		if (symbol[0] != '\n') {
-			stasm_msgft(SMT_ERROR, tlineno, tcharno, "expected eol");
+		// Expect end of statement
+		if (symbol[0] != '\n' && symbol[0] != ';') {
+			stasm_msgft(SMT_ERROR, tlineno, tcharno, "expected end of statement");
 			ret = 1;
-			nextstate = APS_WAIT_EOL;
+			nextstate = APS_WAIT_EOS;
 			break;
 		}
 		nextstate = APS_DEFAULT;
@@ -1107,14 +1107,14 @@ int assembler_handle_token(struct assembler *as, bchar *token, int tlineno, int 
 		case APS_DATA2:
 		case APS_OPCODE2:
 		case APS_PSOP2:
-		case APS_PUSH2_EOL:
+		case APS_PUSH2_EOS:
 			// word1 will be NULL if the opcode expects no immediate value.
 			// Otherwise it will be a quoted string, label, or integer literal.
 			ret = assembler_handle_opcode(as, as->state != APS_OPCODE2, as->code, as->word1, as->tlineno1, as->tcharno1);
 			break;
 
-		case APS_PUSH5_BRKT_EOL:
-		case APS_PUSH9_BRKT_SFP_EOL:
+		case APS_PUSH5_BRKT_EOS:
+		case APS_PUSH9_BRKT_SFP_EOS:
 			if (!as->word1) { // Such as for "[SFP]" notation
 				// @todo: This could be improved with changes to assembler_handle_opcode()
 				as->word1 = balloc();
@@ -1125,7 +1125,7 @@ int assembler_handle_token(struct assembler *as, bchar *token, int tlineno, int 
 			if (ret) break;
 
 			int opcode = -1;
-			if (as->state == APS_PUSH5_BRKT_EOL) switch (as->code) {
+			if (as->state == APS_PUSH5_BRKT_EOS) switch (as->code) {
 			case ASM_CMD_PUSH16: opcode = op_loadpop16; break;
 			case ASM_CMD_PUSH32: opcode = op_loadpop32; break;
 			case ASM_CMD_PUSH64: opcode = op_loadpop64; break;
@@ -1155,8 +1155,8 @@ int assembler_handle_token(struct assembler *as, bchar *token, int tlineno, int 
 			}
 			break;
 
-		case APS_STORE4_BRKT_EOL:
-		case APS_STORE8_BRKT_SFP_EOL:
+		case APS_STORE4_BRKT_EOS:
+		case APS_STORE8_BRKT_SFP_EOS:
 			if (!as->word1) { // Such as for "[SFP]" notation
 				// @todo: This could be improved with changes to assembler_handle_opcode()
 				as->word1 = balloc();
@@ -1169,7 +1169,7 @@ int assembler_handle_token(struct assembler *as, bchar *token, int tlineno, int 
 
 			// Emit the instruction to store to that offset
 			switch (as->state) {
-			case APS_STORE4_BRKT_EOL:
+			case APS_STORE4_BRKT_EOS:
 				switch (as->code) {
 				case ASM_CMD_STORE16: case ASM_CMD_POP16: opcode = op_storerpop16; break;
 				case ASM_CMD_STORE32: case ASM_CMD_POP32: opcode = op_storerpop32; break;
@@ -1178,7 +1178,7 @@ int assembler_handle_token(struct assembler *as, bchar *token, int tlineno, int 
 				default: assert(false);
 				}
 				break;
-			case APS_STORE8_BRKT_SFP_EOL:
+			case APS_STORE8_BRKT_SFP_EOS:
 				switch (as->code) {
 				case ASM_CMD_STORE16: case ASM_CMD_POP16: opcode = op_storerpopsfp16; break;
 				case ASM_CMD_STORE32: case ASM_CMD_POP32: opcode = op_storerpopsfp32; break;
@@ -1223,7 +1223,7 @@ int assembler_handle_token(struct assembler *as, bchar *token, int tlineno, int 
 
 	case APS_STORE1:
 		// Optional newline
-		if (symbol[0] == '\n') {
+		if (symbol[0] == '\n' || symbol[0] == ';') {
 			// With no operand, the store and pop pseudo-ops evaluate to a single instruction
 			int opcode;
 			switch (as->code) {
@@ -1244,17 +1244,17 @@ int assembler_handle_token(struct assembler *as, bchar *token, int tlineno, int 
 		}
 		// With an operand, the store and pop pseudo-ops accept bracket notation
 		if (symbol[0] != '[') {
-			stasm_msgft(SMT_ERROR, tlineno, tcharno, "expected '[' or eol");
+			stasm_msgft(SMT_ERROR, tlineno, tcharno, "expected '[' or end of statement");
 			ret = 1;
-			nextstate = APS_WAIT_EOL;
+			nextstate = APS_WAIT_EOS;
 			break;
 		}
 		// Begin bracket notation
 		nextstate = APS_STORE2_BRKT;
 		break;
 
-	case APS_WAIT_EOL: // A parse error has occurred. Ignore further tokens until EOL.
-		if (symbol[0] == '\n') {
+	case APS_WAIT_EOS: // A parse error has occurred. Ignore further tokens until end of statement.
+		if (symbol[0] == '\n' || symbol[0] == ';') {
 			nextstate = APS_DEFAULT;
 		}
 		break;

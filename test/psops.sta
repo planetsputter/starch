@@ -1,4 +1,4 @@
-; Test pseudo-ops
+// Test pseudo-ops
 
 section 0x1000
 

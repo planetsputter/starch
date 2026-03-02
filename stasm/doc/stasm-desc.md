@@ -18,12 +18,14 @@ Each line of the text input file is processed by the assembler as a comment, a s
 
 ### Comments
 
-Comments in Starch assembly begin with a semicolon (';') and continue until the end of the line. A comment may finish a line started by any other kind of statement, for instance a label or assembler command. There is no syntax for multi-line comments.
+Single-line comments in Starch assembly begin with two slashes (//) and continue until the end of the line. A comment may finish a line started by any other kind of statement, for instance a label or assembler command. Multi-line comments begin with a slash and an asterisk (/*) and end with an asterisk and a slash (*/), just as in C.
 
 Example:
 ```
-; This is a comment
-:label ; This is a comment following a label definition
+// This is a single-line comment
+:label // This is a comment following a label definition
+/* This is a
+multi-line comment. */
 ```
 
 ### Statements
@@ -75,17 +77,17 @@ The push pseudo-ops can take an operand in brackets. In this form the pseudo-op 
 Examples:
 ```
 push8 [:some_label]
-; Evaluates to
+// Evaluates to
 push64 :some_label
 loadpop8
 
 push16 [SFP + 10]
-; Evaluates to
+// Evaluates to
 push64 10
 loadpopsfp16
 
 push32 [SFP]
-; Evaluates to
+// Evaluates to
 push64 0
 loadpopsfp32
 ```
@@ -97,17 +99,17 @@ The store8, store16, store32, and store64 pseudo-ops can also take bracket notat
 Examples:
 ```
 store8 [:some_label]
-; Evalutes to
+// Evalutes to
 push64 :some_label
 storerpop8
 
 store16 [SFP + 10]
-; Evaluates to
+// Evaluates to
 push64 10
 storerpopsfp16
 
 store32 [SFP]
-; Evaluates to
+// Evaluates to
 push64 0
 storerpopsfp32
 ```
@@ -162,9 +164,9 @@ The Starch assembler recognizes some automatic symbols which have a default valu
 
 The following example uses some automatic symbols:
 ```
-push8 $STINT_ASSERT_FAILURE ; Pushes the number of the assertion failure interrupt as an 8-bit integer
-push8 $OP_HALT              ; Pushes the value of the "halt" opcode as an 8-bit integer
-push64 $IO_STDOUT_ADDR      ; Pushes the stdout IO address as a 64-bit integer
+push8 $STINT_ASSERT_FAILURE // Pushes the number of the assertion failure interrupt as an 8-bit integer
+push8 $OP_HALT              // Pushes the value of the "halt" opcode as an 8-bit integer
+push64 $IO_STDOUT_ADDR      // Pushes the stdout IO address as a 64-bit integer
 ```
 
 Once used, an auto-symbol must not be defined manually. An auto-symbol may be defined manually before its first usage, in which case the defined value will be used instead of the automatic value.
