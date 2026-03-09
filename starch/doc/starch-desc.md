@@ -41,6 +41,54 @@ To call a function that takes arguments, arguments are pushed onto the stack beg
 
 Note that while function arguments are pushed to the stack from last to first, the last argument pushed being thought of as the "leftmost", individual instructions which perform a non-commutative operation such as subtraction typically consider the last argument pushed to be the "rightmost". This is to be more similar to postfix notation. These instructions also typically have an order-reversed variant.
 
+Memory Map
+----------
+
+Addresses from 0 through 0x2fff are reserved for special purposes. Program execution begins at address 0x3000.
+
+Special purpose memory:
+
+| Address Range    | Function           |
+|:---------------- |:------------------ |
+| 0x0000 - 0x1fff  | IO memory          |
+| 0x2000 - 0x2fff  | Interrupt handlers |
+
+### IO Memory
+
+Addresses from 0 through 0xfff within IO memory are reserved. Attempts to access memory in this region will result in STINT_BAD_IO_ACCESS. This helps detect null pointer dereferences with small offsets, a common programming error.
+
+Other IO memory is mapped as follows:
+
+| Address | IO Function |
+|:------- |:----------- |
+| 0x1000  | stdin - Byte reads from this location return a byte from stdin, blocking until it is read. Writes generate a STINT_BAD_IO_ACCESS interrupt, as do reads of non-byte size. |
+| 0x1001  | stdout - Byte writes to this location write to stdout. Reads generate a STINT_BAD_IO_ACCESS interrupt, as do writes of non-byte size. |
+| 0x1002  | stdout_flush - Byte writes of any value to this location flush stdout. Reads generate a STINT_BAD_IO_ACCESS interrupt, as do writes of non-byte size. |
+| 0x1003 - 0x100a | urand - Reads beginning at 0x1003 return a pseudorandom value of the width of the read. Writes generate a STINT_BAD_IO_ACCESS interrupt. |
+| 0x100b - 0x1012 | assert - Writes beginning at 0x100b perform an assertion, raising the STINT_ASSERT_FAILIURE interrupt if the value written is zero. Reads generate a STINT_BAD_IO_ACCESS interrupt. |
+
+Access to any unmapped IO memory address will generate STINT_BAD_IO_ACCESS.
+
+### Interrupt Handlers
+
+There are 256 interrupt handlers of 16 bytes each beginning at address 0x2000. When an interrupt occurs, the core vectors to 0x2000 plus the interrupt number multiplied by 16. Currently no other action is taken to preserve processor registers, but this may change in the future. By default, each interrupt handler simply halts with the index of the interrupt as the halt code. For custom interrupt handlers, 16 bytes is enough space to encode a jump to a separate location where more involved handling of the interrupt may take place.
+
+Interrupts
+----------
+
+The Starch core will enter an interrupt handler if certain exceptional conditions occur. These are enumerated below:
+
+| Interrupt Name | Description |
+|:-------------- |:----------- |
+| STINT_NONE     | Index 0. No interrupt. Implementations may use this value internally to indicate that no interrupt has occurred. |
+| STINT_INVALID_INST | An attempt was made to execute an invalid instruction. |
+| STINT_ASSERT_FAILURE | A value of zero was written to the assertion IO memory location. |
+| STINT_DIV_BY_ZERO | An attempt was made to divide by zero. |
+| STINT_BAD_IO_ACCESS | An attempt was made to access invalid IO memory (IO memory which does not have an assigned interpretation). This will include dereferencing a null pointer with a small (less than 0x1000) offset. |
+| STINT_BAD_FRAME_ACCESS | An instruction which would not normally be used to access memory outside the current stack frame attempted to access memory outside the current stack frame. |
+| STINT_BAD_STACK_ACCESS | An instruction which would not normally be used to access memory outside the stack attempted to access memory outside the stack. |
+| STINT_BAD_ADDR | An attempt was made to access memory at an address that does not map to any physical memory. |
+
 Instruction Set
 ---------------
 

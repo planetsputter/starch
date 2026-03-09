@@ -395,10 +395,9 @@ int stint_for_name(const char*);
 // Core memory map
 //
 enum {
-	// Page 0 (0x0000-0x0fff) is reserved to help detect unintentional NULL pointer dereferences
+	// Page 0 (0x0000-0x0fff) is unmapped IO memory, reserved to help detect unintentional NULL pointer dereferences
 
-	// Page 1 (0x1000-0x1fff) is IO memory which performs various special functions
-	BEGIN_IO_ADDR  = 0x1000,
+	// Page 1 (0x1000-0x1fff) contains IO memory which performs various special functions
 	IO_STDIN_ADDR  = 0x1000,
 	IO_STDOUT_ADDR = 0x1001,
 	IO_FLUSH_ADDR  = 0x1002,
