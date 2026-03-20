@@ -24,7 +24,6 @@ struct autosym {
 // Automatic symbols, besides instruction opcodes and interrupt numbers, in alphabetic order
 static struct autosym autosyms[] = {
 	{ "BEGIN_INT_ADDR", BEGIN_INT_ADDR },
-	{ "BEGIN_IO_ADDR", BEGIN_IO_ADDR },
 	{ "INIT_PC_VAL", INIT_PC_VAL },
 	{ "IO_ASSERT_ADDR", IO_ASSERT_ADDR },
 	{ "IO_FLUSH_ADDR", IO_FLUSH_ADDR },
