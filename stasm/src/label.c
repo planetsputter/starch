@@ -47,7 +47,7 @@ int label_usage_apply(const struct label_usage *lu, FILE *outfile, uint64_t labe
 		size_t bc = fread(buff, 1, 1, outfile);
 		if (bc != 1) {
 			stasm_msgf(SMT_ERROR, "failed to read from output file, errno %d", errno);
-			return ret;
+			return 1;
 		}
 
 		// Get the immediate type
