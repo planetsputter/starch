@@ -36,13 +36,14 @@ struct label_rec {
 	bool defined; // Whether this label has been defined
 	uint64_t addr; // Only relevant if label has been defined
 	long fpos; // File position of label
+	int si; // Section index in which label is defined
 	struct label_usage *usages; // Label usages list
 	struct label_rec *prev;
 };
 
 // Initializes the given label record with the given parameters.
 // Takes ownership of the given B-string label and usages.
-void label_rec_init(struct label_rec *rec, bool string_lit, bool defined, bchar *label, uint64_t addr, long fpos, struct label_usage *usages);
+void label_rec_init(struct label_rec *rec, bool string_lit, bool defined, bchar *label, uint64_t addr, long fpos, int si, struct label_usage *usages);
 
 // Destroys the given label record, releasing its label and usages.
 void label_rec_destroy(struct label_rec *rec);

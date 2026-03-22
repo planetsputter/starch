@@ -301,7 +301,7 @@ static int assembler_handle_label_def(struct assembler *as, bchar *token, int tl
 	if (!rec) {
 		// Label has not been used before. Add new label record to list.
 		struct label_rec *next = (struct label_rec*)malloc(sizeof(struct label_rec));
-		label_rec_init(next, false, true, bstrdupb(token), addr, fpos, NULL);
+		label_rec_init(next, false, true, bstrdupb(token), addr, fpos, as->sec_count - 1, NULL);
 		next->prev = as->label_recs;
 		as->label_recs = next;
 	}
@@ -317,6 +317,7 @@ static int assembler_handle_label_def(struct assembler *as, bchar *token, int tl
 		rec->defined = true;
 		rec->addr = addr; // Address is now known
 		rec->fpos = fpos; // File position is now known
+		rec->si = as->sec_count - 1; // Section index is now known
 		for (struct label_usage *lu = rec->usages; lu; lu = lu->prev) {
 			// This will preserve the file position
 			ret = label_usage_apply(lu, as->outfile, rec->addr, as->label_recs);
@@ -531,7 +532,7 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 			if (!rec) {
 				// Label has not been used before. Add new label record to list with usage.
 				rec = (struct label_rec*)malloc(sizeof(struct label_rec));
-				label_rec_init(rec, string_lit, false, string_lit ? contents : bstrdupb(contents), 0, 0, lu);
+				label_rec_init(rec, string_lit, false, string_lit ? contents : bstrdupb(contents), 0, 0, 0, lu);
 				rec->prev = as->label_recs;
 				as->label_recs = rec;
 

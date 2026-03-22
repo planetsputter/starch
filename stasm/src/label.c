@@ -211,6 +211,7 @@ int label_usage_apply(const struct label_usage *lu, FILE *outfile, uint64_t labe
 		}
 
 		// Update all stub section headers, noting which section contains the label usage
+		int compact_si = -1;
 		long end_compact_section = 0;
 		struct stub_sec sec;
 		for (int si = 0; si < nsec; si++) {
@@ -248,6 +249,7 @@ int label_usage_apply(const struct label_usage *lu, FILE *outfile, uint64_t labe
 					if (si < nsec - 1) {
 						end_compact_section -= compact_count;
 					}
+					compact_si = si;
 				}
 
 				// Do not save last section, which is in progress
@@ -275,13 +277,12 @@ int label_usage_apply(const struct label_usage *lu, FILE *outfile, uint64_t labe
 
 		// Adjust all label record and usage file positions.
 		// Note that this will also adjust the file position of *lu passed to this function.
-		// @todo: It would be more correct to save a section index for each label instead of a file position.
 		// Labels defined at the beginning or end of a section have a file position which is ambiguous.
 		for (struct label_rec *rec = recs; rec; rec = rec->prev) {
 			if (rec->defined && rec->fpos > begin_compact_fpos) {
 				// Adjust file positions of labels defined later in the file
 				rec->fpos -= compact_count;
-				if (rec->fpos <= end_compact_section) {
+				if (rec->si == compact_si) {
 					// Adjust addresses of labels defined later in the same section as the compacted usage
 					rec->addr -= compact_count;
 				}
@@ -322,13 +323,14 @@ int label_usage_apply(const struct label_usage *lu, FILE *outfile, uint64_t labe
 }
 
 // Initializes the given label record, taking ownership of the given label B-string
-void label_rec_init(struct label_rec *rec, bool string_lit, bool defined, bchar *label, uint64_t addr, long fpos, struct label_usage *usages)
+void label_rec_init(struct label_rec *rec, bool string_lit, bool defined, bchar *label, uint64_t addr, long fpos, int si, struct label_usage *usages)
 {
 	rec->string_lit = string_lit;
 	rec->label = label;
 	rec->defined = defined;
 	rec->addr = addr;
 	rec->fpos = fpos;
+	rec->si = si;
 	rec->usages = usages;
 	rec->prev = NULL;
 }
