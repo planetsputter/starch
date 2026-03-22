@@ -213,10 +213,9 @@ int stub_init(FILE *file, int maxnsec)
 		return STUB_ERROR_WRITE_FAILURE;
 	}
 	FILE *reopened_file = freopen(NULL, "w+b", file);
-	if (!reopened_file) {
+	if (file != reopened_file) {
 		return STUB_ERROR_WRITE_FAILURE;
 	}
-	file = reopened_file;
 
 	// Extend file to include unused section headers
 	int ret = ftruncate(fileno(file), STUB_HEADER_SIZE + 8 + STUB_SECTION_HEADER_SIZE * maxnsec);
