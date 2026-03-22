@@ -301,7 +301,7 @@ static int assembler_handle_label_def(struct assembler *as, bchar *token, int tl
 	if (!rec) {
 		// Label has not been used before. Add new label record to list.
 		struct label_rec *next = (struct label_rec*)malloc(sizeof(struct label_rec));
-		label_rec_init(next, false, true, bstrdupb(token), addr, NULL);
+		label_rec_init(next, false, true, bstrdupb(token), addr, fpos, NULL);
 		next->prev = as->label_recs;
 		as->label_recs = next;
 	}
@@ -312,20 +312,15 @@ static int assembler_handle_label_def(struct assembler *as, bchar *token, int tl
 	}
 	else {
 		// Label has been used but not defined. This is the definition.
+		// Apply each of the usages.
 		assert(rec->usages);
 		rec->defined = true;
 		rec->addr = addr; // Address is now known
+		rec->fpos = fpos; // File position is now known
 		for (struct label_usage *lu = rec->usages; lu; lu = lu->prev) {
-			// Apply each of the usages
-			ret = label_usage_apply(lu, as->outfile, rec->addr);
+			// This will preserve the file position
+			ret = label_usage_apply(lu, as->outfile, rec->addr, as->label_recs);
 			if (ret) break;
-		}
-
-		// Seek back to the original position
-		int seek_error = fseek(as->outfile, fpos, SEEK_SET);
-		if (seek_error) {
-			stasm_msgf(SMT_ERROR, "failed to seek in output file, errno %d", errno);
-			if (ret == 0) ret = seek_error;
 		}
 	}
 	return ret;
@@ -402,15 +397,9 @@ static int assembler_handle_strings(struct assembler *as)
 		rec->defined = true;
 		rec->addr = addr; // Address is now known
 		for (struct label_usage *lu = rec->usages; lu; lu = lu->prev) {
-			ret = label_usage_apply(lu, as->outfile, addr);
+			// This will preserve the file position
+			ret = label_usage_apply(lu, as->outfile, addr, as->label_recs);
 			if (ret) break;
-		}
-
-		// Seek to after the string contents
-		int seek_error = fseek(as->outfile, fpos + write_len, SEEK_SET);
-		if (seek_error) {
-			stasm_msgf(SMT_ERROR, "failed to seek in output file, errno %d", errno);
-			if (ret == 0) ret = seek_error;
 		}
 	}
 	return ret;
@@ -521,7 +510,7 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 
 			// Note usage of label, including whether it is a raw usage
 			struct label_usage *lu = (struct label_usage*)malloc(sizeof(struct label_usage));
-			label_usage_init(lu, current_fo, curr_addr, opcode_size == 0 ? imm_bytes : 0);
+			label_usage_init(lu, current_fo, curr_addr, opcode_size == 0 ? imm_bytes : 0, pseudo_op);
 
 			// Label name or contents of string literal
 			bchar *contents;
@@ -542,7 +531,7 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 			if (!rec) {
 				// Label has not been used before. Add new label record to list with usage.
 				rec = (struct label_rec*)malloc(sizeof(struct label_rec));
-				label_rec_init(rec, string_lit, false, string_lit ? contents : bstrdupb(contents), 0, lu);
+				label_rec_init(rec, string_lit, false, string_lit ? contents : bstrdupb(contents), 0, 0, lu);
 				rec->prev = as->label_recs;
 				as->label_recs = rec;
 
@@ -595,164 +584,8 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 
 		if (pseudo_op && imm_bytes_reqd) {
 			// Compact pseudo-ops when immediate value is known
-			int opcode = -1;
 			bool oob = false;
-			switch (code) {
-			case ASM_CMD_BRZ16:
-				sdt = sdt_icontain(imm_val);
-				switch (sdt) {
-				case SDT_I8:
-					opcode = op_rbrz16i8;
-					break;
-				case SDT_I16:
-					opcode = op_rbrz16i16;
-					break;
-				case SDT_I32:
-					opcode = op_rbrz16i32;
-					break;
-				case SDT_I64:
-					// There is no conditional branch by 64-bit immediate opcode
-					oob = true;
-					break;
-				default:
-					assert(false);
-				}
-				break;
-			case ASM_CMD_BRZ32:
-				sdt = sdt_icontain(imm_val);
-				switch (sdt) {
-				case SDT_I8:
-					opcode = op_rbrz32i8;
-					break;
-				case SDT_I16:
-					opcode = op_rbrz32i16;
-					break;
-				case SDT_I32:
-					opcode = op_rbrz32i32;
-					break;
-				case SDT_I64:
-					// There is no conditional branch by 64-bit immediate opcode
-					oob = true;
-					break;
-				default:
-					assert(false);
-				}
-				break;
-			case ASM_CMD_BRZ64:
-				sdt = sdt_icontain(imm_val);
-				switch (sdt) {
-				case SDT_I8:
-					opcode = op_rbrz64i8;
-					break;
-				case SDT_I16:
-					opcode = op_rbrz64i16;
-					break;
-				case SDT_I32:
-					opcode = op_rbrz64i32;
-					break;
-				case SDT_I64:
-					// There is no conditional branch by 64-bit immediate opcode
-					oob = true;
-					break;
-				default:
-					assert(false);
-				}
-				break;
-			case ASM_CMD_BRZ8:
-				sdt = sdt_icontain(imm_val);
-				switch (sdt) {
-				case SDT_I8:
-					opcode = op_rbrz8i8;
-					break;
-				case SDT_I16:
-					opcode = op_rbrz8i16;
-					break;
-				case SDT_I32:
-					opcode = op_rbrz8i32;
-					break;
-				case SDT_I64:
-					// There is no conditional branch by 64-bit immediate opcode
-					oob = true;
-					break;
-				default:
-					assert(false);
-				}
-				break;
-
-			case ASM_CMD_DATA16:
-			case ASM_CMD_DATA32:
-			case ASM_CMD_DATA64:
-			case ASM_CMD_DATA8:
-				// We don't compact raw data
-				break;
-
-			case ASM_CMD_PUSH16:
-				if (imm_bytes_reqd < 2) {
-					if (imm_val < 0) opcode = op_push8asi16;
-					else opcode = op_push8asu16;
-				}
-				else {
-					opcode = op_push16as16;
-				}
-				break;
-			case ASM_CMD_PUSH32:
-				if (imm_bytes_reqd < 2) {
-					if (imm_val < 0) opcode = op_push8asi32;
-					else opcode = op_push8asu32;
-				}
-				else if (imm_bytes_reqd < 3) {
-					if (imm_val < 0) opcode = op_push16asi32;
-					else opcode = op_push16asu32;
-				}
-				else {
-					opcode = op_push32as32;
-				}
-				break;
-			case ASM_CMD_PUSH64:
-				if (imm_bytes_reqd < 2) {
-					if (imm_val < 0) opcode = op_push8asi64;
-					else opcode = op_push8asu64;
-				}
-				else if (imm_bytes_reqd < 3) {
-					if (imm_val < 0) opcode = op_push16asi64;
-					else opcode = op_push16asu64;
-				}
-				else if (imm_bytes_reqd < 5) {
-					if (imm_val < 0) opcode = op_push32asi64;
-					else opcode = op_push32asu64;
-				}
-				else {
-					opcode = op_push64as64;
-				}
-				break;
-			case ASM_CMD_PUSH8:
-				// Already as compact as possible
-				opcode = op_push8as8;
-				break;
-
-			case ASM_CMD_RJMP:
-				sdt = sdt_icontain(imm_val);
-				switch (sdt) {
-				case SDT_I8:
-					opcode = op_rjmpi8;
-					break;
-				case SDT_I16:
-					opcode = op_rjmpi16;
-					break;
-				case SDT_I32:
-					opcode = op_rjmpi32;
-					break;
-				case SDT_I64:
-					// There is no relative branch by 64-bit immediate opcode
-					oob = true;
-					break;
-				default:
-					assert(false);
-				}
-				break;
-			default:
-				assert(false);
-			}
+			int opcode = assembler_compact_op(code, pseudo_op, imm_val, &oob);
 			if (oob) {
 				stasm_msgft(SMT_ERROR, tlineno, tcharno, "immediate value out of range for opcode");
 				return 1;
@@ -1279,4 +1112,221 @@ void assembler_get_include(struct assembler *as, bchar **filename)
 bool assembler_finish(struct assembler *as)
 {
 	return as->state == APS_DEFAULT;
+}
+
+// Returns the pseudo-op which may evaluate to the given opcode or -1
+static int assembler_psop_for_op(int opcode)
+{
+	switch (opcode) {
+	case op_rbrz16i8:
+	case op_rbrz16i16:
+	case op_rbrz16i32:
+		return ASM_CMD_BRZ16;
+	case op_rbrz32i8:
+	case op_rbrz32i16:
+	case op_rbrz32i32:
+		return ASM_CMD_BRZ32;
+	case op_rbrz64i8:
+	case op_rbrz64i16:
+	case op_rbrz64i32:
+		return ASM_CMD_BRZ64;
+	case op_rbrz8i8:
+	case op_rbrz8i16:
+	case op_rbrz8i32:
+		return ASM_CMD_BRZ8;
+	case op_rjmpi8:
+	case op_rjmpi16:
+	case op_rjmpi32:
+		return ASM_CMD_RJMP;
+	case op_push8asu16:
+	case op_push8asi16:
+	case op_push16as16:
+		return ASM_CMD_PUSH16;
+	case op_push8asu32:
+	case op_push8asi32:
+	case op_push16asu32:
+	case op_push16asi32:
+	case op_push32as32:
+		return ASM_CMD_PUSH32;
+	case op_push8asu64:
+	case op_push8asi64:
+	case op_push16asu64:
+	case op_push16asi64:
+	case op_push32asu64:
+	case op_push32asi64:
+	case op_push64as64:
+		return ASM_CMD_PUSH64;
+	case op_push8as8:
+		return ASM_CMD_PUSH8;
+	default:
+		return -1;
+	}
+}
+
+int assembler_compact_op(int opcode, bool pseudo_op, int64_t imm_val, bool *oob)
+{
+	int psop = pseudo_op ? opcode : assembler_psop_for_op(opcode);
+	opcode = -1;
+	int sdt = -1, imm_bytes_reqd = -1;
+	*oob = false;
+	switch (psop) {
+	case ASM_CMD_BRZ16:
+		sdt = sdt_icontain(imm_val);
+		switch (sdt) {
+		case SDT_I8:
+			opcode = op_rbrz16i8;
+			break;
+		case SDT_I16:
+			opcode = op_rbrz16i16;
+			break;
+		case SDT_I32:
+			opcode = op_rbrz16i32;
+			break;
+		case SDT_I64:
+			// There is no conditional branch by 64-bit immediate opcode
+			*oob = true;
+			break;
+		default:
+			assert(false);
+		}
+		break;
+	case ASM_CMD_BRZ32:
+		sdt = sdt_icontain(imm_val);
+		switch (sdt) {
+		case SDT_I8:
+			opcode = op_rbrz32i8;
+			break;
+		case SDT_I16:
+			opcode = op_rbrz32i16;
+			break;
+		case SDT_I32:
+			opcode = op_rbrz32i32;
+			break;
+		case SDT_I64:
+			// There is no conditional branch by 64-bit immediate opcode
+			*oob = true;
+			break;
+		default:
+			assert(false);
+		}
+		break;
+	case ASM_CMD_BRZ64:
+		sdt = sdt_icontain(imm_val);
+		switch (sdt) {
+		case SDT_I8:
+			opcode = op_rbrz64i8;
+			break;
+		case SDT_I16:
+			opcode = op_rbrz64i16;
+			break;
+		case SDT_I32:
+			opcode = op_rbrz64i32;
+			break;
+		case SDT_I64:
+			// There is no conditional branch by 64-bit immediate opcode
+			*oob = true;
+			break;
+		default:
+			assert(false);
+		}
+		break;
+	case ASM_CMD_BRZ8:
+		sdt = sdt_icontain(imm_val);
+		switch (sdt) {
+		case SDT_I8:
+			opcode = op_rbrz8i8;
+			break;
+		case SDT_I16:
+			opcode = op_rbrz8i16;
+			break;
+		case SDT_I32:
+			opcode = op_rbrz8i32;
+			break;
+		case SDT_I64:
+			// There is no conditional branch by 64-bit immediate opcode
+			*oob = true;
+			break;
+		default:
+			assert(false);
+		}
+		break;
+
+	case ASM_CMD_DATA16:
+	case ASM_CMD_DATA32:
+	case ASM_CMD_DATA64:
+	case ASM_CMD_DATA8:
+		// We don't compact raw data
+		break;
+
+	case ASM_CMD_PUSH16:
+		imm_bytes_reqd = min_bytes_for_val(imm_val);
+		if (imm_bytes_reqd < 2) {
+			if (imm_val < 0) opcode = op_push8asi16;
+			else opcode = op_push8asu16;
+		}
+		else {
+			opcode = op_push16as16;
+		}
+		break;
+	case ASM_CMD_PUSH32:
+		imm_bytes_reqd = min_bytes_for_val(imm_val);
+		if (imm_bytes_reqd < 2) {
+			if (imm_val < 0) opcode = op_push8asi32;
+			else opcode = op_push8asu32;
+		}
+		else if (imm_bytes_reqd < 3) {
+			if (imm_val < 0) opcode = op_push16asi32;
+			else opcode = op_push16asu32;
+		}
+		else {
+			opcode = op_push32as32;
+		}
+		break;
+	case ASM_CMD_PUSH64:
+		imm_bytes_reqd = min_bytes_for_val(imm_val);
+		if (imm_bytes_reqd < 2) {
+			if (imm_val < 0) opcode = op_push8asi64;
+			else opcode = op_push8asu64;
+		}
+		else if (imm_bytes_reqd < 3) {
+			if (imm_val < 0) opcode = op_push16asi64;
+			else opcode = op_push16asu64;
+		}
+		else if (imm_bytes_reqd < 5) {
+			if (imm_val < 0) opcode = op_push32asi64;
+			else opcode = op_push32asu64;
+		}
+		else {
+			opcode = op_push64as64;
+		}
+		break;
+	case ASM_CMD_PUSH8:
+		// Already as compact as possible
+		opcode = op_push8as8;
+		break;
+
+	case ASM_CMD_RJMP:
+		sdt = sdt_icontain(imm_val);
+		switch (sdt) {
+		case SDT_I8:
+			opcode = op_rjmpi8;
+			break;
+		case SDT_I16:
+			opcode = op_rjmpi16;
+			break;
+		case SDT_I32:
+			opcode = op_rjmpi32;
+			break;
+		case SDT_I64:
+			// There is no relative branch by 64-bit immediate opcode
+			*oob = true;
+			break;
+		default:
+			assert(false);
+		}
+		break;
+	default:
+		assert(false);
+	}
+	return opcode;
 }

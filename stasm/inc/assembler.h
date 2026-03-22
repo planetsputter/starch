@@ -48,3 +48,8 @@ void assembler_get_include(struct assembler*, bchar **filename);
 // Returns whether the input token stream could be finished successfully.
 // The input stream cannot be finished successfully within a statement.
 bool assembler_finish(struct assembler*);
+
+// Returns the opcode with the smallest immediate value required to perform the function
+// of the given opcode (or pseudo-op) with the immediate value, or -1 on error.
+// Sets *oob if out of bounds.
+int assembler_compact_op(int opcode, bool pseudo_op, int64_t imm_val, bool *oob);
