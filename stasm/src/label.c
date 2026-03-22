@@ -191,6 +191,11 @@ int label_usage_apply(const struct label_usage *lu, FILE *outfile, uint64_t labe
 		}
 
 		// Truncate excess content
+		ret = fflush(outfile);
+		if (ret) {
+			stasm_msgf(SMT_ERROR, "failed to flush output file, errno %d", errno);
+			return 1;
+		}
 		ret = ftruncate(fileno(outfile), fpos);
 		if (ret) {
 			stasm_msgf(SMT_ERROR, "failed to truncate output file, errno %d", errno);
