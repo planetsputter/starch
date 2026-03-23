@@ -14,18 +14,20 @@
 struct label_usage {
 	long foffset; // Offset of instruction in file
 	uint64_t addr; // Address of usage
+	int si; // Section index in which usage occurs
 	int data_len; // If non-zero, the length of the raw data label
 	bool pseudo_op; // Whether a pseudo-op was used in the original source
+	int opcode; // The opcode (not pseudo-op) written to the file
 	struct label_usage *prev;
 };
 
-// Initializes the given label usage with the given file offset, address, raw data length, and pseudo-op status
-void label_usage_init(struct label_usage *lu, long foffset, uint64_t addr, int data_len, bool pseudo_op);
+// Initializes the given label usage with the given file offset, address, section index, raw data length, pseudo-op status, and opcode
+void label_usage_init(struct label_usage *lu, long foffset, uint64_t addr, int si, int data_len, bool pseudo_op, int opcode);
 
 // Applies the given label usage to the given output stub file at the given address, updating the given records
 // if necessary due to compaction of a pseudo-op.
 struct label_rec;
-int label_usage_apply(const struct label_usage *lu, FILE *outfile, uint64_t label_addr, struct label_rec *recs);
+int label_usage_apply(struct label_usage *lu, FILE *outfile, uint64_t label_addr, struct label_rec *recs);
 
 //
 // Label record

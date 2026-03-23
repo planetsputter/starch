@@ -12,17 +12,19 @@
 #include "util.h"
 
 // Initializes the given label usage
-void label_usage_init(struct label_usage *lu, long foffset, uint64_t addr, int data_len, bool pseudo_op)
+void label_usage_init(struct label_usage *lu, long foffset, uint64_t addr, int si, int data_len, bool pseudo_op, int opcode)
 {
 	lu->foffset = foffset;
 	lu->addr = addr;
+	lu->si = si;
 	lu->data_len = data_len;
 	lu->pseudo_op = pseudo_op;
+	lu->opcode = opcode;
 	lu->prev = NULL;
 }
 
 // Applies the given label usage in the given file once the label address is known
-int label_usage_apply(const struct label_usage *lu, FILE *outfile, uint64_t label_addr, struct label_rec *recs)
+int label_usage_apply(struct label_usage *lu, FILE *outfile, uint64_t label_addr, struct label_rec *recs)
 {
 	// Record original file position
 	long original_fpos = ftell(outfile);
@@ -58,12 +60,14 @@ int label_usage_apply(const struct label_usage *lu, FILE *outfile, uint64_t labe
 		opcode_len = 1;
 
 		// Read the instruction opcode
-		size_t bc = fread(buff, 1, 1, outfile);
+		size_t bc = fread(buff, 1, opcode_len, outfile);
 		if (bc != 1) {
 			stasm_msgf(SMT_ERROR, "failed to read from output file, errno %d", errno);
 			return 1;
 		}
 		opcode = buff[0];
+
+		assert(opcode == lu->opcode);
 
 		// Get the immediate type
 		int sdt = imm_type_for_opcode(opcode);
@@ -98,6 +102,7 @@ int label_usage_apply(const struct label_usage *lu, FILE *outfile, uint64_t labe
 				stasm_msgf(SMT_ERROR, "failed to compact opcode");
 				return 1;
 			}
+			lu->opcode = opcode;
 			sdt = imm_type_for_opcode(opcode);
 			imm_len_reqd = sdt_size(sdt);
 		}
@@ -212,7 +217,7 @@ int label_usage_apply(const struct label_usage *lu, FILE *outfile, uint64_t labe
 
 		// Update all stub section headers, noting which section contains the label usage
 		int compact_si = -1;
-		long end_compact_section = 0;
+		//long end_compact_section = 0;
 		struct stub_sec sec;
 		for (int si = 0; si < nsec; si++) {
 			// Load the section header information and seek to beginning of section data
@@ -222,57 +227,38 @@ int label_usage_apply(const struct label_usage *lu, FILE *outfile, uint64_t labe
 				return 1;
 			}
 
-			// Seek to end of section data. The last section will not have a size yet
-			// but will continue to the end of the file.
+			// Seek to end of section data
 			if (si == nsec - 1) {
+				// The last section will not have a size yet but will continue to the end of the file
 				ret = fseek(outfile, 0, SEEK_END);
+				if (compact_si < 0) {
+					compact_si = si;
+				}
 			}
 			else {
-				ret = fseek(outfile, sec.size, SEEK_CUR);
+				// Determine end of section file position
+				long eos = sec.fpos + sec.size;
+				if (eos > begin_compact_fpos) {
+					eos -= compact_count;
+					if (compact_si < 0) {
+						compact_si = si;
+					}
+				}
+				ret = fseek(outfile, eos, SEEK_SET);
 			}
 			if (ret) {
 				stasm_msgf(SMT_ERROR, "failed to seek in output file, errno %d", errno);
 				return 1;
 			}
 
-			// Get file position
-			fpos = ftell(outfile);
-			if (fpos < 0) {
-				stasm_msgf(SMT_ERROR, "failed to get position in output file, errno %d", errno);
+			// Save the section.
+			// Note: We save the last section so that its beginning file position gets updated
+			// even though we may continue to write to it and save it again later.
+			ret = stub_save_section(outfile, si, &sec);
+			if (ret) {
+				stasm_msgf(SMT_ERROR, "failed to save stub section, stub error %d", ret);
 				return 1;
 			}
-
-			// Adjust file position if end of section has been moved
-			if (fpos >= begin_compact_fpos) {
-				if (end_compact_section == 0) {
-					end_compact_section = fpos;
-					if (si < nsec - 1) {
-						end_compact_section -= compact_count;
-					}
-					compact_si = si;
-				}
-
-				// Do not save last section, which is in progress
-				if (si < nsec - 1) {
-					ret = fseek(outfile, -compact_count, SEEK_CUR);
-					if (ret) {
-						stasm_msgf(SMT_ERROR, "failed to seek in output file, errno %d", errno);
-						return 1;
-					}
-
-					// Re-write section header
-					ret = stub_save_section(outfile, si, &sec);
-					if (ret) {
-						stasm_msgf(SMT_ERROR, "failed to save stub section, stub error %d", ret);
-						return 1;
-					}
-				}
-			}
-		}
-
-		if (end_compact_section == 0) {
-			stasm_msgf(SMT_ERROR, "failed to identify stub section for label usage");
-			return 1;
 		}
 
 		// Adjust all label record and usage file positions.
@@ -291,22 +277,10 @@ int label_usage_apply(const struct label_usage *lu, FILE *outfile, uint64_t labe
 				if (l->foffset > begin_compact_fpos) {
 					// Adjust file positions of label usages later in the file
 					l->foffset -= compact_count;
-					if (l->foffset <= end_compact_section) {
+					if (l->si == compact_si) {
 						// Adjust addresses of label usages later in the same section as the compacted usage
 						l->addr -= compact_count;
 					}
-				}
-			}
-		}
-
-		// Now that all labels and usages are updated, re-apply each one.
-		// This is definitely not the most efficient approach, but it is the easiest way to be correct.
-		for (struct label_rec *rec = recs; rec; rec = rec->prev) {
-			if (!rec->defined) continue;
-			for (struct label_usage *l = rec->usages; l; l = l->prev) {
-				ret = label_usage_apply(l, outfile, rec->addr, recs);
-				if (ret) { // Error will already have been logged
-					return ret;
 				}
 			}
 		}
@@ -317,6 +291,22 @@ int label_usage_apply(const struct label_usage *lu, FILE *outfile, uint64_t labe
 	if (ret) {
 		stasm_msgf(SMT_ERROR, "failed to seek in output file, errno %d", errno);
 		return 1;
+	}
+
+	if (compact_count > 0) {
+		// Now that all labels and usages are updated, re-apply each one.
+		// Since the addresses of labels and usages may have changed, it is possible they can be compacted again.
+		// This is definitely not the most efficient approach, but it is the easiest way to be correct.
+		// Doing this will potentially move the file position again and must be done last.
+		for (struct label_rec *rec = recs; rec; rec = rec->prev) {
+			if (!rec->defined) continue;
+			for (struct label_usage *l = rec->usages; l; l = l->prev) {
+				ret = label_usage_apply(l, outfile, rec->addr, recs);
+				if (ret) { // Error will already have been logged
+					return ret;
+				}
+			}
+		}
 	}
 
 	return 0;

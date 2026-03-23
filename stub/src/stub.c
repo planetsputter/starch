@@ -12,6 +12,7 @@
 
 void stub_sec_init(struct stub_sec *sec, uint64_t addr, uint8_t flags, uint64_t size)
 {
+	sec->fpos = 0;
 	sec->addr = addr;
 	sec->flags = flags;
 	sec->size = size;
@@ -192,6 +193,7 @@ int stub_load_section(FILE *file, int section, struct stub_sec *sec)
 	if (bfo > efo) {
 		return STUB_ERROR_INVALID_FILE_OFFSET;
 	}
+	sec->fpos = bfo;
 	sec->addr = get_little64(temp_array);
 	sec->flags = flags;
 	sec->size = efo - bfo;
@@ -322,8 +324,9 @@ int stub_save_section(FILE *file, int index, struct stub_sec *sec)
 		return STUB_ERROR_WRITE_FAILURE;
 	}
 
-	// Set the actual section size
+	// Set the actual section size and begin file position
 	sec->size = (uint64_t)fpos - prev_efo;
+	sec->fpos = prev_efo;
 
 	if (index == nsec) { // Saving this section increased the number of sections by one
 		if (fseek(file, STUB_HEADER_SIZE + 4, SEEK_SET)) {

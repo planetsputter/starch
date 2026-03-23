@@ -254,7 +254,6 @@ void assembler_init(struct assembler *as, FILE *outfile)
 	as->word2 = NULL;
 	as->include = NULL;
 	as->sec_count = 0;
-	as->curr_sec_fo = 0;
 	stub_sec_init(&as->curr_sec, 0, 0, 0);
 	as->label_recs = NULL;
 }
@@ -293,7 +292,7 @@ static int assembler_handle_label_def(struct assembler *as, bchar *token, int tl
 		return 1;
 	}
 	// Compute label address
-	uint64_t addr = fpos - as->curr_sec_fo + as->curr_sec.addr;
+	uint64_t addr = fpos - as->curr_sec.fpos + as->curr_sec.addr;
 
 	int ret = 0;
 	// Look up any existing label record
@@ -319,9 +318,34 @@ static int assembler_handle_label_def(struct assembler *as, bchar *token, int tl
 		rec->fpos = fpos; // File position is now known
 		rec->si = as->sec_count - 1; // Section index is now known
 		for (struct label_usage *lu = rec->usages; lu; lu = lu->prev) {
-			// This will preserve the file position
+			// This may adjust the file position due to compaction of pseudo-ops.
+			// It may adjust other things such as label addresses.
 			ret = label_usage_apply(lu, as->outfile, rec->addr, as->label_recs);
 			if (ret) break;
+		}
+
+		if (ret == 0) {
+			// Get current file position
+			fpos = ftell(as->outfile);
+			if (fpos < 0) {
+				stasm_msgf(SMT_ERROR, "failed to get offset in output file, errno %d", errno);
+				return 1;
+			}
+
+			// Reload section data in case section start file position changed due to compaction of previous section.
+			// This will also seek to section start.
+			ret = stub_load_section(as->outfile, as->sec_count - 1, &as->curr_sec);
+			if (ret) {
+				stasm_msgf(SMT_ERROR, "failed to load section %d in output file, stub error %d", as->sec_count - 1, ret);
+				return 1;
+			}
+
+			// Return to the original position
+			ret = fseek(as->outfile, fpos, SEEK_SET);
+			if (ret) {
+				stasm_msgf(SMT_ERROR, "failed to seek in output file, errno %d", errno);
+				return 1;
+			}
 		}
 	}
 	return ret;
@@ -348,8 +372,8 @@ static int assembler_handle_section(struct assembler *as, uint64_t addr)
 		stasm_msgf(SMT_ERROR, "failed to load stub section %d with error %d", as->sec_count, ret);
 		return ret;
 	}
-	as->curr_sec_fo = ftell(as->outfile);
-	if (as->curr_sec_fo < 0) {
+	as->curr_sec.fpos = ftell(as->outfile);
+	if (as->curr_sec.fpos < 0) {
 		stasm_msgf(SMT_ERROR, "failed to get offset of section %d with error %d", as->sec_count, ret);
 		ret = 1;
 	}
@@ -382,7 +406,7 @@ static int assembler_handle_strings(struct assembler *as)
 			break;
 		}
 		// Compute string content address
-		uint64_t addr = fpos - as->curr_sec_fo + as->curr_sec.addr;
+		uint64_t addr = fpos - as->curr_sec.fpos + as->curr_sec.addr;
 
 		// Write the string literal contents to the file
 		size_t write_len = bstrlen(rec->label) + 1;
@@ -397,10 +421,37 @@ static int assembler_handle_strings(struct assembler *as)
 		assert(rec->usages);
 		rec->defined = true;
 		rec->addr = addr; // Address is now known
+		rec->fpos = fpos; // File position is now known
+		rec->si = as->sec_count - 1; // Section index is now known
 		for (struct label_usage *lu = rec->usages; lu; lu = lu->prev) {
-			// This will preserve the file position
-			ret = label_usage_apply(lu, as->outfile, addr, as->label_recs);
+			// This may adjust the file position due to compaction of pseudo-ops
+			// It may adjust other things such as label addresses.
+			ret = label_usage_apply(lu, as->outfile, rec->addr, as->label_recs);
 			if (ret) break;
+		}
+
+		if (ret == 0) {
+			// Get current file position
+			fpos = ftell(as->outfile);
+			if (fpos < 0) {
+				stasm_msgf(SMT_ERROR, "failed to get offset in output file, errno %d", errno);
+				return 1;
+			}
+
+			// Reload section data in case section start file position changed due to compaction of previous section.
+			// This will also seek to section start.
+			ret = stub_load_section(as->outfile, as->sec_count - 1, &as->curr_sec);
+			if (ret) {
+				stasm_msgf(SMT_ERROR, "failed to load section %d in output file, stub error %d", as->sec_count - 1, ret);
+				return 1;
+			}
+
+			// Return to the original position
+			ret = fseek(as->outfile, fpos, SEEK_SET);
+			if (ret) {
+				stasm_msgf(SMT_ERROR, "failed to seek in output file, errno %d", errno);
+				return 1;
+			}
 		}
 	}
 	return ret;
@@ -418,7 +469,7 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 	int opcode_size = 1; // For now we assume opcode size is 1 byte
 	int opcode, sdt;
 	if (pseudo_op) {
-		// For pseudo-ops, put the worst-case (max program size) opcode
+		// For pseudo-ops, put the worst-case (max program size) opcode. These may be compacted later.
 		switch (code) {
 		case ASM_CMD_BRZ16:
 			opcode = op_rbrz16i32;
@@ -499,6 +550,7 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 		int64_t imm_val = 0;
 		assert(sdt != SDT_VOID);
 		bool string_lit = token[0] == '"';
+		struct label_usage *lu = NULL;
 		if (string_lit || token[0] == ':') { // String literal or label
 			// Get current file offset
 			long current_fo = ftell(as->outfile);
@@ -507,11 +559,11 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 				return 1;
 			}
 			// Compute current address
-			uint64_t curr_addr = as->curr_sec.addr + current_fo - as->curr_sec_fo;
+			uint64_t curr_addr = as->curr_sec.addr + current_fo - as->curr_sec.fpos;
 
 			// Note usage of label, including whether it is a raw usage
-			struct label_usage *lu = (struct label_usage*)malloc(sizeof(struct label_usage));
-			label_usage_init(lu, current_fo, curr_addr, opcode_size == 0 ? imm_bytes : 0, pseudo_op);
+			lu = (struct label_usage*)malloc(sizeof(struct label_usage));
+			label_usage_init(lu, current_fo, curr_addr, as->sec_count - 1, opcode_size == 0 ? imm_bytes : 0, pseudo_op, opcode);
 
 			// Label name or contents of string literal
 			bchar *contents;
@@ -583,18 +635,24 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 			imm_bytes_reqd = min_bytes_for_val(imm_val);
 		}
 
-		if (pseudo_op && imm_bytes_reqd) {
+		if (pseudo_op && imm_bytes_reqd && opcode_size > 0) {
 			// Compact pseudo-ops when immediate value is known
 			bool oob = false;
-			int opcode = assembler_compact_op(code, pseudo_op, imm_val, &oob);
+			opcode = assembler_compact_op(code, pseudo_op, imm_val, &oob);
 			if (oob) {
 				stasm_msgft(SMT_ERROR, tlineno, tcharno, "immediate value out of range for opcode");
 				return 1;
 			}
-			if (opcode >= 0) {
-				buff[0] = opcode;
-				sdt = imm_type_for_opcode(opcode);
-				imm_bytes = sdt_size(sdt);
+			if (opcode < 0) {
+				stasm_msgft(SMT_ERROR, tlineno, tcharno, "unable to compact opcode");
+				return 1;
+			}
+			buff[0] = opcode;
+			sdt = imm_type_for_opcode(opcode);
+			imm_bytes = sdt_size(sdt);
+
+			if (lu) { // Update opcode for label usage
+				lu->opcode = opcode;
 			}
 		}
 

@@ -24,7 +24,6 @@ struct assembler {
 
 	// Output stub file sections
 	int sec_count;
-	long curr_sec_fo; // File offset of current section data
 	struct stub_sec curr_sec; // The current section
 
 	struct label_rec *label_recs; // Label records

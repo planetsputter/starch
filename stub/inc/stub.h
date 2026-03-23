@@ -13,6 +13,7 @@ enum {
 
 // Section of a stub file
 struct stub_sec {
+	long fpos;
 	uint64_t addr;
 	uint8_t flags;
 	uint64_t size;
@@ -56,6 +57,6 @@ int stub_init(FILE *file, int maxnsec);
 
 // Sets the address and flags for the given section in the given stub file,
 // using the current file position as the section end to determine the section size.
-// Updates the size member of the given section structure.
+// Updates the size and fpos members of the given section structure.
 // Returns 0 on success.
 int stub_save_section(FILE *file, int index, struct stub_sec *sec);
