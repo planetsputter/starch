@@ -8,6 +8,7 @@
 
 // Variables set by command-line arguments
 const char *arg_help = NULL;
+const char *arg_addr = NULL;
 const char *arg_bin = NULL;
 const char *arg_output = NULL;
 
@@ -19,6 +20,15 @@ struct carg_desc arg_descs[] = {
 		&arg_help,      // Value
 		false,          // Required
 		"show usage",   // Usage text
+		NULL            // Value hint
+	},
+	{
+		CARG_TYPE_UNARY, // Type
+		'\0',            // Flag
+		"--addr",       // Name
+		&arg_addr,      // Value
+		false,          // Required
+		"output addresses", // Usage text
 		NULL            // Value hint
 	},
 	{
@@ -140,6 +150,7 @@ int main(int argc, const char *argv[])
 
 		// Disassemble all bytes in section
 		for (uint64_t di = 0; di < sec.size; ) {
+			uint64_t op_addr = sec.addr + di;
 			int opcode = fgetc(infile);
 			if (opcode == EOF) {
 				fprintf(stderr, "error: unexpected EOF in \"%s\"\n", arg_bin);
@@ -182,6 +193,16 @@ int main(int argc, const char *argv[])
 				val |= b << (j * 8);
 			}
 			if (ret) break;
+
+			// Print address if requested
+			if (arg_addr) {
+				ret = fprintf(outfile, "%08"PRIx64" ", op_addr);
+				if (ret < 0) {
+					fprintf(stderr, "error: failed to write to \"%s\"\n", arg_output ? arg_output : "stdout");
+					ret = 1;
+					break;
+				}
+			}
 
 			// Print opcode name
 			ret = fprintf(outfile, "%s", name);
