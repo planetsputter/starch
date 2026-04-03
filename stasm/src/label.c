@@ -20,6 +20,7 @@ void label_usage_init(struct label_usage *lu, long foffset, uint64_t addr, int s
 	lu->data_len = data_len;
 	lu->pseudo_op = pseudo_op;
 	lu->opcode = opcode;
+	lu->needs_apply = true;
 	lu->prev = NULL;
 }
 
@@ -139,6 +140,9 @@ int label_usage_apply(struct label_usage *lu, FILE *outfile, uint64_t label_addr
 		stasm_msgf(SMT_ERROR, "failed to write to output file, errno %d", errno);
 		return 1;
 	}
+
+	// Applied this label
+	lu->needs_apply = false;
 
 	int compact_count = imm_len - imm_len_reqd;
 	if (compact_count > 0) {
@@ -261,16 +265,17 @@ int label_usage_apply(struct label_usage *lu, FILE *outfile, uint64_t label_addr
 			}
 		}
 
-		// Adjust all label record and usage file positions.
-		// Note that this will also adjust the file position of *lu passed to this function.
-		// Labels defined at the beginning or end of a section have a file position which is ambiguous.
+		// Adjust all label record and usage file positions and addresses
 		for (struct label_rec *rec = recs; rec; rec = rec->prev) {
+			bool reapply_rec = false;
 			if (rec->defined && rec->fpos > begin_compact_fpos) {
 				// Adjust file positions of labels defined later in the file
 				rec->fpos -= compact_count;
 				if (rec->si == compact_si) {
-					// Adjust addresses of labels defined later in the same section as the compacted usage
+					// Adjust addresses of labels defined later in the same section as the compacted usage.
+					// Because the address is changing, all usages of this label will need to be reapplied.
 					rec->addr -= compact_count;
+					reapply_rec = true;
 				}
 			}
 			for (struct label_usage *l = rec->usages; l; l = l->prev) {
@@ -280,7 +285,17 @@ int label_usage_apply(struct label_usage *lu, FILE *outfile, uint64_t label_addr
 					if (l->si == compact_si) {
 						// Adjust addresses of label usages later in the same section as the compacted usage
 						l->addr -= compact_count;
+
+						// If this was a relative operation, the usage will need to be reapplied
+						int jmp_br = 0, use_delta = 0;
+						opcode_is_jmp_br(l->opcode, &jmp_br, &use_delta);
+						if (use_delta) {
+							l->needs_apply = true;
+						}
 					}
+				}
+				if (reapply_rec) {
+					l->needs_apply = true;
 				}
 			}
 		}
@@ -291,22 +306,6 @@ int label_usage_apply(struct label_usage *lu, FILE *outfile, uint64_t label_addr
 	if (ret) {
 		stasm_msgf(SMT_ERROR, "failed to seek in output file, errno %d", errno);
 		return 1;
-	}
-
-	if (compact_count > 0) {
-		// Now that all labels and usages are updated, re-apply each one.
-		// Since the addresses of labels and usages may have changed, it is possible they can be compacted again.
-		// This is definitely not the most efficient approach, but it is the easiest way to be correct.
-		// Doing this will potentially move the file position again and must be done last.
-		for (struct label_rec *rec = recs; rec; rec = rec->prev) {
-			if (!rec->defined) continue;
-			for (struct label_usage *l = rec->usages; l; l = l->prev) {
-				ret = label_usage_apply(l, outfile, rec->addr, recs);
-				if (ret) { // Error will already have been logged
-					return ret;
-				}
-			}
-		}
 	}
 
 	return 0;

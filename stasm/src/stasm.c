@@ -71,9 +71,6 @@ static void detect_non_help_arg(struct carg_desc *desc, const char *arg)
 	}
 }
 
-// Token line and character number
-static int tlineno, tcharno;
-
 //
 // Include file link
 //
@@ -275,13 +272,18 @@ int main(int argc, const char *argv[])
 	ucp c = 0;
 	bool tip = false; // Token in progress
 
+	// Token line and character number
+	int tlineno = 0, tcharno = 0;
+	// Current line and character number
+	int lineno = 1, charno = 0;
+
 	// Parse each byte of the source file and each included file
 	while (inc_chain) {
 		// Check whether a token is in progress
 		if (!tip && tokenizer_in_progress(&tokenizer)) {
 			tip = true;
-			tlineno = inc_chain->lineno;
-			tcharno = inc_chain->charno;
+			tlineno = lineno;
+			tcharno = charno;
 		}
 
 		// Assemble any emitted tokens
@@ -306,6 +308,8 @@ int main(int argc, const char *argv[])
 				}
 
 				// Add link to chain
+				inc_chain->lineno = lineno;
+				inc_chain->charno = charno;
 				struct inc_link *link = (struct inc_link*)malloc(sizeof(struct inc_link));
 				inc_link_init(link, filename, incfile);
 				link->prev = inc_chain;
@@ -324,14 +328,16 @@ int main(int argc, const char *argv[])
 			free(inc_chain);
 			inc_chain = prev;
 			if (!inc_chain) break; // Assembled all files
+			lineno = inc_chain->lineno;
+			charno = inc_chain->charno;
 		}
 		// Keep track of line and character numbers
 		else if (c == '\n') {
-			inc_chain->lineno++;
-			inc_chain->charno = 1;
+			lineno++;
+			charno = 1;
 		}
 		else {
-			inc_chain->charno++;
+			charno++;
 		}
 
 		// Get a character from the current input file
@@ -369,11 +375,9 @@ int main(int argc, const char *argv[])
 		tokenizer_parse(&tokenizer, c);
 	}
 
-	if (!assembler_finish(&as)) {
-		if (ret == 0) {
-			stasm_msgft(SMT_ERROR, tlineno, tcharno, "incomplete statement");
-			ret = 1;
-		}
+	int finret = assembler_finish(&as, lineno, charno);
+	if (ret == 0) {
+		ret = finret;
 	}
 
 	if (as.sec_count) {
@@ -383,17 +387,6 @@ int main(int argc, const char *argv[])
 			stasm_msgf(SMT_ERROR, "failed to save section %d to \"%s\"", as.sec_count - 1, arg_output);
 			if (ret == 0) {
 				ret = save_error;
-			}
-		}
-	}
-
-	// Check for undefined labels
-	if (ret == 0) {
-		for (struct label_rec *rec = as.label_recs; rec; rec = rec->prev) {
-			if (!rec->defined) {
-				stasm_msgf(SMT_ERROR, "undefined label \"%s\"", rec->label);
-				ret = 1;
-				break;
 			}
 		}
 	}

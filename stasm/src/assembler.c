@@ -1168,9 +1168,38 @@ void assembler_get_include(struct assembler *as, bchar **filename)
 	as->include = NULL;
 }
 
-bool assembler_finish(struct assembler *as)
+int assembler_finish(struct assembler *as, int lineno, int charno)
 {
-	return as->state == APS_DEFAULT;
+	if (as->state != APS_DEFAULT) {
+		stasm_msgft(SMT_ERROR, lineno, charno, "incomplete statement");
+		return 1;
+	}
+
+	// Reapply any labels usages that may need to be reapplied
+	int ret = 0;
+	bool applied_any = true;
+	while (ret == 0 && applied_any) {
+		applied_any = false;
+		for (struct label_rec *rec = as->label_recs; rec; rec = rec->prev) {
+			if (!rec->defined) {
+				// Undefined labels are an error at this point
+				stasm_msgf(SMT_ERROR, "undefined label \"%s\"", rec->label);
+				ret = 1;
+			}
+			else for (struct label_usage *lu = rec->usages; lu; lu = lu->prev) {
+				if (lu->needs_apply) {
+					// Applying a label may cause compaction that requires other labels to be re-applied
+					int applyret = label_usage_apply(lu, as->outfile, rec->addr, as->label_recs);
+					if (ret == 0) {
+						ret = applyret;
+					}
+					applied_any = true;
+				}
+			}
+		}
+	}
+
+	return ret;
 }
 
 // Returns the pseudo-op which may evaluate to the given opcode or -1

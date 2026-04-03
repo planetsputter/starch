@@ -44,9 +44,9 @@ int assembler_handle_token(struct assembler*, bchar *token, int tlineno, int tch
 void assembler_get_include(struct assembler*, bchar **filename);
 
 // Indicates that the input token stream has finished.
-// Returns whether the input token stream could be finished successfully.
-// The input stream cannot be finished successfully within a statement.
-bool assembler_finish(struct assembler*);
+// The current statement must be complete and all labels must be defined.
+// Returns zero on success.
+int assembler_finish(struct assembler*, int lineno, int charno);
 
 // Returns the opcode with the smallest immediate value required to perform the function
 // of the given opcode (or pseudo-op) with the immediate value, or -1 on error.
