@@ -156,8 +156,6 @@ define MAX_REPS 0x1000
 push64 $MAX_REPS
 ```
 
-Symbols may not be defined more than once. Symbol redefinition will result in an error.
-
 ### Auto-Symbols
 
 The Starch assembler recognizes some automatic symbols which have a default value when used if not defined by the user. Each Starch interrupt name can be used as an automatic symbol which evaluates to the interrupt number (for instance `$STINT_DIV_BY_ZERO`). Each Starch opcode name can be used as an automatic symbol which evaluates to the numeric value of the opcode when capitalized and preceded by "OP_" (for instance `$OP_HALT`). Important IO addresses also have automatic symbols (for instance `$IO_STDOUT_ADDR`).
@@ -168,8 +166,6 @@ push8 $STINT_ASSERT_FAILURE // Pushes the number of the assertion failure interr
 push8 $OP_HALT              // Pushes the value of the "halt" opcode as an 8-bit integer
 push64 $IO_STDOUT_ADDR      // Pushes the stdout IO address as a 64-bit integer
 ```
-
-Once used, an auto-symbol must not be defined manually. An auto-symbol may be defined manually before its first usage, in which case the defined value will be used instead of the automatic value.
 
 Example Files
 -------------

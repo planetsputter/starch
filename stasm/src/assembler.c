@@ -991,8 +991,13 @@ int assembler_handle_token(struct assembler *as, bchar *token, int tlineno, int 
 		case APS_INCLUDE2:
 			// Included file name is in word1
 			assert(as->include == NULL);
-			as->include = as->word1;
-			as->word1 = NULL;
+
+			// Parse string literal
+			as->include = balloc();
+			if (!parse_string_lit(as->word1, &as->include)) {
+				stasm_msgft(SMT_ERROR, tlineno, tcharno, "invalid string literal");
+				ret = 1;
+			}
 			break;
 
 		case APS_DATA2:

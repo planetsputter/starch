@@ -44,6 +44,95 @@ $STASM compact.sta
 $DISTASM a.stb --addr -o dis.sta
 cmp compact-dis.sta dis.sta
 
+# Check various errors are detected by the assembler
+echo testing rejection of opcode outside of section
+if $STASM <<EOF 2>/dev/null
+push64 0
+EOF
+then false; fi
+
+echo testing rejection of label outside of section
+if $STASM <<EOF 2>/dev/null
+:test_label
+EOF
+then false; fi
+
+echo testing rejection of strings outside of section
+if $STASM <<EOF 2>/dev/null
+strings
+EOF
+then false; fi
+
+echo testing rejection of invalid maximum number of sections
+if $STASM --maxnsec 0 </dev/null 2>/dev/null; then false; fi
+$STASM --maxnsec 1 </dev/null
+
+echo testing rejection of invalid section address
+if $STASM <<EOF 2>/dev/null
+section -1
+EOF
+then false; fi
+if $STASM <<EOF 2>/dev/null
+section a
+EOF
+then false; fi
+
+echo testing rejection of empty symbol name
+if $STASM <<EOF 2>/dev/null
+section 0x3000
+push64 \$
+EOF
+then false; fi
+
+echo testing rejection of empty label name
+if $STASM <<EOF 2>/dev/null
+section 0x3000
+:
+EOF
+then false; fi
+
+echo testing rejection of undefined symbol
+if $STASM <<EOF 2>/dev/null
+define a 1
+section 0x3000
+push64 \$b
+EOF
+then false; fi
+
+echo testing rejection of quoted symbol
+if $STASM <<EOF 2>/dev/null
+define "a" 1
+EOF
+then false; fi
+
+echo testing rejection of unquoted include
+if $STASM <<EOF 2>/dev/null
+include psops.sta
+EOF
+then false; fi
+
+echo testing rejection of duplicate labels
+if $STASM <<EOF 2>/dev/null
+section 0x3000
+:test
+:test
+EOF
+then false; fi
+
+echo testing rejection of invalid opcode
+if $STASM <<EOF 2>/dev/null
+section 0x3000
+test
+EOF
+then false; fi
+
+echo testing rejection of incomplete statement
+if $STASM <<EOF 2>/dev/null
+section 0x3000
+push64
+EOF
+then false; fi
+
 # Run individual tests
 echo testing add, sub
 $STASM test-add-sub.sta

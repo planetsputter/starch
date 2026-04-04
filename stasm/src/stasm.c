@@ -78,6 +78,10 @@ static void handle_arg(struct carg_desc *desc, const char *arg)
 			stasm_msgf(SMT_ERROR, "failed to parse --maxnsec argument \"%s\"", arg_maxnsec);
 			arg_error = true;
 		}
+		else if (maxnsec <= 0) {
+			stasm_msgf(SMT_ERROR, "invalid --maxnsec value %d", maxnsec);
+			arg_error = true;
+		}
 	}
 	else if (desc->value == &arg_output) {
 		// Output file name must not be empty or end in a slash
@@ -226,7 +230,7 @@ int main(int argc, const char *argv[])
 	if (arg_src) {
 		infile = fopen(arg_src, "r");
 		if (!infile) {
-			stasm_msgf(SMT_ERROR, "failed to open %s, errno %d", arg_src, errno);
+			stasm_msgf(SMT_ERROR, "failed to open \"%s\", errno %d", arg_src, errno);
 			return 1;
 		}
 	}
@@ -311,7 +315,7 @@ int main(int argc, const char *argv[])
 				// Open included file
 				FILE *incfile = fopen(filename, "r");
 				if (!incfile) {
-					stasm_msgf(SMT_ERROR, "failed to open %s, errno %d", filename, errno);
+					stasm_msgf(SMT_ERROR, "failed to open \"%s\", errno %d", filename, errno);
 					ret = 1;
 					break;
 				}
