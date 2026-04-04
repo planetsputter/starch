@@ -306,7 +306,7 @@ static int assembler_handle_label_def(struct assembler *as, bchar *token, int tl
 	}
 	else if (rec->defined) {
 		// A definition already exists for this label
-		stasm_msgft(SMT_ERROR, tlineno, tcharno, "definition already exists for label");
+		stasm_msgft(SMT_ERROR, tlineno, tcharno, "definition already exists for label \"%s\"", token);
 		ret = 1;
 	}
 	else {
