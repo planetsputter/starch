@@ -39,6 +39,10 @@ echo disassembling pseudo-ops
 $DISTASM a.stb -o dis.sta
 echo checking for proper disassembly
 cmp psops-dis.sta dis.sta
+echo checking compaction of pseudo-ops
+$STASM compact.sta
+$DISTASM a.stb --addr -o dis.sta
+cmp compact-dis.sta dis.sta
 
 # Run individual tests
 echo testing add, sub

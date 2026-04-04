@@ -1,0 +1,37 @@
+// compact.sta
+
+section 0x3000
+:test1
+push64 :test1
+:test3
+push64 :test2
+:test15
+push64 :test3
+push64 :test4
+push64 :test5
+push64 :test6
+push64 :test7
+:test16
+push64 :test8
+:test14
+
+section 0x4000
+:test5
+push64 :test9
+:test7
+push64 :test10
+:test9
+push64 :test11
+:test11
+push64 :test12
+:test13
+push64 :test13
+:test12
+push64 :test14
+:test10
+push64 :test15
+:test4
+:test8
+push64 :test16
+:test2
+:test6
