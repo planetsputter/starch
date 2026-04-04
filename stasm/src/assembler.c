@@ -1170,6 +1170,10 @@ void assembler_get_include(struct assembler *as, bchar **filename)
 
 int assembler_finish(struct assembler *as, int lineno, int charno)
 {
+	if (as->state == APS_WAIT_EOS) {
+		// An error has already been logged
+		return 1;
+	}
 	if (as->state != APS_DEFAULT) {
 		stasm_msgft(SMT_ERROR, lineno, charno, "incomplete statement");
 		return 1;
