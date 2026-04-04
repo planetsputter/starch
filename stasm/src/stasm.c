@@ -244,8 +244,8 @@ int main(int argc, const char *argv[])
 		if (infile != stdin) {
 			fclose(infile);
 		}
-		bfree(outfilename);
 		stasm_msgf(SMT_ERROR, "failed to open \"%s\" for writing, errno %d", outfilename, errno);
+		bfree(outfilename);
 		return 1;
 	}
 
@@ -256,8 +256,8 @@ int main(int argc, const char *argv[])
 		if (infile != stdin) {
 			fclose(infile);
 		}
-		bfree(outfilename);
 		stasm_msgf(SMT_ERROR, "failed to initialize output stub file \"%s\"", outfilename);
+		bfree(outfilename);
 		return 1;
 	}
 
