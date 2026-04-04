@@ -92,58 +92,49 @@ struct bpmap *bpmap = NULL;
 bool non_help_arg = false, arg_error = false;
 void handle_arg(struct carg_desc *desc, const char *arg)
 {
-	if (desc->value != &arg_help) {
-		non_help_arg = true;
+	if (desc->value == &arg_help) {
+		return;
 	}
+	non_help_arg = true;
 
-	if (!arg_help) {
-		if (desc->value == &arg_bp) {
-			char *end = NULL;
-			long addr = strtol(arg, &end, 0);
-			if (end == NULL || *end != '\0' || end == arg) {
-				fprintf(stderr, "error: failed to parse BP address: %s\n", arg);
-				arg_error = true;
-			}
-			else {
-				if (bpmap == NULL) bpmap = bpmap_create();
-				// Note: For now all counts are 1
-				bpmap = bpmap_insert(bpmap, addr, 1);
-			}
+	if (desc->value == &arg_bp) {
+		char *end = NULL;
+		long addr = strtol(arg, &end, 0);
+		if (end == NULL || *end != '\0' || end == arg) {
+			fprintf(stderr, "error: failed to parse BP address: %s\n", arg);
+			arg_error = true;
+		}
+		else {
+			if (bpmap == NULL) bpmap = bpmap_create();
+			// Note: For now all counts are 1
+			bpmap = bpmap_insert(bpmap, addr, 1);
 		}
 	}
 }
 
 int main(int argc, const char *argv[])
 {
+	int ret = 0;
+
 	// Parse command-line arguments
 	enum carg_error parse_error = carg_parse_args(
 		arg_descs,
 		handle_arg,
-		NULL,
+		carg_print_error,
 		argc,
 		argv
 	);
 	if (arg_help) {
 		// Usage requested
 		if (non_help_arg) {// Other arguments present
-			fprintf(stderr, "warning: Only printing usage. Other arguments present\n");
+			fprintf(stderr, "error: Only printing usage. Other arguments present\n");
+			ret = 1;
 		}
 		carg_print_usage(argv[0], arg_descs);
-		return parse_error != CARG_ERROR_NONE;
+		return ret;
 	}
-	if (arg_error) {
+	if (parse_error != CARG_ERROR_NONE || arg_error) {
 		// Error message has already been printed
-		return 1;
-	}
-	if (parse_error != CARG_ERROR_NONE) {
-		// Parse arguments again, printing errors
-		parse_error = carg_parse_args(
-			arg_descs,
-			NULL,
-			carg_print_error,
-			argc,
-			argv
-		);
 		return 1;
 	}
 
@@ -177,7 +168,7 @@ int main(int argc, const char *argv[])
 	}
 
 	// Verify the image file is a stub file
-	int ret = stub_verify(infile);
+	ret = stub_verify(infile);
 	if (ret) {
 		fclose(infile);
 		fprintf(stderr, "error: \"%s\" is not a valid stub file\n", arg_image);

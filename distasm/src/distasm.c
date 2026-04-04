@@ -15,45 +15,45 @@ const char *arg_output = NULL;
 struct carg_desc arg_descs[] = {
 	{
 		CARG_TYPE_UNARY, // Type
-		'h',            // Flag
-		"--help",       // Name
-		&arg_help,      // Value
-		false,          // Required
-		"show usage",   // Usage text
-		NULL            // Value hint
+		'h',             // Flag
+		"--help",        // Name
+		&arg_help,       // Value
+		false,           // Required
+		"show usage",    // Usage text
+		NULL             // Value hint
 	},
 	{
 		CARG_TYPE_UNARY, // Type
-		'\0',            // Flag
-		"--addr",       // Name
-		&arg_addr,      // Value
-		false,          // Required
+		'a',             // Flag
+		"--addr",        // Name
+		&arg_addr,       // Value
+		false,           // Required
 		"output addresses", // Usage text
-		NULL            // Value hint
+		NULL             // Value hint
 	},
 	{
 		CARG_TYPE_NAMED,  // Type
-		'o',             // Flag
-		"--output",      // Name
-		&arg_output,     // Value
-		false,           // Required
-		"binary output", // Usage text
-		"output"         // Value hint
+		'o',              // Flag
+		"--output",       // Name
+		&arg_output,      // Value
+		false,            // Required
+		"binary output",  // Usage text
+		"output"          // Value hint
 	},
 	{
 		CARG_TYPE_POSITIONAL, // Type
-		'\0',                // Flag
-		NULL,                // Name
-		&arg_bin,            // Value
-		true,                // Required
-		"starch binary",     // Usage text
-		"binary"             // Value hint
+		'\0',                 // Flag
+		NULL,                 // Name
+		&arg_bin,             // Value
+		true,                 // Required
+		"starch binary",      // Usage text
+		"binary"              // Value hint
 	},
 	{ CARG_TYPE_NONE }
 };
 
 bool non_help_arg = false;
-void detect_non_help_arg(struct carg_desc *desc, const char *arg)
+void handle_arg(struct carg_desc *desc, const char *arg)
 {
 	(void)arg;
 	if (desc->value != &arg_help) {
@@ -63,31 +63,27 @@ void detect_non_help_arg(struct carg_desc *desc, const char *arg)
 
 int main(int argc, const char *argv[])
 {
+	int ret = 0;
+
 	// Parse command-line arguments
 	enum carg_error parse_error = carg_parse_args(
 		arg_descs,
-		detect_non_help_arg,
-		NULL,
+		handle_arg,
+		carg_print_error,
 		argc,
 		argv
 	);
 	if (arg_help) {
 		// Usage requested
 		if (non_help_arg) {// Other arguments present
-			fprintf(stderr, "warning: Only printing usage. Other arguments present.\n");
+			fprintf(stderr, "error: Only printing usage. Other arguments present.\n");
+			ret = 1;
 		}
 		carg_print_usage(argv[0], arg_descs);
-		return parse_error != CARG_ERROR_NONE;
+		return ret;
 	}
 	if (parse_error != CARG_ERROR_NONE) {
-		// Parse arguments again, printing errors
-		parse_error = carg_parse_args(
-			arg_descs,
-			NULL,
-			carg_print_error,
-			argc,
-			argv
-		);
+		// Error message has already been printed
 		return 1;
 	}
 	// Arguments parsed, no errors
@@ -100,7 +96,7 @@ int main(int argc, const char *argv[])
 	}
 
 	// Verify the input file is a valid stub file
-	int ret = stub_verify(infile);
+	ret = stub_verify(infile);
 	if (ret) {
 		fclose(infile);
 		fprintf(stderr, "error: \"%s\" is not a valid stub file\n", arg_bin);
