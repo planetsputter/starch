@@ -2,8 +2,9 @@
 
 #include <inttypes.h>
 
-#include "starch.h"
+#include "bstr.h"
 #include "carg.h"
+#include "starch.h"
 #include "stub.h"
 
 // Variables set by command-line arguments
@@ -113,11 +114,17 @@ int main(int argc, const char *argv[])
 
 	// Open output file
 	FILE *outfile;
+	bchar *outfilename = NULL;
 	if (arg_output) {
-		outfile = fopen(arg_output, "w");
+		// Attempt to remove output file, ignoring failure
+		remove(arg_output);
+
+		// Open output file with ".tmp" extension
+		outfilename = bstrcatc(bstrdupc(arg_output), ".tmp");
+		outfile = fopen(outfilename, "w");
 		if (!outfile) {
 			fclose(infile);
-			fprintf(stderr, "error: failed to open \"%s\"\n", arg_output);
+			fprintf(stderr, "error: failed to open \"%s\"\n", outfilename);
 			return 1;
 		}
 	}
@@ -139,7 +146,7 @@ int main(int argc, const char *argv[])
 		// Print section description
 		ret = fprintf(outfile, "section %#"PRIx64"\n", sec.addr);
 		if (ret < 0) {
-			fprintf(stderr, "error: failed to write to \"%s\"\n", arg_output ? arg_output : "stdout");
+			fprintf(stderr, "error: failed to write to \"%s\"\n", outfilename ? outfilename : "stdout");
 			ret = 1;
 			break;
 		}
@@ -194,7 +201,7 @@ int main(int argc, const char *argv[])
 			if (arg_addr) {
 				ret = fprintf(outfile, "%08"PRIx64" ", op_addr);
 				if (ret < 0) {
-					fprintf(stderr, "error: failed to write to \"%s\"\n", arg_output ? arg_output : "stdout");
+					fprintf(stderr, "error: failed to write to \"%s\"\n", outfilename ? outfilename : "stdout");
 					ret = 1;
 					break;
 				}
@@ -203,7 +210,7 @@ int main(int argc, const char *argv[])
 			// Print opcode name
 			ret = fprintf(outfile, "%s", name);
 			if (ret < 0) {
-				fprintf(stderr, "error: failed to write to \"%s\"\n", arg_output ? arg_output : "stdout");
+				fprintf(stderr, "error: failed to write to \"%s\"\n", outfilename ? outfilename : "stdout");
 				ret = 1;
 				break;
 			}
@@ -246,7 +253,7 @@ int main(int argc, const char *argv[])
 				ret = fprintf(outfile, "\n");
 			}
 			if (ret < 0) {
-				fprintf(stderr, "error: failed to write to \"%s\"\n", arg_output ? arg_output : "stdout");
+				fprintf(stderr, "error: failed to write to \"%s\"\n", outfilename ? outfilename : "stdout");
 				ret = 1;
 				break;
 			}
@@ -258,6 +265,17 @@ int main(int argc, const char *argv[])
 	fclose(infile);
 	if (outfile != stdout) {
 		fclose(outfile);
+	}
+
+	if (ret == 0 && outfilename) {
+		// On success, copy temporary output to named output
+		ret = rename(outfilename, arg_output);
+		if (ret) {
+			fprintf(stderr, "error: failed to move \"%s\" to \"%s\"", outfilename, arg_output);
+		}
+	}
+	if (outfilename) {
+		bfree(outfilename);
 	}
 
 	return ret;

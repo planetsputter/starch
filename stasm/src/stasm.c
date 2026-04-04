@@ -79,6 +79,12 @@ static void handle_arg(struct carg_desc *desc, const char *arg)
 			arg_error = true;
 		}
 	}
+	else if (desc->value == &arg_output) {
+		// Output file name must not be empty or end in a slash
+		if (arg[0] == '\0' || arg[strlen(arg) - 1] == '/') {
+			arg_error = true;
+		}
+	}
 }
 
 //
@@ -228,13 +234,18 @@ int main(int argc, const char *argv[])
 		infile = stdin;
 	}
 
-	// Open output file
-	FILE *outfile = fopen(arg_output, "w+b");
+	// Attempt to remove output file, ignoring failure
+	remove(arg_output);
+
+	// Open output file with ".tmp" extension
+	bchar *outfilename = bstrcatc(bstrdupc(arg_output), ".tmp");
+	FILE *outfile = fopen(outfilename, "w+b");
 	if (!outfile) {
 		if (infile != stdin) {
 			fclose(infile);
 		}
-		stasm_msgf(SMT_ERROR, "failed to open \"%s\" for writing, errno %d", arg_output, errno);
+		bfree(outfilename);
+		stasm_msgf(SMT_ERROR, "failed to open \"%s\" for writing, errno %d", outfilename, errno);
 		return 1;
 	}
 
@@ -245,7 +256,8 @@ int main(int argc, const char *argv[])
 		if (infile != stdin) {
 			fclose(infile);
 		}
-		stasm_msgf(SMT_ERROR, "failed to initialize output stub file \"%s\"", arg_output);
+		bfree(outfilename);
+		stasm_msgf(SMT_ERROR, "failed to initialize output stub file \"%s\"", outfilename);
 		return 1;
 	}
 
@@ -381,7 +393,7 @@ int main(int argc, const char *argv[])
 		// Save the last section of the stub file
 		int save_error = stub_save_section(outfile, as.sec_count - 1, &as.curr_sec);
 		if (save_error) {
-			stasm_msgf(SMT_ERROR, "failed to save section %d to \"%s\"", as.sec_count - 1, arg_output);
+			stasm_msgf(SMT_ERROR, "failed to save section %d to \"%s\"", as.sec_count - 1, outfilename);
 			if (ret == 0) {
 				ret = save_error;
 			}
@@ -405,10 +417,20 @@ int main(int argc, const char *argv[])
 	// Close output file
 	fclose(outfile);
 
-	// Fail if any error messages were emitted
-	if (ret == 0 && msg_counts[SMT_ERROR] != 0) {
-		ret = 1;
+	if (ret == 0) {
+		// Fail if any error messages were emitted
+		if (msg_counts[SMT_ERROR] != 0) {
+			ret = 1;
+		}
+		// On success, copy temporary output to named output
+		else {
+			ret = rename(outfilename, arg_output);
+			if (ret) {
+				stasm_msgf(SMT_ERROR, "failed to move \"%s\" to \"%s\"", outfilename, arg_output);
+			}
+		}
 	}
+	bfree(outfilename);
 
 	return ret;
 }
