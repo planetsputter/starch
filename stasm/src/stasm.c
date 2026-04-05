@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <stdarg.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 
 #include "assembler.h"
 #include "bstr.h"
@@ -51,6 +52,15 @@ static struct carg_desc arg_descs[] = {
 		"maxnsec"        // Value hint
 	},
 	{
+		CARG_TYPE_NAMED, // Type
+		'I',             // Flag
+		"--include",     // Name
+		NULL,            // Value
+		false,           // Required
+		"directory", // Usage text
+		"directory" // Value hint
+	},
+	{
 		CARG_TYPE_POSITIONAL, // Type
 		'\0',                 // Flag
 		NULL,                 // Name
@@ -62,7 +72,23 @@ static struct carg_desc arg_descs[] = {
 	{ CARG_TYPE_NONE }
 };
 
-static bool non_help_arg = false, arg_error = false;
+//
+// Included directory list
+//
+struct inc_dir {
+	bchar *dir;
+	struct inc_dir *next;
+};
+static void inc_dir_destroy(struct inc_dir *inc_dir)
+{
+	if (inc_dir->dir) {
+		bfree(inc_dir->dir);
+		inc_dir->dir = NULL;
+	}
+}
+static struct inc_dir *inc_dirs;
+
+static bool non_help_arg = false;
 static void handle_arg(struct carg_desc *desc, const char *arg)
 {
 	if (desc->value == &arg_help) {
@@ -76,17 +102,30 @@ static void handle_arg(struct carg_desc *desc, const char *arg)
 		maxnsec = strtol(arg, &end, 0);
 		if (!end || *end != '\0' || *arg == '\0') {
 			stasm_msgf(SMT_ERROR, "failed to parse --maxnsec argument \"%s\"", arg_maxnsec);
-			arg_error = true;
 		}
 		else if (maxnsec <= 0) {
 			stasm_msgf(SMT_ERROR, "invalid --maxnsec value %d", maxnsec);
-			arg_error = true;
 		}
 	}
 	else if (desc->value == &arg_output) {
 		// Output file name must not be empty or end in a slash
 		if (arg[0] == '\0' || arg[strlen(arg) - 1] == '/') {
-			arg_error = true;
+			stasm_msgf(SMT_ERROR, "invalid output file name \"%s\"", arg);
+		}
+	}
+	else if (desc->name && strcmp(desc->name, "--include") == 0) {
+		if (arg[0] == '\0') {
+			stasm_msgf(SMT_ERROR, "invalid include directory name \"\"");
+		}
+		else {
+			// Add include directory to front of list
+			struct inc_dir *inc_dir = (struct inc_dir*)malloc(sizeof(struct inc_dir));
+			inc_dir->dir = bstrdupc(arg);
+			if (inc_dir->dir[bstrlen(inc_dir->dir) - 1] != '/') {
+				inc_dir->dir = bstrcatc(inc_dir->dir, "/");
+			}
+			inc_dir->next = inc_dirs;
+			inc_dirs = inc_dir;
 		}
 	}
 }
@@ -219,7 +258,7 @@ int main(int argc, const char *argv[])
 		carg_print_usage(argv[0], arg_descs);
 		return ret;
 	}
-	if (parse_error != CARG_ERROR_NONE || arg_error) {
+	if (parse_error != CARG_ERROR_NONE || msg_counts[SMT_ERROR]) {
 		// Error message has already been printed
 		return 1;
 	}
@@ -312,11 +351,53 @@ int main(int argc, const char *argv[])
 			bchar *filename = NULL;
 			assembler_get_include(&as, &filename);
 			if (filename) {
-				// Open included file
-				FILE *incfile = fopen(filename, "r");
-				if (!incfile) {
-					stasm_msgf(SMT_ERROR, "failed to open \"%s\", errno %d", filename, errno);
+				// Determine path to included file
+				struct stat inc_stat;
+				int statret;
+				struct inc_dir *inc_dir = NULL;
+				bchar *path = NULL;
+				do {
+					if (path) {
+						bfree(path);
+					}
+					if (inc_dir) {
+						path = bstrcatb(bstrdupb(inc_dir->dir), filename);
+						inc_dir = inc_dir->next;
+					}
+					else {
+						path = bstrdupb(filename);
+						inc_dir = inc_dirs;
+					}
+					statret = stat(path, &inc_stat);
+					if (statret != 0) {
+						statret = errno;
+					}
+				} while (statret == ENOENT && inc_dir);
+
+				if (statret == ENOENT) {
+					// Failed to find file
+					stasm_msgft(SMT_ERROR, tlineno, tcharno, "failed to find included file \"%s\"", filename);
 					ret = 1;
+					bfree(path);
+					bfree(filename);
+					break;
+				}
+				bfree(filename);
+
+				if (statret != 0) {
+					// The file exists, but we failed to stat it
+					stasm_msgft(SMT_ERROR, tlineno, tcharno, "failed to stat file \"%s\", errno %d", path, statret);
+					ret = 1;
+					bfree(path);
+					break;
+				}
+
+				// Open included file
+				FILE *incfile = fopen(path, "r");
+				if (!incfile) {
+					stasm_msgft(SMT_ERROR, tlineno, tcharno, "failed to open \"%s\", errno %d", path, errno);
+					ret = 1;
+					bfree(path);
 					break;
 				}
 
@@ -324,7 +405,7 @@ int main(int argc, const char *argv[])
 				inc_chain->lineno = lineno;
 				inc_chain->charno = charno;
 				struct inc_link *link = (struct inc_link*)malloc(sizeof(struct inc_link));
-				inc_link_init(link, filename, incfile);
+				inc_link_init(link, path, incfile);
 				link->prev = inc_chain;
 				inc_chain = link;
 			}
@@ -364,7 +445,7 @@ int main(int argc, const char *argv[])
 				}
 				// Ensure the decoder and tokenizer can terminate now
 				if (!utf8_decoder_can_terminate(&decoder) || !tokenizer_finish(&tokenizer)) {
-					stasm_msgf(SMT_ERROR, "unexpected EOF");
+					stasm_msgft(SMT_ERROR, lineno, charno, "unexpected EOF");
 					ret = 1;
 					break;
 				}
@@ -416,6 +497,14 @@ int main(int argc, const char *argv[])
 		inc_link_destroy(inc_chain);
 		free(inc_chain);
 		inc_chain = prev;
+	}
+
+	// Destroy included directory list
+	while (inc_dirs) {
+		struct inc_dir *next = inc_dirs->next;
+		inc_dir_destroy(inc_dirs);
+		free(inc_dirs);
+		inc_dirs = next;
 	}
 
 	// Close output file

@@ -139,7 +139,7 @@ The Starch assembler supports several assembler commands which aid the developer
 |:----------------- |:----------- |
 | define \<name\> \<value\> | This command allows the developer to define a symbolic constant whose value is substituted where it is used later in the program when preceded by a dollar sign ('$'). |
 | section \<address\> | Starts a new section at the given address. |
-| include "\<filename\>" | Includes the contents of the file at the quoted path as if inserted into this point in the input. |
+| include "\<filename\>" | Includes the contents of the file at the quoted path as if inserted into this point in the input. The current directory is searched for the file, then each include directory provided as a command line argument. |
 | data8 \<value\> | Inserts the given value into the output as an 8-bit integer. |
 | data16 \<value\> | Inserts the given value into the output as a 16-bit integer. |
 | data32 \<value\> | Inserts the given value into the output as a 32-bit integer. |
