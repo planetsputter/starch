@@ -8,24 +8,50 @@
 enum { // Tokenizer states
 	TZS_DEFAULT,
 	TZS_COMMENT,
-	TZS_SIGN,
-	TZS_SLASH,
+	TZS_OP,
 	TZS_QUOTED,
 	TZS_QUOTED_ESC,
 	TZS_MULTI_COMMENT,
 };
 
-// Single-character operators in numeric order
-static const char scos[] = "\n!#%&'()*,.;<=>?@[\\]^`{|}~";
+// These characters are operators or begin operators.
+// The list must be in numeric order.
+static const char ops[] = "\n!#%&'()*+,-./;<=>?@[\\]^`{|}~";
 
-// Returns whether the given character is a single-character operator
-static bool is_sco(ucp c)
+// These characters begin two-character operators.
+// The list must be in numeric order.
+// Currently this list must be a subset of the ops list.
+static const char begin_ops[] = "&+-/<=>|";
+
+// Returns whether the given character is in the above list
+static bool isop(ucp c)
 {
 	// Use binary search for efficiency
-	int low = 0, high = sizeof(scos) - 2, mid;
+	int low = 0, high = sizeof(ops) - 2, mid;
 	while (low <= high) {
 		mid = (low + high) / 2;
-		int comp = c - scos[mid];
+		int comp = c - ops[mid];
+		if (comp < 0) {
+			high = mid - 1;
+		}
+		else if (comp > 0) {
+			low = mid + 1;
+		}
+		else {
+			return true;
+		}
+	}
+	return false;
+}
+
+// Returns whether the given character begins an operator
+static bool begins_op(ucp c)
+{
+	// Use binary search for efficiency
+	int low = 0, high = sizeof(begin_ops) - 2, mid;
+	while (low <= high) {
+		mid = (low + high) / 2;
+		int comp = c - begin_ops[mid];
 		if (comp < 0) {
 			high = mid - 1;
 		}
@@ -89,24 +115,27 @@ void tokenizer_parse(struct tokenizer *tz, ucp c)
 		int error = 0;
 		switch (tz->state) {
 		case TZS_DEFAULT:
-			if (c == 0 || isspace((int)c) || is_sco(c) || c == '"' || c == ';' || c == '-' || c == '+' || c == '/') {
+			if (c == 0 || isspace((int)c) || isop(c) || c == '"' || c == '-' || c == '+') {
 				// These characters end the current token, if any
 				tokenizer_enqueue(tz);
-				if (is_sco(c)) { // SCOs get their own token
-					tz->ctoken = bstrdupu(&c, 1, &error);
-					tokenizer_enqueue(tz);
-				}
-				else if (c == '"') { // Double quote begins quoted token
-					tz->ctoken = bstrdupu(&c, 1, &error);
+				bool capture = true, enqueue = false;
+				if (c == '"') { // Double quote begins quoted token
 					tz->state = TZS_QUOTED;
 				}
-				else if (c == '-' || c == '+') { // Sign may become its own token, or start a literal
-					tz->ctoken = bstrdupu(&c, 1, &error);
-					tz->state = TZS_SIGN;
+				else if (begins_op(c)) { // Character begins an operator
+					tz->state = TZS_OP;
 				}
-				else if (c == '/') { // Slash may become its own token, or start a comment
+				else if (isop(c)) { // This character is an operator
+					enqueue = true;
+				}
+				else { // Whitespace a null characters end tokens but do not begin tokens
+					capture = false;
+				}
+				if (capture) {
 					tz->ctoken = bstrdupu(&c, 1, &error);
-					tz->state = TZS_SLASH;
+				}
+				if (enqueue) {
+					tokenizer_enqueue(tz);
 				}
 			}
 			else { // Other characters start a token or continue the current one
@@ -122,31 +151,56 @@ void tokenizer_parse(struct tokenizer *tz, ucp c)
 				again = true;
 			}
 			break;
-		case TZS_SIGN:
-			if (isdigit(c)) { // Sign begins literal
+		case TZS_OP:
+			tz->state = TZS_DEFAULT;
+			bool combine; // Whether to combine with the next operator character
+			bool enqueue = true; // Whether to enqueue token immediately
+			switch (tz->ctoken[0]) {
+			case '-':
+			case '+':
+				if (isdigit(c)) { // Sign begins literal
+					combine = true;
+					enqueue = false;
+				}
+				else { // Sign becomes its own token
+					combine = false;
+				}
+				break;
+			case '&': // Check for "&&"
+			case '|': // Check for "||"
+				combine = c == (ucp)tz->ctoken[0];
+				break;
+			case '<': // Check for "<="
+			case '=': // Check for "=="
+			case '>': // Check for ">="
+				combine = c == '=';
+				break;
+			case '/':
+				combine = false;
+				if (c == '/') { // Begins single-line comment
+					bfree(tz->ctoken);
+					tz->ctoken = NULL;
+					tz->state = TZS_COMMENT;
+				}
+				else if (c == '*') { // Begins multi-line comment
+					bfree(tz->ctoken);
+					tz->ctoken = NULL;
+					tz->state = TZS_MULTI_COMMENT;
+				}
+				break;
+			default:
+				combine = false;
+			}
+
+			if (combine) { // First and second characters should be combined
 				tz->ctoken = bstrcatu(tz->ctoken, &c, 1, &error);
 			}
-			else { // Sign is its own token
-				tokenizer_enqueue(tz);
+			else { // First character is its own token
 				again = true;
 			}
-			tz->state = TZS_DEFAULT;
-			break;
-		case TZS_SLASH:
-			if (c == '/') { // Begins single-line comment
-				bfree(tz->ctoken);
-				tz->ctoken = NULL;
-				tz->state = TZS_COMMENT;
-			}
-			else if (c == '*') { // Begins multi-line comment
-				bfree(tz->ctoken);
-				tz->ctoken = NULL;
-				tz->state = TZS_MULTI_COMMENT;
-			}
-			else { // Slash is its own token
+			if (enqueue) {
+				// Enqueue potentially combined token(s)
 				tokenizer_enqueue(tz);
-				tz->state = TZS_DEFAULT;
-				again = true;
 			}
 			break;
 		case TZS_QUOTED:
@@ -205,5 +259,6 @@ bool tokenizer_finish(struct tokenizer *tz)
 	}
 	// Finish current token, if any
 	tokenizer_enqueue(tz);
+	tz->state = TZS_DEFAULT;
 	return true;
 }
