@@ -11,7 +11,7 @@
 #include "bstr.h"
 #include "lits.h"
 #include "starch.h"
-#include "stasm.h"
+#include "stmsg.h"
 #include "util.h"
 
 //
@@ -65,7 +65,7 @@ static int symbol_sub(struct assembler *as, bchar *token, int tlineno, int tchar
 		*val = token;
 	}
 	else if (token[1] == '\0') { // Check for empty symbol name
-		stasm_msgft(SMT_ERROR, tlineno, tcharno, "empty symbol name");
+		stmsgtf(SMT_ERROR, tlineno, tcharno, "empty symbol name");
 	}
 	else {
 		// Look up an existing symbol definition
@@ -116,7 +116,7 @@ static int symbol_sub(struct assembler *as, bchar *token, int tlineno, int tchar
 				as->defs = bmap_insert(as->defs, name, symbol);
 			}
 			else {
-				stasm_msgft(SMT_ERROR, tlineno, tcharno, "undefined symbol \"%s\"", name);
+				stmsgtf(SMT_ERROR, tlineno, tcharno, "undefined symbol \"%s\"", name);
 				bfree(name);
 			}
 		}
@@ -281,14 +281,14 @@ void assembler_destroy(struct assembler *as)
 static int assembler_handle_label_def(struct assembler *as, bchar *token, int tlineno, int tcharno)
 {
 	if (as->sec_count == 0) {
-		stasm_msgft(SMT_ERROR, tlineno, tcharno, "expected section definition before label");
+		stmsgtf(SMT_ERROR, tlineno, tcharno, "expected section definition before label");
 		return 1;
 	}
 
 	// Compute current position within section
 	long fpos = ftell(as->outfile);
 	if (fpos < 0) {
-		stasm_msgf(SMT_ERROR, "failed to get offset in output file, errno %d", errno);
+		stmsgf(SMT_ERROR, "failed to get offset in output file, errno %d", errno);
 		return 1;
 	}
 	// Compute label address
@@ -306,7 +306,7 @@ static int assembler_handle_label_def(struct assembler *as, bchar *token, int tl
 	}
 	else if (rec->defined) {
 		// A definition already exists for this label
-		stasm_msgft(SMT_ERROR, tlineno, tcharno, "definition already exists for label \"%s\"", token);
+		stmsgtf(SMT_ERROR, tlineno, tcharno, "definition already exists for label \"%s\"", token);
 		ret = 1;
 	}
 	else {
@@ -328,7 +328,7 @@ static int assembler_handle_label_def(struct assembler *as, bchar *token, int tl
 			// Get current file position
 			fpos = ftell(as->outfile);
 			if (fpos < 0) {
-				stasm_msgf(SMT_ERROR, "failed to get offset in output file, errno %d", errno);
+				stmsgf(SMT_ERROR, "failed to get offset in output file, errno %d", errno);
 				return 1;
 			}
 
@@ -336,14 +336,14 @@ static int assembler_handle_label_def(struct assembler *as, bchar *token, int tl
 			// This will also seek to section start.
 			ret = stub_load_section(as->outfile, as->sec_count - 1, &as->curr_sec);
 			if (ret) {
-				stasm_msgf(SMT_ERROR, "failed to load section %d in output file, stub error %d", as->sec_count - 1, ret);
+				stmsgf(SMT_ERROR, "failed to load section %d in output file, stub error %d", as->sec_count - 1, ret);
 				return 1;
 			}
 
 			// Return to the original position
 			ret = fseek(as->outfile, fpos, SEEK_SET);
 			if (ret) {
-				stasm_msgf(SMT_ERROR, "failed to seek in output file, errno %d", errno);
+				stmsgf(SMT_ERROR, "failed to seek in output file, errno %d", errno);
 				return 1;
 			}
 		}
@@ -364,17 +364,17 @@ static int assembler_handle_section(struct assembler *as, uint64_t addr)
 		ret = stub_save_section(as->outfile, as->sec_count, &as->curr_sec);
 	}
 	if (ret) {
-		stasm_msgf(SMT_ERROR, "failed to save stub section %d with error %d", as->sec_count, ret);
+		stmsgf(SMT_ERROR, "failed to save stub section %d with error %d", as->sec_count, ret);
 		return ret;
 	}
 	ret = stub_load_section(as->outfile, as->sec_count, &as->curr_sec);
 	if (ret) {
-		stasm_msgf(SMT_ERROR, "failed to load stub section %d with error %d", as->sec_count, ret);
+		stmsgf(SMT_ERROR, "failed to load stub section %d with error %d", as->sec_count, ret);
 		return ret;
 	}
 	as->curr_sec.fpos = ftell(as->outfile);
 	if (as->curr_sec.fpos < 0) {
-		stasm_msgf(SMT_ERROR, "failed to get offset of section %d with error %d", as->sec_count, ret);
+		stmsgf(SMT_ERROR, "failed to get offset of section %d with error %d", as->sec_count, ret);
 		ret = 1;
 	}
 	else {
@@ -387,7 +387,7 @@ static int assembler_handle_section(struct assembler *as, uint64_t addr)
 static int assembler_handle_strings(struct assembler *as)
 {
 	if (as->sec_count == 0) {
-		stasm_msgf(SMT_ERROR, "expected section definition before strings");
+		stmsgf(SMT_ERROR, "expected section definition before strings");
 		return 1;
 	}
 
@@ -401,7 +401,7 @@ static int assembler_handle_strings(struct assembler *as)
 		// Note current file offset
 		long fpos = ftell(as->outfile);
 		if (fpos < 0) {
-			stasm_msgf(SMT_ERROR, "failed to seek in output file, errno %d", errno);
+			stmsgf(SMT_ERROR, "failed to seek in output file, errno %d", errno);
 			ret = 1;
 			break;
 		}
@@ -412,7 +412,7 @@ static int assembler_handle_strings(struct assembler *as)
 		size_t write_len = bstrlen(rec->label) + 1;
 		size_t bc = fwrite(rec->label, 1, write_len, as->outfile);
 		if (bc != write_len) {
-			stasm_msgf(SMT_ERROR, "failed to write to output file, errno %d", errno);
+			stmsgf(SMT_ERROR, "failed to write to output file, errno %d", errno);
 			ret = 1;
 			break;
 		}
@@ -434,7 +434,7 @@ static int assembler_handle_strings(struct assembler *as)
 			// Get current file position
 			fpos = ftell(as->outfile);
 			if (fpos < 0) {
-				stasm_msgf(SMT_ERROR, "failed to get offset in output file, errno %d", errno);
+				stmsgf(SMT_ERROR, "failed to get offset in output file, errno %d", errno);
 				return 1;
 			}
 
@@ -442,14 +442,14 @@ static int assembler_handle_strings(struct assembler *as)
 			// This will also seek to section start.
 			ret = stub_load_section(as->outfile, as->sec_count - 1, &as->curr_sec);
 			if (ret) {
-				stasm_msgf(SMT_ERROR, "failed to load section %d in output file, stub error %d", as->sec_count - 1, ret);
+				stmsgf(SMT_ERROR, "failed to load section %d in output file, stub error %d", as->sec_count - 1, ret);
 				return 1;
 			}
 
 			// Return to the original position
 			ret = fseek(as->outfile, fpos, SEEK_SET);
 			if (ret) {
-				stasm_msgf(SMT_ERROR, "failed to seek in output file, errno %d", errno);
+				stmsgf(SMT_ERROR, "failed to seek in output file, errno %d", errno);
 				return 1;
 			}
 		}
@@ -462,7 +462,7 @@ static int assembler_handle_strings(struct assembler *as)
 static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int code, bchar *token, int tlineno, int tcharno)
 {
 	if (as->sec_count == 0) {
-		stasm_msgf(SMT_ERROR, "expected section definition before first instruction");
+		stmsgf(SMT_ERROR, "expected section definition before first instruction");
 		return 1;
 	}
 
@@ -555,7 +555,7 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 			// Get current file offset
 			long current_fo = ftell(as->outfile);
 			if (current_fo < 0) {
-				stasm_msgf(SMT_ERROR, "failed to get offset with error %d", errno);
+				stmsgf(SMT_ERROR, "failed to get offset with error %d", errno);
 				return 1;
 			}
 			// Compute current address
@@ -571,7 +571,7 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 				contents = balloc();
 				if (!parse_string_lit(token, &contents)) {
 					bfree(contents);
-					stasm_msgft(SMT_ERROR, tlineno, tcharno, "invalid string literal");
+					stmsgtf(SMT_ERROR, tlineno, tcharno, "invalid string literal");
 					return 1;
 				}
 			}
@@ -640,11 +640,11 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 			bool oob = false;
 			opcode = assembler_compact_op(code, pseudo_op, imm_val, &oob);
 			if (oob) {
-				stasm_msgft(SMT_ERROR, tlineno, tcharno, "immediate value out of range for opcode");
+				stmsgtf(SMT_ERROR, tlineno, tcharno, "immediate value out of range for opcode");
 				return 1;
 			}
 			if (opcode < 0) {
-				stasm_msgft(SMT_ERROR, tlineno, tcharno, "unable to compact opcode");
+				stmsgtf(SMT_ERROR, tlineno, tcharno, "unable to compact opcode");
 				return 1;
 			}
 			buff[0] = opcode;
@@ -658,7 +658,7 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 
 		// Check that value fits into buffer
 		if (imm_bytes_reqd > imm_bytes) {
-			stasm_msgft(SMT_ERROR, tlineno, tcharno, "immediate value \"%s\" is out of bounds for type", token);
+			stmsgtf(SMT_ERROR, tlineno, tcharno, "immediate value \"%s\" is out of bounds for type", token);
 			return 1;
 		}
 
@@ -669,7 +669,7 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 	// Write instruction buffer to output file
 	size_t written = fwrite(buff, 1, opcode_size + imm_bytes, as->outfile);
 	if (written != (size_t)(opcode_size + imm_bytes)) {
-		stasm_msgf(SMT_ERROR, "failed to write to output file, errno %d", errno);
+		stmsgf(SMT_ERROR, "failed to write to output file, errno %d", errno);
 		return 1;
 	}
 
@@ -708,7 +708,7 @@ int assembler_handle_token(struct assembler *as, bchar *token, int tlineno, int 
 		if (symbol[0] == ':') { // ':' introduces a label
 			if (symbol[1] == '\0') {
 				// Label name must not be empty
-				stasm_msgft(SMT_ERROR, tlineno, tcharno, "invalid label name");
+				stmsgtf(SMT_ERROR, tlineno, tcharno, "invalid label name");
 				ret = 1;
 				break;
 			}
@@ -768,7 +768,7 @@ int assembler_handle_token(struct assembler *as, bchar *token, int tlineno, int 
 			code = opcode_for_name(symbol);
 			if (code < 0) {
 				// Instruction is not an exact match for any opcode
-				stasm_msgft(SMT_ERROR, tlineno, tcharno, "unrecognized opcode \"%s\"", symbol);
+				stmsgtf(SMT_ERROR, tlineno, tcharno, "unrecognized opcode \"%s\"", symbol);
 				nextstate = APS_WAIT_EOS; // Don't attempt to process the rest of the statement
 				ret = 1;
 				break;
@@ -804,7 +804,7 @@ int assembler_handle_token(struct assembler *as, bchar *token, int tlineno, int 
 	case APS_STORE7_BRKT_SFP_END:
 		// Disallow newlines
 		if (symbol[0] == '\n' || symbol[0] == ';') {
-			stasm_msgf(SMT_ERROR, "unexpected end of statement", symbol);
+			stmsgf(SMT_ERROR, "unexpected end of statement", symbol);
 			nextstate = APS_DEFAULT;
 			ret = 1;
 			break;
@@ -840,23 +840,24 @@ int assembler_handle_token(struct assembler *as, bchar *token, int tlineno, int 
 		case APS_INCLUDE1:
 			// Require quoted token
 			if (symbol[0] != '"') {
-				stasm_msgft(SMT_ERROR, tlineno, tcharno, "expected quoted string");
+				stmsgtf(SMT_ERROR, tlineno, tcharno, "expected quoted string");
 				ret = 1;
 				nextstate = APS_WAIT_EOS;
 				break;
 			}
 			nextstate++;
 			break;
-		case APS_DEFINE1:
-			// Disallow quoted token
-			if (symbol[0] == '"') {
-				stasm_msgft(SMT_ERROR, tlineno, tcharno, "unexpected quoted string");
+		case APS_DEFINE1: {
+			// Disallow quoted token, integer literal, or label
+			int64_t ival = 0;
+			if (symbol[0] == '"' || symbol[0] == ':' || parse_int(symbol, &ival)) {
+				stmsgtf(SMT_ERROR, tlineno, tcharno, "invalid symbol name \"%s\"", symbol);
 				ret = 1;
 				nextstate = APS_WAIT_EOS;
 				break;
 			}
 			nextstate++;
-			break;
+		}	break;
 
 		case APS_PUSH1:
 		case APS_PUSH3_BRKT:
@@ -927,7 +928,7 @@ int assembler_handle_token(struct assembler *as, bchar *token, int tlineno, int 
 				bret = as->pret1 = parse_int(symbol, &as->pval1);
 			}
 			if (!bret) {
-				stasm_msgft(SMT_ERROR, tlineno, tcharno, "invalid integer literal");
+				stmsgtf(SMT_ERROR, tlineno, tcharno, "invalid integer literal \"%s\"", symbol);
 				nextstate = APS_WAIT_EOS;
 				ret = 1;
 				break;
@@ -943,7 +944,7 @@ int assembler_handle_token(struct assembler *as, bchar *token, int tlineno, int 
 		case APS_STORE3_BRKT_END:
 		case APS_STORE7_BRKT_SFP_END:
 			if (symbol[0] != ']') {
-				stasm_msgft(SMT_ERROR, tlineno, tcharno, "expected \"]\"");
+				stmsgtf(SMT_ERROR, tlineno, tcharno, "expected \"]\"");
 				nextstate = APS_WAIT_EOS;
 				ret = 1;
 				break;
@@ -972,7 +973,7 @@ int assembler_handle_token(struct assembler *as, bchar *token, int tlineno, int 
 	case APS_STRINGS:
 		// Expect end of statement
 		if (symbol[0] != '\n' && symbol[0] != ';') {
-			stasm_msgft(SMT_ERROR, tlineno, tcharno, "expected end of statement");
+			stmsgtf(SMT_ERROR, tlineno, tcharno, "expected end of statement");
 			ret = 1;
 			nextstate = APS_WAIT_EOS;
 			break;
@@ -995,7 +996,7 @@ int assembler_handle_token(struct assembler *as, bchar *token, int tlineno, int 
 			// Parse string literal
 			as->include = balloc();
 			if (!parse_string_lit(as->word1, &as->include)) {
-				stasm_msgft(SMT_ERROR, tlineno, tcharno, "invalid string literal");
+				stmsgtf(SMT_ERROR, tlineno, tcharno, "invalid string literal");
 				ret = 1;
 			}
 			break;
@@ -1043,7 +1044,7 @@ int assembler_handle_token(struct assembler *as, bchar *token, int tlineno, int 
 			// @todo: Allow section flags
 			if (as->pret1) { // Address parsed successfully
 				if (as->pval1 < 0) {
-					stasm_msgft(SMT_ERROR, tlineno, tcharno, "section address cannot be negative");
+					stmsgtf(SMT_ERROR, tlineno, tcharno, "section address cannot be negative");
 					ret = 1;
 					break;
 				}
@@ -1140,7 +1141,7 @@ int assembler_handle_token(struct assembler *as, bchar *token, int tlineno, int 
 		}
 		// With an operand, the store and pop pseudo-ops accept bracket notation
 		if (symbol[0] != '[') {
-			stasm_msgft(SMT_ERROR, tlineno, tcharno, "expected '[' or end of statement");
+			stmsgtf(SMT_ERROR, tlineno, tcharno, "expected '[' or end of statement");
 			ret = 1;
 			nextstate = APS_WAIT_EOS;
 			break;
@@ -1180,7 +1181,7 @@ int assembler_finish(struct assembler *as, int lineno, int charno)
 		return 1;
 	}
 	if (as->state != APS_DEFAULT) {
-		stasm_msgft(SMT_ERROR, lineno, charno, "incomplete statement");
+		stmsgtf(SMT_ERROR, lineno, charno, "incomplete statement");
 		return 1;
 	}
 
@@ -1192,7 +1193,7 @@ int assembler_finish(struct assembler *as, int lineno, int charno)
 		for (struct label_rec *rec = as->label_recs; rec; rec = rec->prev) {
 			if (!rec->defined) {
 				// Undefined labels are an error at this point
-				stasm_msgf(SMT_ERROR, "undefined label \"%s\"", rec->label);
+				stmsgf(SMT_ERROR, "undefined label \"%s\"", rec->label);
 				ret = 1;
 			}
 			else for (struct label_usage *lu = rec->usages; lu; lu = lu->prev) {

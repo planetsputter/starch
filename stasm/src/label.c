@@ -8,7 +8,7 @@
 #include "assembler.h"
 #include "label.h"
 #include "starch.h"
-#include "stasm.h"
+#include "stmsg.h"
 #include "util.h"
 
 // Initializes the given label usage
@@ -30,14 +30,14 @@ int label_usage_apply(struct label_usage *lu, FILE *outfile, uint64_t label_addr
 	// Record original file position
 	long original_fpos = ftell(outfile);
 	if (original_fpos < 0) {
-		stasm_msgf(SMT_ERROR, "failed to get position in output file, errno %d", errno);
+		stmsgf(SMT_ERROR, "failed to get position in output file, errno %d", errno);
 		return 1;
 	}
 
 	// Seek to the instruction
 	int ret = fseek(outfile, lu->foffset, SEEK_SET);
 	if (ret) {
-		stasm_msgf(SMT_ERROR, "failed to seek in output file, errno %d", errno);
+		stmsgf(SMT_ERROR, "failed to seek in output file, errno %d", errno);
 		return ret;
 	}
 
@@ -63,7 +63,7 @@ int label_usage_apply(struct label_usage *lu, FILE *outfile, uint64_t label_addr
 		// Read the instruction opcode
 		size_t bc = fread(buff, 1, opcode_len, outfile);
 		if (bc != 1) {
-			stasm_msgf(SMT_ERROR, "failed to read from output file, errno %d", errno);
+			stmsgf(SMT_ERROR, "failed to read from output file, errno %d", errno);
 			return 1;
 		}
 		opcode = buff[0];
@@ -74,7 +74,7 @@ int label_usage_apply(struct label_usage *lu, FILE *outfile, uint64_t label_addr
 		int sdt = imm_type_for_opcode(opcode);
 		if (sdt < 0) {
 			const char *opname = name_for_opcode(opcode);
-			stasm_msgf(SMT_ERROR, "failed to get immediate type for opcode 0x%02x (%s)",
+			stmsgf(SMT_ERROR, "failed to get immediate type for opcode 0x%02x (%s)",
 				opcode, opname ? opname : "unknown");
 			return 1;
 		}
@@ -82,7 +82,7 @@ int label_usage_apply(struct label_usage *lu, FILE *outfile, uint64_t label_addr
 		// Get the immediate size
 		imm_len = sdt_size(sdt);
 		if (imm_len < 1 || imm_len > 8) {
-			stasm_msgf(SMT_ERROR, "invalid immediate size %d for data type %d", imm_len, sdt);
+			stmsgf(SMT_ERROR, "invalid immediate size %d for data type %d", imm_len, sdt);
 			return 1;
 		}
 
@@ -96,11 +96,11 @@ int label_usage_apply(struct label_usage *lu, FILE *outfile, uint64_t label_addr
 			bool oob = false;
 			opcode = assembler_compact_op(opcode, false, imm_val, &oob);
 			if (oob) {
-				stasm_msgf(SMT_ERROR, "immediate value out of range for opcode");
+				stmsgf(SMT_ERROR, "immediate value out of range for opcode");
 				return 1;
 			}
 			if (opcode < 0) {
-				stasm_msgf(SMT_ERROR, "failed to compact opcode");
+				stmsgf(SMT_ERROR, "failed to compact opcode");
 				return 1;
 			}
 			lu->opcode = opcode;
@@ -114,14 +114,14 @@ int label_usage_apply(struct label_usage *lu, FILE *outfile, uint64_t label_addr
 		// Seek back to beginning of opcode
 		ret = fseek(outfile, -opcode_len, SEEK_CUR);
 		if (ret) {
-			stasm_msgf(SMT_ERROR, "failed to seek in output file, errno %d", errno);
+			stmsgf(SMT_ERROR, "failed to seek in output file, errno %d", errno);
 			return 1;
 		}
 	}
 
 	// Bounds-check immediate value
 	if (imm_len_reqd < min_bytes_for_val(imm_val)) {
-		stasm_msgf(SMT_ERROR, "immediate label value out of range for opcode");
+		stmsgf(SMT_ERROR, "immediate label value out of range for opcode");
 		return 1;
 	}
 	assert(imm_len_reqd <= imm_len);
@@ -137,7 +137,7 @@ int label_usage_apply(struct label_usage *lu, FILE *outfile, uint64_t label_addr
 	// Write opcode and immediate value to output file
 	size_t bc = fwrite(buff, 1, opcode_len + imm_len_reqd, outfile);
 	if (bc != (size_t)opcode_len + imm_len_reqd) {
-		stasm_msgf(SMT_ERROR, "failed to write to output file, errno %d", errno);
+		stmsgf(SMT_ERROR, "failed to write to output file, errno %d", errno);
 		return 1;
 	}
 
@@ -156,14 +156,14 @@ int label_usage_apply(struct label_usage *lu, FILE *outfile, uint64_t label_addr
 			// Skip the bytes being compacted
 			ret = fseek(outfile, compact_count, SEEK_CUR);
 			if (ret) {
-				stasm_msgf(SMT_ERROR, "failed to seek in output file, errno %d", errno);
+				stmsgf(SMT_ERROR, "failed to seek in output file, errno %d", errno);
 				return 1;
 			}
 
 			// Read a block
 			bc = fread(read_buf, 1, MAX_READ, outfile);
 			if (ferror(outfile)) {
-				stasm_msgf(SMT_ERROR, "failed to read from output file, errno %d", errno);
+				stmsgf(SMT_ERROR, "failed to read from output file, errno %d", errno);
 				return 1;
 			}
 			if (bc == 0) { // End of file reached
@@ -173,14 +173,14 @@ int label_usage_apply(struct label_usage *lu, FILE *outfile, uint64_t label_addr
 			// Seek back to the beginning of the compacted bytes
 			ret = fseek(outfile, -bc - compact_count, SEEK_CUR);
 			if (ret) {
-				stasm_msgf(SMT_ERROR, "failed to seek in output file, errno %d", errno);
+				stmsgf(SMT_ERROR, "failed to seek in output file, errno %d", errno);
 				return 1;
 			}
 
 			// Re-write the block
 			bc = fwrite(read_buf, 1, bc, outfile);
 			if (ferror(outfile)) {
-				stasm_msgf(SMT_ERROR, "failed to write to output file, errno %d", errno);
+				stmsgf(SMT_ERROR, "failed to write to output file, errno %d", errno);
 				return 1;
 			}
 		}
@@ -188,26 +188,26 @@ int label_usage_apply(struct label_usage *lu, FILE *outfile, uint64_t label_addr
 		// We are now at EOF. Move back.
 		ret = fseek(outfile, -compact_count, SEEK_CUR);
 		if (ret) {
-			stasm_msgf(SMT_ERROR, "failed to seek in output file, errno %d", errno);
+			stmsgf(SMT_ERROR, "failed to seek in output file, errno %d", errno);
 			return 1;
 		}
 
 		// Get file position
 		long fpos = ftell(outfile);
 		if (fpos < 0) {
-			stasm_msgf(SMT_ERROR, "failed to get position in output file, errno %d", errno);
+			stmsgf(SMT_ERROR, "failed to get position in output file, errno %d", errno);
 			return 1;
 		}
 
 		// Truncate excess content
 		ret = fflush(outfile);
 		if (ret) {
-			stasm_msgf(SMT_ERROR, "failed to flush output file, errno %d", errno);
+			stmsgf(SMT_ERROR, "failed to flush output file, errno %d", errno);
 			return 1;
 		}
 		ret = ftruncate(fileno(outfile), fpos);
 		if (ret) {
-			stasm_msgf(SMT_ERROR, "failed to truncate output file, errno %d", errno);
+			stmsgf(SMT_ERROR, "failed to truncate output file, errno %d", errno);
 			return 1;
 		}
 
@@ -215,7 +215,7 @@ int label_usage_apply(struct label_usage *lu, FILE *outfile, uint64_t label_addr
 		int maxnsec = 0, nsec = 0;
 		ret = stub_get_section_counts(outfile, &maxnsec, &nsec);
 		if (ret || nsec < 1) {
-			stasm_msgf(SMT_ERROR, "failed to get stub section counts, stub error %d", ret);
+			stmsgf(SMT_ERROR, "failed to get stub section counts, stub error %d", ret);
 			return 1;
 		}
 
@@ -227,7 +227,7 @@ int label_usage_apply(struct label_usage *lu, FILE *outfile, uint64_t label_addr
 			// Load the section header information and seek to beginning of section data
 			ret = stub_load_section(outfile, si, &sec);
 			if (ret) {
-				stasm_msgf(SMT_ERROR, "failed to load stub section, stub error %d", ret);
+				stmsgf(SMT_ERROR, "failed to load stub section, stub error %d", ret);
 				return 1;
 			}
 
@@ -251,7 +251,7 @@ int label_usage_apply(struct label_usage *lu, FILE *outfile, uint64_t label_addr
 				ret = fseek(outfile, eos, SEEK_SET);
 			}
 			if (ret) {
-				stasm_msgf(SMT_ERROR, "failed to seek in output file, errno %d", errno);
+				stmsgf(SMT_ERROR, "failed to seek in output file, errno %d", errno);
 				return 1;
 			}
 
@@ -260,7 +260,7 @@ int label_usage_apply(struct label_usage *lu, FILE *outfile, uint64_t label_addr
 			// even though we may continue to write to it and save it again later.
 			ret = stub_save_section(outfile, si, &sec);
 			if (ret) {
-				stasm_msgf(SMT_ERROR, "failed to save stub section, stub error %d", ret);
+				stmsgf(SMT_ERROR, "failed to save stub section, stub error %d", ret);
 				return 1;
 			}
 		}
@@ -304,7 +304,7 @@ int label_usage_apply(struct label_usage *lu, FILE *outfile, uint64_t label_addr
 	// Seek back to the original file position, allowing for compaction
 	ret = fseek(outfile, original_fpos - compact_count, SEEK_SET);
 	if (ret) {
-		stasm_msgf(SMT_ERROR, "failed to seek in output file, errno %d", errno);
+		stmsgf(SMT_ERROR, "failed to seek in output file, errno %d", errno);
 		return 1;
 	}
 

@@ -5,6 +5,7 @@
 #include "bstr.h"
 #include "carg.h"
 #include "starch.h"
+#include "stmsg.h"
 #include "stub.h"
 
 // Variables set by command-line arguments
@@ -77,7 +78,7 @@ int main(int argc, const char *argv[])
 	if (arg_help) {
 		// Usage requested
 		if (non_help_arg) {// Other arguments present
-			fprintf(stderr, "error: Only printing usage. Other arguments present.\n");
+			stmsgf(SMT_ERROR, "Only printing usage. Other arguments present.");
 			ret = 1;
 		}
 		carg_print_usage(argv[0], arg_descs);
@@ -92,7 +93,7 @@ int main(int argc, const char *argv[])
 	// Open input binary
 	FILE *infile = fopen(arg_bin, "rb");
 	if (!infile) {
-		fprintf(stderr, "error: failed to open \"%s\"\n", arg_bin);
+		stmsgf(SMT_ERROR, "failed to open \"%s\"", arg_bin);
 		return 1;
 	}
 
@@ -100,7 +101,7 @@ int main(int argc, const char *argv[])
 	ret = stub_verify(infile);
 	if (ret) {
 		fclose(infile);
-		fprintf(stderr, "error: \"%s\" is not a valid stub file\n", arg_bin);
+		stmsgf(SMT_ERROR, "\"%s\" is not a valid stub file", arg_bin);
 		return ret;
 	}
 
@@ -108,7 +109,7 @@ int main(int argc, const char *argv[])
 	int maxnsec = 0, nsec = 0;
 	ret = stub_get_section_counts(infile, &maxnsec, &nsec);
 	if (ret) {
-		fprintf(stderr, "error: failed to get section counts from \"%s\"\n", arg_bin);
+		stmsgf(SMT_ERROR, "failed to get section counts from \"%s\"", arg_bin);
 		return ret;
 	}
 
@@ -124,7 +125,7 @@ int main(int argc, const char *argv[])
 		outfile = fopen(outfilename, "w");
 		if (!outfile) {
 			fclose(infile);
-			fprintf(stderr, "error: failed to open \"%s\"\n", outfilename);
+			stmsgf(SMT_ERROR, "failed to open \"%s\"", outfilename);
 			return 1;
 		}
 	}
@@ -139,14 +140,14 @@ int main(int argc, const char *argv[])
 		ret = stub_load_section(infile, si, &sec);
 		if (ret) {
 			fclose(infile);
-			fprintf(stderr, "error: failed to load section %d from \"%s\"\n", si, arg_bin);
+			stmsgf(SMT_ERROR, "failed to load section %d from \"%s\"", si, arg_bin);
 			break;
 		}
 
 		// Print section description
 		ret = fprintf(outfile, "section %#"PRIx64"\n", sec.addr);
 		if (ret < 0) {
-			fprintf(stderr, "error: failed to write to \"%s\"\n", outfilename ? outfilename : "stdout");
+			stmsgf(SMT_ERROR, "failed to write to \"%s\"", outfilename ? outfilename : "stdout");
 			ret = 1;
 			break;
 		}
@@ -156,7 +157,7 @@ int main(int argc, const char *argv[])
 			uint64_t op_addr = sec.addr + di;
 			int opcode = fgetc(infile);
 			if (opcode == EOF) {
-				fprintf(stderr, "error: unexpected EOF in \"%s\"\n", arg_bin);
+				stmsgf(SMT_ERROR, "unexpected EOF in \"%s\"", arg_bin);
 				ret = 1;
 				break;
 			}
@@ -165,7 +166,7 @@ int main(int argc, const char *argv[])
 			// Look up opcode name
 			const char *name = name_for_opcode(opcode);
 			if (name == NULL) {
-				fprintf(stderr, "error: failed to look up name for opcode %02x\n", opcode);
+				stmsgf(SMT_ERROR, "failed to look up name for opcode %02x", opcode);
 				ret = 1;
 				break;
 			}
@@ -173,7 +174,7 @@ int main(int argc, const char *argv[])
 			// Determine type of immediate value
 			int sdt = imm_type_for_opcode(opcode);
 			if (sdt < 0) {
-				fprintf(stderr, "error: unable to determine immediate type for opcode 0x%02x\n",
+				stmsgf(SMT_ERROR, "unable to determine immediate type for opcode 0x%02x",
 					opcode);
 				ret = 1;
 				break;
@@ -188,7 +189,7 @@ int main(int argc, const char *argv[])
 			for (int j = 0; j < imm_len; j++) {
 				b = fgetc(infile);
 				if (b == EOF) {
-					fprintf(stderr, "error: unexpected EOF in \"%s\"\n", arg_bin);
+					stmsgf(SMT_ERROR, "unexpected EOF in \"%s\"", arg_bin);
 					ret = 1;
 					break;
 				}
@@ -201,7 +202,7 @@ int main(int argc, const char *argv[])
 			if (arg_addr) {
 				ret = fprintf(outfile, "%08"PRIx64" ", op_addr);
 				if (ret < 0) {
-					fprintf(stderr, "error: failed to write to \"%s\"\n", outfilename ? outfilename : "stdout");
+					stmsgf(SMT_ERROR, "failed to write to \"%s\"", outfilename ? outfilename : "stdout");
 					ret = 1;
 					break;
 				}
@@ -210,7 +211,7 @@ int main(int argc, const char *argv[])
 			// Print opcode name
 			ret = fprintf(outfile, "%s", name);
 			if (ret < 0) {
-				fprintf(stderr, "error: failed to write to \"%s\"\n", outfilename ? outfilename : "stdout");
+				stmsgf(SMT_ERROR, "failed to write to \"%s\"", outfilename ? outfilename : "stdout");
 				ret = 1;
 				break;
 			}
@@ -253,7 +254,7 @@ int main(int argc, const char *argv[])
 				ret = fprintf(outfile, "\n");
 			}
 			if (ret < 0) {
-				fprintf(stderr, "error: failed to write to \"%s\"\n", outfilename ? outfilename : "stdout");
+				stmsgf(SMT_ERROR, "failed to write to \"%s\"", outfilename ? outfilename : "stdout");
 				ret = 1;
 				break;
 			}
@@ -271,7 +272,7 @@ int main(int argc, const char *argv[])
 		// On success, copy temporary output to named output
 		ret = rename(outfilename, arg_output);
 		if (ret) {
-			fprintf(stderr, "error: failed to move \"%s\" to \"%s\"", outfilename, arg_output);
+			stmsgf(SMT_ERROR, "failed to move \"%s\" to \"%s\"", outfilename, arg_output);
 		}
 	}
 	if (outfilename) {

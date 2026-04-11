@@ -10,6 +10,7 @@
 #include "menu.h"
 #include "starch.h"
 #include "stem.h"
+#include "stmsg.h"
 #include "util.h"
 
 static int do_help(size_t argc, const char *argv[], int *flags);
@@ -484,10 +485,10 @@ int do_menu(int *flags)
 			ssize_t nread = getline(&line, &linesize, stdin);
 			if (nread <= 0) {
 				if (ferror(stdin)) { // error
-					fprintf(stderr, "error: failed to read from stdin\n");
+					stmsgf(SMT_ERROR, "failed to read from stdin");
 				}
 				else { // EOF
-					fprintf(stderr, "error: EOF while reading from stdin\n");
+					stmsgf(SMT_ERROR, "EOF while reading from stdin");
 				}
 				ret = 1;
 				break;

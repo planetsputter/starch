@@ -170,10 +170,14 @@ void tokenizer_parse(struct tokenizer *tz, ucp c)
 			case '|': // Check for "||"
 				combine = c == (ucp)tz->ctoken[0];
 				break;
-			case '<': // Check for "<="
+			case '<': // Check for "<=" or "<<"
+				combine = c == '=' || c == '<';
+				break;
 			case '=': // Check for "=="
-			case '>': // Check for ">="
 				combine = c == '=';
+				break;
+			case '>': // Check for ">=" or ">>"
+				combine = c == '=' || c == '>';
 				break;
 			case '/':
 				combine = false;

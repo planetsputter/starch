@@ -84,6 +84,27 @@ push64 \$
 EOF
 then false; fi
 
+echo testing rejection of integer literal symbol name
+if $STASM <<EOF 2>/dev/null
+define 1 0
+EOF
+then false; fi
+
+echo testing rejection of string literal symbol name
+if $STASM <<EOF 2>/dev/null
+define "test" 0
+EOF
+then false; fi
+$STASM <<EOF
+define test "test"
+EOF
+
+echo testing rejection of label symbol name
+if $STASM <<EOF 2>/dev/null
+define :test1 :test2
+EOF
+then false; fi
+
 echo testing rejection of empty label name
 if $STASM <<EOF 2>/dev/null
 section 0x3000

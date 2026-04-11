@@ -56,3 +56,7 @@ int bstrcmpc(const bchar *s1, const char *s2);
 // B-string s2 by returning an integer less than, equal to, or greater than zero.
 // Note: Strings are compared using the default signedness of the char type.
 int bstrcmpb(const bchar *s1, const bchar *s2);
+
+// Returns the offset of the given byte within the B-string contents, or the length
+// of the B-string if the byte is not found.
+size_t bstrfindbyte(const bchar*, bchar byte);

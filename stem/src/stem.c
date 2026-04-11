@@ -12,6 +12,7 @@
 #include "starch.h"
 #include "carg.h"
 #include "stem.h"
+#include "stmsg.h"
 #include "stub.h"
 
 // Variables set by command-line arguments
@@ -101,7 +102,7 @@ void handle_arg(struct carg_desc *desc, const char *arg)
 		char *end = NULL;
 		long addr = strtol(arg, &end, 0);
 		if (end == NULL || *end != '\0' || end == arg) {
-			fprintf(stderr, "error: failed to parse BP address: %s\n", arg);
+			stmsgf(SMT_ERROR, "failed to parse BP address: %s", arg);
 			arg_error = true;
 		}
 		else {
@@ -127,7 +128,7 @@ int main(int argc, const char *argv[])
 	if (arg_help) {
 		// Usage requested
 		if (non_help_arg) {// Other arguments present
-			fprintf(stderr, "error: Only printing usage. Other arguments present\n");
+			stmsgf(SMT_ERROR, "Only printing usage. Other arguments present");
 			ret = 1;
 		}
 		carg_print_usage(argv[0], arg_descs);
@@ -144,7 +145,7 @@ int main(int argc, const char *argv[])
 		char *endptr = NULL;
 		max_cycles = strtol(arg_cycles, &endptr, 0);
 		if (*arg_cycles == '\0' || *endptr != '\0') {
-			fprintf(stderr, "error: invalid cycle count \"%s\"\n", arg_cycles);
+			stmsgf(SMT_ERROR, "invalid cycle count \"%s\"", arg_cycles);
 			return 1;
 		}
 	}
@@ -155,7 +156,7 @@ int main(int argc, const char *argv[])
 		char *endptr = NULL;
 		mem_size = strtol(arg_mem_size, &endptr, 0);
 		if (*arg_mem_size == '\0' || *endptr != '\0' || mem_size < 0x4000) {
-			fprintf(stderr, "error: invalid memory size \"%s\"\n", arg_mem_size);
+			stmsgf(SMT_ERROR, "invalid memory size \"%s\"", arg_mem_size);
 			return 1;
 		}
 	}
@@ -163,7 +164,7 @@ int main(int argc, const char *argv[])
 	// Open the input image file
 	FILE *infile = fopen(arg_image, "rb");
 	if (infile == NULL) {
-		fprintf(stderr, "error: failed to open image file \"%s\"\n", arg_image);
+		stmsgf(SMT_ERROR, "failed to open image file \"%s\"", arg_image);
 		return errno;
 	}
 
@@ -171,7 +172,7 @@ int main(int argc, const char *argv[])
 	ret = stub_verify(infile);
 	if (ret) {
 		fclose(infile);
-		fprintf(stderr, "error: \"%s\" is not a valid stub file\n", arg_image);
+		stmsgf(SMT_ERROR, "\"%s\" is not a valid stub file", arg_image);
 		return ret;
 	}
 
@@ -180,7 +181,7 @@ int main(int argc, const char *argv[])
 	ret = stub_get_section_counts(infile, &maxnsec, &nsec);
 	if (ret) {
 		fclose(infile);
-		fprintf(stderr, "error: failed to get section counts from \"%s\"\n", arg_image);
+		stmsgf(SMT_ERROR, "failed to get section counts from \"%s\"", arg_image);
 		return ret;
 	}
 
@@ -204,14 +205,14 @@ int main(int argc, const char *argv[])
 		// Load section information
 		ret = stub_load_section(infile, si, &sec);
 		if (ret) {
-			fprintf(stderr, "error: failed to load section %d from \"%s\"\n", si, arg_image);
+			stmsgf(SMT_ERROR, "failed to load section %d from \"%s\"", si, arg_image);
 			break;
 		}
 
 		// Load section into memory
 		ret = mem_load_image(&main_mem, sec.addr, sec.size, infile);
 		if (ret) {
-			fprintf(stderr, "error: failed to load memory from \"%s\" to address %#"PRIx64"\n",
+			stmsgf(SMT_ERROR, "failed to load memory from \"%s\" to address %#"PRIx64,
 				arg_image, sec.addr);
 			break;
 		}
@@ -241,7 +242,7 @@ int main(int argc, const char *argv[])
 			}
 		}
 		if (ret < 0) {
-			fprintf(stderr, "error: an error occurred during emulation\n");
+			stmsgf(SMT_ERROR, "an error occurred during emulation");
 		}
 		else if (ret >= 256) { // Core halted
 			ret -= 256;
@@ -251,7 +252,7 @@ int main(int argc, const char *argv[])
 		if (arg_dump) {
 			FILE *dumpfile = fopen(arg_dump, "wb");
 			if (!dumpfile) {
-				fprintf(stderr, "error: unable to open hex dump file \"%s\"\n", arg_dump);
+				stmsgf(SMT_ERROR, "unable to open hex dump file \"%s\"", arg_dump);
 				ret = 1;
 			}
 			else {

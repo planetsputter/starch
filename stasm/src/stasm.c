@@ -10,7 +10,7 @@
 #include "carg.h"
 #include "lits.h"
 #include "starch.h"
-#include "stasm.h"
+#include "stmsg.h"
 #include "stub.h"
 #include "tokenizer.h"
 #include "utf8.h"
@@ -101,21 +101,21 @@ static void handle_arg(struct carg_desc *desc, const char *arg)
 		char *end = NULL;
 		maxnsec = strtol(arg, &end, 0);
 		if (!end || *end != '\0' || *arg == '\0') {
-			stasm_msgf(SMT_ERROR, "failed to parse --maxnsec argument \"%s\"", arg_maxnsec);
+			stmsgf(SMT_ERROR, "failed to parse --maxnsec argument \"%s\"", arg_maxnsec);
 		}
 		else if (maxnsec <= 0) {
-			stasm_msgf(SMT_ERROR, "invalid --maxnsec value %d", maxnsec);
+			stmsgf(SMT_ERROR, "invalid --maxnsec value %d", maxnsec);
 		}
 	}
 	else if (desc->value == &arg_output) {
 		// Output file name must not be empty or end in a slash
 		if (arg[0] == '\0' || arg[strlen(arg) - 1] == '/') {
-			stasm_msgf(SMT_ERROR, "invalid output file name \"%s\"", arg);
+			stmsgf(SMT_ERROR, "invalid output file name \"%s\"", arg);
 		}
 	}
 	else if (desc->name && strcmp(desc->name, "--include") == 0) {
 		if (arg[0] == '\0') {
-			stasm_msgf(SMT_ERROR, "invalid include directory name \"\"");
+			stmsgf(SMT_ERROR, "invalid include directory name \"\"");
 		}
 		else {
 			// Add include directory to front of list
@@ -128,113 +128,6 @@ static void handle_arg(struct carg_desc *desc, const char *arg)
 			inc_dirs = inc_dir;
 		}
 	}
-}
-
-//
-// Include file link
-//
-struct inc_link {
-	bchar *filename;
-	FILE *file;
-	int lineno, charno;
-	struct inc_link *prev;
-};
-
-// The include chain
-static struct inc_link *inc_chain = NULL;
-
-// Initializes the given link, taking ownership of the given filename B-string.
-// Also takes ownership of the given file, closing it when the object is destroyed.
-static void inc_link_init(struct inc_link *link, bchar *filename, FILE *file)
-{
-	link->filename = filename;
-	link->file = file;
-	link->lineno = 1;
-	link->charno = 0; // Will be incremented before processing first character
-	link->prev = NULL;
-}
-
-// Destroys the given include link
-static void inc_link_destroy(struct inc_link *link)
-{
-	if (link->filename) {
-		bfree(link->filename);
-		link->filename = NULL;
-	}
-	if (link->file) {
-		if (link->file != stdin) {
-			fclose(link->file);
-		}
-		link->file = NULL;
-	}
-}
-
-// Stasm message counts by type
-static size_t msg_counts[SMT_NUM];
-size_t stasm_count_msg(int msg_type)
-{
-	return msg_counts[msg_type];
-}
-
-// Message type names including ANSI color codes
-#define ANSI_YELLOW "\033[33m"
-#define ANSI_RED "\033[31m"
-#define ANSI_NORMAL "\033[0m"
-static const char *stasm_msg_types[] = {
-	"info",
-	ANSI_YELLOW "warning" ANSI_NORMAL,
-	ANSI_RED "error" ANSI_NORMAL,
-};
-
-int stasm_vmsgf(int msg_type, int lineno, int charno, const char *format, va_list args)
-{
-	// Prepend message type name
-	FILE *out_file = msg_type <= SMT_INFO ? stdout : stderr;
-	fprintf(out_file, "%s: ", stasm_msg_types[msg_type]);
-
-	// Prepend the current file and line if it is known
-	struct inc_link *link = inc_chain;
-	if (link) {
-		if (lineno) {
-			fprintf(out_file, "%s:%d:%d: ", link->filename, lineno, charno);
-		}
-		else {
-			fprintf(out_file, "%s: ", link->filename);
-		}
-	}
-
-	// Format and print the given message
-	int ret = vfprintf(out_file, format, args);
-	fprintf(out_file, "\n"); // Append newline
-
-	// Print the include chain
-	if (link) {
-		link = link->prev;
-	}
-	for (; link; link = link->prev) {
-		fprintf(out_file, "  in file included from %s:%d\n", link->filename, link->lineno - 1);
-	}
-
-	msg_counts[msg_type]++;
-	return ret;
-}
-
-int stasm_msgf(int msg_type, const char *format, ...)
-{
-	va_list args;
-	va_start(args, format);
-	int ret = stasm_vmsgf(msg_type, 0, 0, format, args);
-	va_end(args);
-	return ret;
-}
-
-int stasm_msgft(int msg_type, int lineno, int charno, const char *format, ...)
-{
-	va_list args;
-	va_start(args, format);
-	int ret = stasm_vmsgf(msg_type, lineno, charno, format, args);
-	va_end(args);
-	return ret;
 }
 
 int main(int argc, const char *argv[])
@@ -252,13 +145,13 @@ int main(int argc, const char *argv[])
 	if (arg_help) {
 		// Usage requested
 		if (non_help_arg) {// Other arguments present
-			stasm_msgf(SMT_ERROR, "Only printing usage. Other arguments present.");
+			stmsgf(SMT_ERROR, "Only printing usage. Other arguments present.");
 			ret = 1;
 		}
 		carg_print_usage(argv[0], arg_descs);
 		return ret;
 	}
-	if (parse_error != CARG_ERROR_NONE || msg_counts[SMT_ERROR]) {
+	if (parse_error != CARG_ERROR_NONE || stmsg_counts[SMT_ERROR]) {
 		// Error message has already been printed
 		return 1;
 	}
@@ -269,7 +162,7 @@ int main(int argc, const char *argv[])
 	if (arg_src) {
 		infile = fopen(arg_src, "r");
 		if (!infile) {
-			stasm_msgf(SMT_ERROR, "failed to open \"%s\", errno %d", arg_src, errno);
+			stmsgf(SMT_ERROR, "failed to open \"%s\", errno %d", arg_src, errno);
 			return 1;
 		}
 	}
@@ -287,7 +180,7 @@ int main(int argc, const char *argv[])
 		if (infile != stdin) {
 			fclose(infile);
 		}
-		stasm_msgf(SMT_ERROR, "failed to open \"%s\" for writing, errno %d", outfilename, errno);
+		stmsgf(SMT_ERROR, "failed to open \"%s\" for writing, errno %d", outfilename, errno);
 		bfree(outfilename);
 		return 1;
 	}
@@ -299,14 +192,14 @@ int main(int argc, const char *argv[])
 		if (infile != stdin) {
 			fclose(infile);
 		}
-		stasm_msgf(SMT_ERROR, "failed to initialize output stub file \"%s\"", outfilename);
+		stmsgf(SMT_ERROR, "failed to initialize output stub file \"%s\"", outfilename);
 		bfree(outfilename);
 		return 1;
 	}
 
 	// Initialize include chain
 	inc_chain = (struct inc_link*)malloc(sizeof(struct inc_link));
-	inc_link_init(inc_chain, arg_src ? bstrdupc(arg_src) : bstrdupc("(stdin)"), infile);
+	inc_link_init(inc_chain, strdup(arg_src ? arg_src : "(stdin)"), infile);
 
 	// Initialize decoder
 	struct utf8_decoder decoder;
@@ -351,6 +244,14 @@ int main(int argc, const char *argv[])
 			bchar *filename = NULL;
 			assembler_get_include(&as, &filename);
 			if (filename) {
+				// Check that filename does not include an embedded null byte
+				size_t ni = bstrfindbyte(filename, '\0');
+				if (ni == bstrlen(filename)) {
+					stmsgtf(SMT_ERROR, tlineno, tcharno, "embedded null in include file name");
+					ret = 1;
+					break;
+				}
+
 				// Determine path to included file
 				struct stat inc_stat;
 				int statret;
@@ -376,7 +277,7 @@ int main(int argc, const char *argv[])
 
 				if (statret == ENOENT) {
 					// Failed to find file
-					stasm_msgft(SMT_ERROR, tlineno, tcharno, "failed to find included file \"%s\"", filename);
+					stmsgtf(SMT_ERROR, tlineno, tcharno, "failed to find included file \"%s\"", filename);
 					ret = 1;
 					bfree(path);
 					bfree(filename);
@@ -386,7 +287,7 @@ int main(int argc, const char *argv[])
 
 				if (statret != 0) {
 					// The file exists, but we failed to stat it
-					stasm_msgft(SMT_ERROR, tlineno, tcharno, "failed to stat file \"%s\", errno %d", path, statret);
+					stmsgtf(SMT_ERROR, tlineno, tcharno, "failed to stat file \"%s\", errno %d", path, statret);
 					ret = 1;
 					bfree(path);
 					break;
@@ -395,7 +296,7 @@ int main(int argc, const char *argv[])
 				// Open included file
 				FILE *incfile = fopen(path, "r");
 				if (!incfile) {
-					stasm_msgft(SMT_ERROR, tlineno, tcharno, "failed to open \"%s\", errno %d", path, errno);
+					stmsgtf(SMT_ERROR, tlineno, tcharno, "failed to open \"%s\", errno %d", path, errno);
 					ret = 1;
 					bfree(path);
 					break;
@@ -405,7 +306,8 @@ int main(int argc, const char *argv[])
 				inc_chain->lineno = lineno;
 				inc_chain->charno = charno;
 				struct inc_link *link = (struct inc_link*)malloc(sizeof(struct inc_link));
-				inc_link_init(link, path, incfile);
+				inc_link_init(link, strdup(path), incfile);
+				bfree(path);
 				link->prev = inc_chain;
 				inc_chain = link;
 			}
@@ -439,13 +341,13 @@ int main(int argc, const char *argv[])
 			int b = fgetc(inc_chain->file);
 			if (b == EOF) { // Finish file
 				if (ferror(inc_chain->file)) {// Check for file read error
-					stasm_msgf(SMT_ERROR, "read failed, errno %d", errno);
+					stmsgf(SMT_ERROR, "read failed, errno %d", errno);
 					ret = 1;
 					break;
 				}
 				// Ensure the decoder and tokenizer can terminate now
 				if (!utf8_decoder_can_terminate(&decoder) || !tokenizer_finish(&tokenizer)) {
-					stasm_msgft(SMT_ERROR, lineno, charno, "unexpected EOF");
+					stmsgtf(SMT_ERROR, lineno, charno, "unexpected EOF");
 					ret = 1;
 					break;
 				}
@@ -458,7 +360,7 @@ int main(int argc, const char *argv[])
 			// Decode byte
 			ucp *cp = utf8_decoder_decode(&decoder, b, &c, &ret);
 			if (ret) { // Encoding error
-				stasm_msgf(SMT_ERROR, "encoding error");
+				stmsgf(SMT_ERROR, "encoding error");
 				break;
 			}
 			if (cp != &c) break; // Character generated
@@ -478,7 +380,7 @@ int main(int argc, const char *argv[])
 		// Save the last section of the stub file
 		int save_error = stub_save_section(outfile, as.sec_count - 1, &as.curr_sec);
 		if (save_error) {
-			stasm_msgf(SMT_ERROR, "failed to save section %d to \"%s\"", as.sec_count - 1, outfilename);
+			stmsgf(SMT_ERROR, "failed to save section %d to \"%s\"", as.sec_count - 1, outfilename);
 			if (ret == 0) {
 				ret = save_error;
 			}
@@ -512,14 +414,14 @@ int main(int argc, const char *argv[])
 
 	if (ret == 0) {
 		// Fail if any error messages were emitted
-		if (msg_counts[SMT_ERROR] != 0) {
+		if (stmsg_counts[SMT_ERROR] != 0) {
 			ret = 1;
 		}
 		// On success, copy temporary output to named output
 		else {
 			ret = rename(outfilename, arg_output);
 			if (ret) {
-				stasm_msgf(SMT_ERROR, "failed to move \"%s\" to \"%s\"", outfilename, arg_output);
+				stmsgf(SMT_ERROR, "failed to move \"%s\" to \"%s\"", outfilename, arg_output);
 			}
 		}
 	}

@@ -164,3 +164,14 @@ int bstrcmpb(const bchar *s1, const bchar *s2)
 	}
 	return ret;
 }
+
+size_t bstrfindbyte(const bchar *s, bchar byte)
+{
+	size_t len = bstrlen(s), i;
+	for (i = 0; i < len; i++) {
+		if (s[i] == byte) {
+			break;
+		}
+	}
+	return i;
+}
