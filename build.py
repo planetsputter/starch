@@ -84,6 +84,9 @@ def process_cfg(filename, buildcfg):
 	# Keep a list of targets
 	targets = []
 
+	# List of objects for all targets
+	allobjs = []
+
 	def process_target():
 		# Check context
 		target = ctx['target']
@@ -119,10 +122,13 @@ def process_cfg(filename, buildcfg):
 			else: sources += [s] # Globs were not used
 		objs = []
 		for source in sources:
-			# Compute the name for the object file
-			obj = '.build/obj/%s-%s.o' % (basename(source, withext=False),
-				hashlib.sha256(source.encode('utf-8')).hexdigest()[0:16])
+			# Compute a hash that encodes the significant parameters for generating the object for this source
+			h = hashlib.sha256(repr((compiler, source, cflags)).encode('utf-8')).hexdigest()[0:16]
+			# Compute the name for the object file, which includes the hash
+			obj = '.build/obj/%s-%s.o' % (basename(source, withext=False), h)
 			objs.append(obj)
+			if obj in allobjs: continue # This object is required by multiple targets, rule already generated
+			allobjs.append(obj)
 			# Have the compiler generate the dependency rules
 			args = (compiler, '-c', source, '-M', '-MM', '-MF', '-', '-MQ', obj, *cflags)
 			result = subprocess.run(args, capture_output=True)
