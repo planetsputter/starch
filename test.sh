@@ -92,16 +92,27 @@ then false; fi
 
 echo testing rejection of string literal symbol name
 if $STASM <<EOF 2>/dev/null
-define "test" 0
+define "a" 1
 EOF
 then false; fi
 $STASM <<EOF
-define test "test"
+define a "1"
 EOF
 
 echo testing rejection of label symbol name
 if $STASM <<EOF 2>/dev/null
 define :test1 :test2
+EOF
+then false; fi
+$STASM <<EOF
+define test1 :test1
+EOF
+
+echo testing rejection of undefined symbol
+if $STASM <<EOF 2>/dev/null
+define a 1
+section 0x3000
+push64 \$b
 EOF
 then false; fi
 
@@ -112,31 +123,17 @@ section 0x3000
 EOF
 then false; fi
 
-echo testing rejection of undefined symbol
+echo testing rejection of duplicate labels
 if $STASM <<EOF 2>/dev/null
-define a 1
 section 0x3000
-push64 \$b
-EOF
-then false; fi
-
-echo testing rejection of quoted symbol
-if $STASM <<EOF 2>/dev/null
-define "a" 1
+:test
+:test
 EOF
 then false; fi
 
 echo testing rejection of unquoted include
 if $STASM <<EOF 2>/dev/null
 include psops.sta
-EOF
-then false; fi
-
-echo testing rejection of duplicate labels
-if $STASM <<EOF 2>/dev/null
-section 0x3000
-:test
-:test
 EOF
 then false; fi
 
