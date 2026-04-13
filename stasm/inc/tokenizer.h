@@ -22,7 +22,7 @@ void tokenizer_destroy(struct tokenizer*);
 bool tokenizer_in_progress(struct tokenizer*);
 
 // Parses the given character
-void tokenizer_parse(struct tokenizer*, ucp c);
+int tokenizer_parse(struct tokenizer*, ucp c);
 
 // Sets *token to an emitted token, or to NULL if there are no more tokens to emit.
 // Call until it sets *token to NULL to emit all tokens for each parsed character.

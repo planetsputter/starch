@@ -368,7 +368,8 @@ int main(int argc, const char *argv[])
 		if (ret) break;
 
 		// Feed the generated character to the tokenizer
-		tokenizer_parse(&tokenizer, c);
+		ret = tokenizer_parse(&tokenizer, c);
+		if (ret) break;
 	}
 
 	int finret = assembler_finish(&as, lineno, charno);

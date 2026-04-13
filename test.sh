@@ -22,6 +22,8 @@ echo testing utf8 library
 ../util/test/utf8test
 echo testing literal parsing
 ../util/test/littest
+echo testing expression parsing
+../stasm/test/exprtest 2>/dev/null
 
 # Assemble a file which contains every opcode
 echo assembling all opcodes

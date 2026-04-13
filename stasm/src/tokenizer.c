@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <ctype.h>
 
+#include "stmsg.h"
 #include "tokenizer.h"
 
 enum { // Tokenizer states
@@ -16,7 +17,7 @@ enum { // Tokenizer states
 
 // These characters are operators or begin operators.
 // The list must be in numeric order.
-static const char ops[] = "\n!#%&'()*+,-./;<=>?@[\\]^`{|}~";
+static const char ops[] = "\n!%&()*+,-./;<=>?@[\\]^`{|}~";
 
 // These characters begin two-character operators.
 // The list must be in numeric order.
@@ -107,19 +108,20 @@ static void tokenizer_enqueue(struct tokenizer *tz)
 	}
 }
 
-void tokenizer_parse(struct tokenizer *tz, ucp c)
+int tokenizer_parse(struct tokenizer *tz, ucp c)
 {
 	bool again;
+	int ret = 0;
 	do {
 		again = false;
 		int error = 0;
 		switch (tz->state) {
 		case TZS_DEFAULT:
-			if (c == 0 || isspace((int)c) || isop(c) || c == '"' || c == '-' || c == '+') {
+			if (c == 0 || isspace((int)c) || isop(c) || c == '"' || c == '\'' || c == '-' || c == '+') {
 				// These characters end the current token, if any
 				tokenizer_enqueue(tz);
 				bool capture = true, enqueue = false;
-				if (c == '"') { // Double quote begins quoted token
+				if (c == '"' || c == '\'') { // Quotation begins quoted token
 					tz->state = TZS_QUOTED;
 				}
 				else if (begins_op(c)) { // Character begins an operator
@@ -208,14 +210,21 @@ void tokenizer_parse(struct tokenizer *tz, ucp c)
 			}
 			break;
 		case TZS_QUOTED:
-			// Append quoted character
-			tz->ctoken = bstrcatu(tz->ctoken, &c, 1, &error);
-			if (c == '"') { // Unescaped double quote ends quoted token
-				tokenizer_enqueue(tz);
-				tz->state = TZS_DEFAULT;
+			if (c == '\n') { // Newline disallowed in quoted literal
+				stmsgf(SMT_ERROR, "unexpected newline in %s literal",
+					tz->ctoken[0] == '"' ? "string" : "character");
+				ret = 1;
 			}
-			else if (c == '\\') { // Backslash escapes the next character
-				tz->state = TZS_QUOTED_ESC;
+			else {
+				// Append quoted character
+				tz->ctoken = bstrcatu(tz->ctoken, &c, 1, &error);
+				if (c == (ucp)tz->ctoken[0]) { // Unescaped quotation ends quoted token
+					tokenizer_enqueue(tz);
+					tz->state = TZS_DEFAULT;
+				}
+				else if (c == '\\') { // Backslash escapes the next character
+					tz->state = TZS_QUOTED_ESC;
+				}
 			}
 			break;
 		case TZS_QUOTED_ESC:
@@ -241,7 +250,8 @@ void tokenizer_parse(struct tokenizer *tz, ucp c)
 		// Only possible error is character value out of range, which should
 		// not happen since these characters are coming from a decoded stream
 		assert(error == 0);
-	} while (again);
+	} while (again && !ret);
+	return ret;
 }
 
 void tokenizer_emit(struct tokenizer *tz, bchar **token)
