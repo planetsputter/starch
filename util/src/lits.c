@@ -175,7 +175,6 @@ bool parse_int(const bchar *s, int64_t *val)
 	}
 	if (*p == '\0') return false; // "", "-", or "+"
 
-	// @todo: handle overflow
 	int64_t temp_val = 0;
 
 	if (*p == '0') {
@@ -185,18 +184,24 @@ bool parse_int(const bchar *s, int64_t *val)
 			for (; isxdigit(*p); p++) {
 				// Compute value of hexadecimal digit
 				int val = *p >= 'a' ? *p - 'a' + 10 : *p >= 'A' ? *p - 'A' + 10 : *p - '0';
+				if (temp_val >> 60) return false; // *0x10 would overflow
 				temp_val = temp_val * 0x10 + val;
 			}
 		}
 		else { // Octal literal
 			for (p++; *p >= '0' && *p <= '7'; p++) {
-				temp_val = temp_val * 8 + *p - '0';
+				if (temp_val >> 61) return false; // *010 would overflow
+				temp_val = temp_val * 010 + *p - '0';
 			}
 		}
 	}
 	else { // Decimal literal
 		for (; isdigit(*p); p++) {
-			temp_val = temp_val * 10 + *p - '0';
+			if (temp_val > 1844674407370955161 || temp_val < 0) return false; // *10 would overflow
+			temp_val *= 10;
+			bool nowneg = temp_val < 0;
+			temp_val += *p - '0';
+			if (nowneg && (temp_val >= 0)) return false; // Sign flip indicates overflow
 		}
 	}
 

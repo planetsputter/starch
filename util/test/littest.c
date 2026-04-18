@@ -63,6 +63,11 @@ int main()
 	bchar *ts = NULL;
 	int error = (int)random();
 
+	// Test rejection of empty string integer literal
+	ts = bstrdupc("");
+	assert(!parse_int(ts, &val));
+	bfree(ts);
+
 	// Test that only decimal digits are valid single-character integer literals
 	for (c = 0; c < 256; c++) {
 		ts = bstrdupu(&c, 1, &error);
@@ -91,6 +96,149 @@ int main()
 		assert(error == 0 && parse_int(ts, &val) && val == (int64_t)'0' - c);
 		bfree(ts);
 	}
+
+	// Test acceptance of maximum decimal literals
+	ts = bstrdupc("18446744073709551615");
+	assert(parse_int(ts, &val) && val == -1);
+	bfree(ts);
+	ts = bstrdupc("+18446744073709551615");
+	assert(parse_int(ts, &val) && val == -1);
+	bfree(ts);
+	ts = bstrdupc("-18446744073709551615");
+	assert(parse_int(ts, &val) && val == 1);
+	bfree(ts);
+	ts = bstrdupc("9223372036854775807");
+	assert(parse_int(ts, &val) && val == 0x7fffffffffffffff);
+	bfree(ts);
+	ts = bstrdupc("+9223372036854775807");
+	assert(parse_int(ts, &val) && val == 0x7fffffffffffffff);
+	bfree(ts);
+	ts = bstrdupc("-9223372036854775807");
+	assert(parse_int(ts, &val) && val == -0x7fffffffffffffff);
+	bfree(ts);
+	ts = bstrdupc("9223372036854775808");
+	assert(parse_int(ts, &val) && val == (int64_t)0x8000000000000000);
+	bfree(ts);
+	ts = bstrdupc("+9223372036854775808");
+	assert(parse_int(ts, &val) && val == (int64_t)0x8000000000000000);
+	bfree(ts);
+	ts = bstrdupc("-9223372036854775808");
+	assert(parse_int(ts, &val) && val == (int64_t)0x8000000000000000);
+	bfree(ts);
+
+	// Test rejection of overflowing decimal literals
+	ts = bstrdupc("18446744073709551616");
+	assert(!parse_int(ts, &val));
+	bfree(ts);
+	ts = bstrdupc("+18446744073709551616");
+	assert(!parse_int(ts, &val));
+	bfree(ts);
+	ts = bstrdupc("-18446744073709551616");
+	assert(!parse_int(ts, &val));
+	bfree(ts);
+	ts = bstrdupc("184467440737095516150");
+	assert(!parse_int(ts, &val));
+	bfree(ts);
+	ts = bstrdupc("+184467440737095516150");
+	assert(!parse_int(ts, &val));
+	bfree(ts);
+	ts = bstrdupc("-184467440737095516150");
+	assert(!parse_int(ts, &val));
+	bfree(ts);
+	ts = bstrdupc("57646075230342348790");
+	assert(!parse_int(ts, &val));
+	bfree(ts);
+	ts = bstrdupc("+57646075230342348790");
+	assert(!parse_int(ts, &val));
+	bfree(ts);
+	ts = bstrdupc("-57646075230342348790");
+	assert(!parse_int(ts, &val));
+	bfree(ts);
+
+	// Test acceptance of maximum octal literals
+	ts = bstrdupc("01777777777777777777777");
+	assert(parse_int(ts, &val) && val == -1);
+	bfree(ts);
+	ts = bstrdupc("+01777777777777777777777");
+	assert(parse_int(ts, &val) && val == -1);
+	bfree(ts);
+	ts = bstrdupc("-01777777777777777777777");
+	assert(parse_int(ts, &val) && val == 1);
+	bfree(ts);
+	ts = bstrdupc("0777777777777777777777");
+	assert(parse_int(ts, &val) && val == 0x7fffffffffffffff);
+	bfree(ts);
+	ts = bstrdupc("+0777777777777777777777");
+	assert(parse_int(ts, &val) && val == 0x7fffffffffffffff);
+	bfree(ts);
+	ts = bstrdupc("-0777777777777777777777");
+	assert(parse_int(ts, &val) && val == -0x7fffffffffffffff);
+	bfree(ts);
+	ts = bstrdupc("01000000000000000000000");
+	assert(parse_int(ts, &val) && val == (int64_t)0x8000000000000000);
+	bfree(ts);
+	ts = bstrdupc("+01000000000000000000000");
+	assert(parse_int(ts, &val) && val == (int64_t)0x8000000000000000);
+	bfree(ts);
+	ts = bstrdupc("-01000000000000000000000");
+	assert(parse_int(ts, &val) && val == (int64_t)0x8000000000000000);
+	bfree(ts);
+
+	// Test rejection of overflowing octal literals
+	ts = bstrdupc("02000000000000000000000");
+	assert(!parse_int(ts, &val));
+	bfree(ts);
+	ts = bstrdupc("+02000000000000000000000");
+	assert(!parse_int(ts, &val));
+	bfree(ts);
+	ts = bstrdupc("-02000000000000000000000");
+	assert(!parse_int(ts, &val));
+	bfree(ts);
+
+	// Test rejection of incomplete hexadecimal literal 0x
+	ts = bstrdupc("0x");
+	assert(!parse_int(ts, &val));
+	bfree(ts);
+
+	// Test acceptance of maximum hexadecimal literals
+	ts = bstrdupc("0xffffffffffffffff");
+	assert(parse_int(ts, &val) && val == -1);
+	bfree(ts);
+	ts = bstrdupc("+0xffffffffffffffff");
+	assert(parse_int(ts, &val) && val == -1);
+	bfree(ts);
+	ts = bstrdupc("-0xffffffffffffffff");
+	assert(parse_int(ts, &val) && val == 1);
+	bfree(ts);
+	ts = bstrdupc("0x7fffffffffffffff");
+	assert(parse_int(ts, &val) && val == 0x7fffffffffffffff);
+	bfree(ts);
+	ts = bstrdupc("+0x7fffffffffffffff");
+	assert(parse_int(ts, &val) && val == 0x7fffffffffffffff);
+	bfree(ts);
+	ts = bstrdupc("-0x7fffffffffffffff");
+	assert(parse_int(ts, &val) && val == -0x7fffffffffffffff);
+	bfree(ts);
+	ts = bstrdupc("0x8000000000000000");
+	assert(parse_int(ts, &val) && val == (int64_t)0x8000000000000000);
+	bfree(ts);
+	ts = bstrdupc("+0x8000000000000000");
+	assert(parse_int(ts, &val) && val == (int64_t)0x8000000000000000);
+	bfree(ts);
+	ts = bstrdupc("-0x8000000000000000");
+	assert(parse_int(ts, &val) && val == (int64_t)0x8000000000000000);
+	bfree(ts);
+
+	// Test rejection of overflowing hexadecimal literals
+	ts = bstrdupc("0x10000000000000000");
+	assert(!parse_int(ts, &val));
+	bfree(ts);
+	ts = bstrdupc("+0x10000000000000000");
+	assert(!parse_int(ts, &val));
+	bfree(ts);
+	ts = bstrdupc("-0x10000000000000000");
+	assert(!parse_int(ts, &val));
+	bfree(ts);
 
 	// Test only valid and no invalid single character escapes for code points below 256
 	utf8_decode_array((const byte*)"'\\x'", 4, ca, sizeof(ca) / sizeof(*ca), &error);
@@ -173,8 +321,66 @@ int main()
 	bfree(ts);
 
 	enum { TEST_CYCLES = 1000 };
-
+	char buff[30];
 	for (int i = 0; i < TEST_CYCLES; i++) {
+		//
+		// Integer literals
+		//
+		// Test hexadecimal notation
+		c = randcp();
+		snprintf(buff, sizeof(buff), "0x%x", c);
+		ts = bstrdupc(buff);
+		assert(parse_int(ts, &val) && val == c);
+		bfree(ts);
+		snprintf(buff, sizeof(buff), "0x%X", c);
+		ts = bstrdupc(buff);
+		assert(parse_int(ts, &val) && val == c);
+		bfree(ts);
+		snprintf(buff, sizeof(buff), "+0x%x", c);
+		ts = bstrdupc(buff);
+		assert(parse_int(ts, &val) && val == c);
+		bfree(ts);
+		snprintf(buff, sizeof(buff), "+0x%X", c);
+		ts = bstrdupc(buff);
+		assert(parse_int(ts, &val) && val == c);
+		bfree(ts);
+		snprintf(buff, sizeof(buff), "-0x%x", c);
+		ts = bstrdupc(buff);
+		assert(parse_int(ts, &val) && val == -(int)c);
+		bfree(ts);
+		snprintf(buff, sizeof(buff), "-0x%X", c);
+		ts = bstrdupc(buff);
+		assert(parse_int(ts, &val) && val == -(int)c);
+		bfree(ts);
+
+		// Test decimal notation
+		snprintf(buff, sizeof(buff), "%u", c);
+		ts = bstrdupc(buff);
+		assert(parse_int(ts, &val) && val == c);
+		bfree(ts);
+		snprintf(buff, sizeof(buff), "+%u", c);
+		ts = bstrdupc(buff);
+		assert(parse_int(ts, &val) && val == c);
+		bfree(ts);
+		snprintf(buff, sizeof(buff), "-%u", c);
+		ts = bstrdupc(buff);
+		assert(parse_int(ts, &val) && val == -(int)c);
+		bfree(ts);
+
+		// Test octal notation
+		snprintf(buff, sizeof(buff), "0%o", c);
+		ts = bstrdupc(buff);
+		assert(parse_int(ts, &val) && val == c);
+		bfree(ts);
+		snprintf(buff, sizeof(buff), "+0%o", c);
+		ts = bstrdupc(buff);
+		assert(parse_int(ts, &val) && val == c);
+		bfree(ts);
+		snprintf(buff, sizeof(buff), "-0%o", c);
+		ts = bstrdupc(buff);
+		assert(parse_int(ts, &val) && val == -(int)c);
+		bfree(ts);
+
 		//
 		// Character literals
 		//
