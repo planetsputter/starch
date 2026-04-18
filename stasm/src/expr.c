@@ -1,10 +1,51 @@
 // expr.c
 
 #include <assert.h>
+#include <ctype.h>
 #include <stdlib.h>
 
 #include "expr.h"
+#include "lits.h"
 #include "stmsg.h"
+
+// These characters are operators or begin operators.
+// The list must be in numeric order.
+static const char ops[] = "\n!%&()*,./;<=>?@[\\]^`{|}";
+
+// Returns whether the given token is an operator.
+// Sets *is_unary to whether the operator is a unary operator.
+static bool is_op(const bchar *token, bool *is_unary)
+{
+	// Check for unary operators
+	if ((token[0] == '!' && token[1] == '\0') || token[0] == '~') {
+		*is_unary = true;
+		return true;
+	}
+	*is_unary = false;
+
+	// Check for sign at beginning of integer literal
+	if (token[0] == '+' || token[0] == '-') {
+		return !isdigit(token[1]);
+	}
+
+	// Use binary search for efficiency
+	char c = token[0];
+	int low = 0, high = sizeof(ops) - 2, mid;
+	while (low <= high) {
+		mid = (low + high) / 2;
+		int comp = c - ops[mid];
+		if (comp < 0) {
+			high = mid - 1;
+		}
+		else if (comp > 0) {
+			low = mid + 1;
+		}
+		else {
+			return true;
+		}
+	}
+	return false;
+}
 
 void expr_init(struct expr *e, bchar *op_val)
 {
@@ -31,6 +72,147 @@ void expr_destroy(struct expr *e)
 	}
 }
 
+int expr_eval(struct expr *e, int64_t *val)
+{
+	int ret;
+	if (!e->op_val) { // Null expression
+		if (!e->lhs || e->rhs) {
+			stmsgf(SMT_ERROR, "cannot evaluate null expression");
+			ret = 1;
+		}
+		else {
+			ret = expr_eval(e->lhs, val);
+		}
+	}
+	else if (e->lhs) { // This must be an operator
+		const bchar *op = e->op_val;
+		bool is_unary;
+		if (!is_op(op, &is_unary)) {
+			stmsgf(SMT_ERROR, "expected operator, not \"%s\"", op);
+			ret = 1;
+		}
+		else if (!is_unary && !e->rhs) {
+			stmsgf(SMT_ERROR, "expected rhs when evaluating operator \"%s\"", op);
+			ret = 1;
+		}
+		else if (is_unary && e->rhs) {
+			stmsgf(SMT_ERROR, "unexpected rhs when evaluating unary operator \"%s\"", op);
+			ret = 1;
+		}
+		else {
+			// Evaluate lhs and rhs
+			int64_t lv, rv;
+			ret = expr_eval(e->lhs, &lv);
+			if (!ret && e->rhs) {
+				ret = expr_eval(e->rhs, &rv);
+			}
+			// Combine lhs and rhs using operator
+			if (!ret) {
+				bool unrec = false;
+				switch (*op) {
+				case '*':
+					*val = lv * rv;
+					break;
+				case '/':
+					*val = lv / rv;
+					break;
+				case '%':
+					*val = lv % rv;
+					break;
+				case '+':
+					*val = lv + rv;
+					break;
+				case '-':
+					*val = lv - rv;
+					break;
+				case '<':
+					op++;
+					if (*op == '<') *val = lv << rv;
+					else if (*op == '=') *val = lv <= rv;
+					else {
+						op--;
+						*val = lv < rv;
+					}
+					break;
+				case '>':
+					op++;
+					if (*op == '>') *val = lv >> rv;
+					else if (*op == '=') *val = lv >= rv;
+					else {
+						op--;
+						*val = lv > rv;
+					}
+					break;
+				case '=':
+					op++;
+					if (*op == '=') *val = lv == rv;
+					else {
+						op--;
+						unrec = true; // Don't know how to handle assignment operator
+					}
+					break;
+				case '&':
+					op++;
+					if (*op == '&') *val = lv && rv;
+					else {
+						op--;
+						*val = lv & rv;
+					}
+					break;
+				case '^':
+					*val = lv ^ rv;
+					break;
+				case '|':
+					op++;
+					if (*op == '|') *val = lv || rv;
+					else {
+						op--;
+						*val = lv | rv;
+					}
+					break;
+				case '!':
+					op++;
+					if (*op == '=') *val = lv != rv;
+					else {
+						op--;
+						assert(is_unary);
+						*val = !lv;
+					}
+					break;
+				case '~':
+					assert(is_unary);
+					*val = ~lv;
+					break;
+				case ',':
+					*val = rv;
+					break;
+				default:
+					unrec = true;
+				}
+				assert(*(++op) == '\0');
+				if (unrec) {
+					stmsgf(SMT_ERROR, "unrecognized operator \"%s\"", op);
+					ret = 1;
+				}
+			}
+		}
+	}
+	else { // This must be a value
+		if (e->rhs) {
+			stmsgf(SMT_ERROR, "unexpected rhs when evaluating expression");
+			ret = 1;
+		}
+		else if (!parse_int(e->op_val, val)) {
+			stmsgf(SMT_ERROR, "failed to parse integer literal \"%s\"", e->op_val);
+			ret = 1;
+		}
+		else {
+			ret = 0;
+		}
+	}
+	return ret;
+}
+
 void expr_parser_init(struct expr_parser *p)
 {
 	p->expr = NULL;
@@ -50,32 +232,6 @@ void expr_parser_destroy(struct expr_parser *p)
 		free(p->subp);
 		p->subp = NULL;
 	}
-}
-
-// @todo: Consolidate with tokenizer.
-// These characters are operators or begin operators.
-// The list must be in numeric order.
-static const char ops[] = "\n!%&()*+,-./;<=>?@[\\]^`{|}~";
-
-// Returns whether the given character is in the above list
-static bool isop(ucp c)
-{
-	// Use binary search for efficiency
-	int low = 0, high = sizeof(ops) - 2, mid;
-	while (low <= high) {
-		mid = (low + high) / 2;
-		int comp = c - ops[mid];
-		if (comp < 0) {
-			high = mid - 1;
-		}
-		else if (comp > 0) {
-			low = mid + 1;
-		}
-		else {
-			return true;
-		}
-	}
-	return false;
 }
 
 // Return the precedence value of the given operator.
@@ -119,7 +275,7 @@ static int prec_val(const bchar *op)
 		break;
 	case '!':
 		if (op[1] == '=') ret = 4;
-		else ret = -1; // @todo: unary
+		else ret = -1; // Unary
 		break;
 	case ',':
 		ret = 11;
@@ -169,10 +325,10 @@ int expr_parser_parse(struct expr_parser *p, bchar *token)
 	// Note: Here we rely on the fact that all operator tokens begin with characters
 	// that have single-byte representation in UTF-8, and that no other tokens will
 	// begin with these bytes.
-	bool is_op = isop(token[0]);
-
+	bool is_unary;
+	bool this_op = is_op(token, &is_unary);
 	if (p->afterval) { // Expect operator
-		if (!is_op || token[0] == '(') {
+		if (!this_op || is_unary || token[0] == '(') {
 			stmsgf(SMT_ERROR, "expected operator, not \"%s\"", token);
 			ret = 1;
 		}
@@ -202,8 +358,8 @@ int expr_parser_parse(struct expr_parser *p, bchar *token)
 		expr_parser_init(p->subp);
 		bfree(token);
 	}
-	// Expect value
-	else if (is_op && token[0] != ')') {
+	// Expect value or unary operator
+	else if (this_op && !is_unary && token[0] != ')') {
 		// @todo: Don't fail for unary operators that modify a single value like '!'
 		stmsgf(SMT_ERROR, "expected value, not \"%s\"", token);
 		ret = 1;
@@ -222,9 +378,19 @@ int expr_parser_parse(struct expr_parser *p, bchar *token)
 		else {
 			struct expr *rmost; // Find rightmost operator
 			for (rmost = p->expr; rmost->rhs; rmost = rmost->rhs);
-			rmost->rhs = e; // Append value to rightmost
+			// See if rightmost is unary
+			bool isrmostu;
+			assert(is_op(rmost->op_val, &isrmostu));
+			if (isrmostu) { // If it is, append to leftmost from rightmost
+				struct expr *lmfr;
+				for (lmfr = rmost; lmfr->lhs; lmfr = lmfr->lhs);
+				lmfr->lhs = e;
+			}
+			else {
+				rmost->rhs = e; // Append value to rightmost
+			}
 		}
-		p->afterval = true;
+		p->afterval = !is_unary;
 	}
 
 	if (ret) {

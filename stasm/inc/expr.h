@@ -3,6 +3,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #include "bstr.h"
 
@@ -24,6 +25,10 @@ void expr_init(struct expr*, bchar *op_val);
 
 // Destroys the given expression and all sub-expressions
 void expr_destroy(struct expr*);
+
+// Evaluates the given expression, which must consist of integer literals.
+// Returns zero on success.
+int expr_eval(struct expr*, int64_t *val);
 
 //
 // Expression parser

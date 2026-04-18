@@ -22,7 +22,7 @@ static const char ops[] = "\n!%&()*+,-./;<=>?@[\\]^`{|}~";
 // These characters begin two-character operators.
 // The list must be in numeric order.
 // Currently this list must be a subset of the ops list.
-static const char begin_ops[] = "&+-/<=>|";
+static const char begin_ops[] = "!&+-/<=>|";
 
 // Returns whether the given character is in the above list
 static bool isop(ucp c)
@@ -176,6 +176,7 @@ int tokenizer_parse(struct tokenizer *tz, ucp c)
 				combine = c == '=' || c == '<';
 				break;
 			case '=': // Check for "=="
+			case '!': // Check for "!="
 				combine = c == '=';
 				break;
 			case '>': // Check for ">=" or ">>"
