@@ -8,43 +8,32 @@
 #include "lits.h"
 #include "stmsg.h"
 
-// These characters are operators or begin operators.
-// The list must be in numeric order.
-static const char ops[] = "\n!%&()*,./;<=>?@[\\]^`{|}";
-
 // Returns whether the given token is an operator.
 // Sets *is_unary to whether the operator is a unary operator.
 static bool is_op(const bchar *token, bool *is_unary)
 {
+	*is_unary = false;
+
+	// We rely on the input string being encoded with UTF-8 and check the first byte.
+	// Quoted strings are not operators.
+	char fb = token[0];
+	if (fb >= 0x7f || fb <= ' ' || fb == '"' || fb == '\'') return false;
+
 	// Check for unary operators
-	if ((token[0] == '!' && token[1] == '\0') || token[0] == '~') {
+	if ((fb == '!' && token[1] == '\0') || fb == '~') {
 		*is_unary = true;
 		return true;
 	}
-	*is_unary = false;
 
 	// Check for sign at beginning of integer literal
-	if (token[0] == '+' || token[0] == '-') {
+	if (fb == '+' || fb == '-') {
 		return !isdigit(token[1]);
 	}
 
-	// Use binary search for efficiency
-	char c = token[0];
-	int low = 0, high = sizeof(ops) - 2, mid;
-	while (low <= high) {
-		mid = (low + high) / 2;
-		int comp = c - ops[mid];
-		if (comp < 0) {
-			high = mid - 1;
-		}
-		else if (comp > 0) {
-			low = mid + 1;
-		}
-		else {
-			return true;
-		}
-	}
-	return false;
+	// Any token beginning with a printable character that is non-alphanumeric
+	// and not an underscore, dollar sign, colon, or whitespace is considered an operator.
+	// This approach works because the tokenizer recognizes operators in a similar way.
+	return !isalnum(fb) && fb != '_' && fb != '$' && fb != ':';
 }
 
 void expr_init(struct expr *e, bchar *op_val)

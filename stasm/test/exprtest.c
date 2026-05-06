@@ -145,5 +145,36 @@ int main()
 	expr_destroy(e);
 	free(e);
 
+	// Test treatment of quoted strings as values
+	ret = parse_expr("\"hello\"+ 1", &e);
+	assert(ret == 0 && e && bstrcmpc(e->op_val, "+") == 0 && e->lhs &&
+		bstrcmpc(e->lhs->op_val, "\"hello\"") == 0 && !e->lhs->lhs && !e->lhs->rhs &&
+		e->rhs && bstrcmpc(e->rhs->op_val, "1") == 0 && !e->rhs->lhs && !e->rhs->rhs);
+	expr_destroy(e);
+	free(e);
+
+	ret = parse_expr("'h'+ 1", &e);
+	assert(ret == 0 && e && bstrcmpc(e->op_val, "+") == 0 && e->lhs &&
+		bstrcmpc(e->lhs->op_val, "'h'") == 0 && !e->lhs->lhs && !e->lhs->rhs &&
+		e->rhs && bstrcmpc(e->rhs->op_val, "1") == 0 && !e->rhs->lhs && !e->rhs->rhs);
+	expr_destroy(e);
+	free(e);
+
+	// Test treatment of symbols as values
+	ret = parse_expr("$sym*2", &e);
+	assert(ret == 0 && e && bstrcmpc(e->op_val, "*") == 0 && e->lhs &&
+		bstrcmpc(e->lhs->op_val, "$sym") == 0 && !e->lhs->lhs && !e->lhs->rhs &&
+		e->rhs && bstrcmpc(e->rhs->op_val, "2") == 0 && !e->rhs->lhs && !e->rhs->rhs);
+	expr_destroy(e);
+	free(e);
+
+	// Test treatment of labels as values
+	ret = parse_expr(":lbl/3", &e);
+	assert(ret == 0 && e && bstrcmpc(e->op_val, "/") == 0 && e->lhs &&
+		bstrcmpc(e->lhs->op_val, ":lbl") == 0 && !e->lhs->lhs && !e->lhs->rhs &&
+		e->rhs && bstrcmpc(e->rhs->op_val, "3") == 0 && !e->rhs->lhs && !e->rhs->rhs);
+	expr_destroy(e);
+	free(e);
+
 	return 0;
 }

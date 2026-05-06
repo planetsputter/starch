@@ -15,34 +15,14 @@ enum { // Tokenizer states
 	TZS_MULTI_COMMENT,
 };
 
-// These characters are operators or begin operators.
-// The list must be in numeric order.
-static const char ops[] = "\n!%&()*+,-./;<=>?@[\\]^`{|}~";
-
 // These characters begin two-character operators.
 // The list must be in numeric order.
-// Currently this list must be a subset of the ops list.
 static const char begin_ops[] = "!&+-/<=>|";
 
-// Returns whether the given character is in the above list
+// Returns whether the given character is an operator character
 static bool isop(ucp c)
 {
-	// Use binary search for efficiency
-	int low = 0, high = sizeof(ops) - 2, mid;
-	while (low <= high) {
-		mid = (low + high) / 2;
-		int comp = c - ops[mid];
-		if (comp < 0) {
-			high = mid - 1;
-		}
-		else if (comp > 0) {
-			low = mid + 1;
-		}
-		else {
-			return true;
-		}
-	}
-	return false;
+	return c < 0x7f && c > ' ' && !isalnum(c) && c != '_' && c != '$' && c != ':' && c != '"' && c != '\'';
 }
 
 // Returns whether the given character begins an operator
@@ -117,7 +97,7 @@ int tokenizer_parse(struct tokenizer *tz, ucp c)
 		int error = 0;
 		switch (tz->state) {
 		case TZS_DEFAULT:
-			if (c == 0 || isspace((int)c) || isop(c) || c == '"' || c == '\'' || c == '-' || c == '+') {
+			if (c == 0 || isspace((int)c) || isop(c) || c == '"' || c == '\'') {
 				// These characters end the current token, if any
 				tokenizer_enqueue(tz);
 				bool capture = true, enqueue = false;
@@ -127,10 +107,10 @@ int tokenizer_parse(struct tokenizer *tz, ucp c)
 				else if (begins_op(c)) { // Character begins an operator
 					tz->state = TZS_OP;
 				}
-				else if (isop(c)) { // This character is an operator
+				else if (isop(c) || c == '\n') { // This character is an operator or is treated like one
 					enqueue = true;
 				}
-				else { // Whitespace a null characters end tokens but do not begin tokens
+				else { // Whitespace and null characters end tokens but do not begin tokens
 					capture = false;
 				}
 				if (capture) {
