@@ -197,11 +197,15 @@ bool parse_int(const bchar *s, int64_t *val)
 	}
 	else { // Decimal literal
 		for (; isdigit(*p); p++) {
-			if (temp_val > 1844674407370955161 || temp_val < 0) return false; // *10 would overflow
-			temp_val *= 10;
-			bool nowneg = temp_val < 0;
-			temp_val += *p - '0';
-			if (nowneg && (temp_val >= 0)) return false; // Sign flip indicates overflow
+			// Wrapping (setting high bit and so becoming negative) is okay. Overflow is not.
+			if (temp_val > 0x1999999999999999l || temp_val < 0) return false; // *10 would overflow
+			// Note: A bug in gcc 15.2.0 requires us to compare temp_val to the greatest value
+			// that will not wrap when multiplied by 10, rather than comparing for negative
+			// after multiplying by 10. Otherwise when compiled with optimization the check for
+			// negative will apparently be skipped.
+			bool wrap = temp_val > 0x0cccccccccccccccl; // Values greater than this will wrap
+			temp_val = temp_val * 10 + *p - '0';
+			if (wrap && (temp_val >= 0)) return false; // Sign flip indicates overflow
 		}
 	}
 
