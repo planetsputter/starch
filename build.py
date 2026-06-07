@@ -41,8 +41,10 @@ def mk_esc_rule(rule):
 def mk_esc_recipe(rec):
 	return sh_esc(rec).replace('$', '$$')
 
-# Writes a dependency rule to the given makefile, escaping the target and each dependency
+# Writes a dependency rule to the given makefile, escaping the target and each dependency.
+# deps may be a string representing a single dependency or a list of dependencies.
 def mf_write_rule(mf, target, deps):
+	if isinstance(deps, str): deps = [deps]
 	mf.write('%s:%s\n' % (mk_esc_rule(target), ' '.join([mk_esc_rule(d) for d in deps])))
 
 # Process a build configuration file
@@ -64,10 +66,8 @@ def process_cfg(filename, buildcfg):
 		'all:\n' +
 		'clean:\n' +
 		'\t@echo rm -f .build/obj/*.o\n' +
-		'\t@echo rm -f .build/lastcfg\n' +
 		'ifneq ($(filter clean,$(MAKECMDGOALS)),)\n' +
 		'    $(shell rm -f .build/obj/*.o)\n' +
-		'    $(shell rm -f .build/lastcfg)\n' +
 		'endif\n')
 
 	# Parameters from file
@@ -156,8 +156,9 @@ def process_cfg(filename, buildcfg):
 			# Write extra dependency rule
 			mf_write_rule(mf, target, libraries)
 
-		# Write the target object dependencies rule to the makefile
-		mf_write_rule(mf, target, objs)
+		# Write the target dependencies rule to the makefile.
+		# The dependencies themselves depend on the build configuration.
+		mf_write_rule(mf, target, objs + ['.build/lastcfg'])
 
 		# Write the recipe to create the target
 		if target_type == 'bin':
@@ -171,6 +172,7 @@ def process_cfg(filename, buildcfg):
 				mk_esc_recipe(objs)))
 		elif target_type == 'so':
 			raise Exception('unimplemented')
+
 		targets.append(target)
 
 	# Parse each line of the file
@@ -266,21 +268,6 @@ if __name__ == '__main__':
 		# Set our environment variable BUILDCFG so the make process will inherit it
 		os.putenv('BUILDCFG', buildcfg)
 
-		# Check what the last build configuration was
-		lastcfg = None
-		try:
-			file = open('.build/lastcfg')
-			lastcfg = file.readline().strip()
-			file.close()
-		except FileNotFoundError as e:
-			pass
-
-		# Warn if this config is different from the last and we are not cleaning.
-		# This can result in stale files if recipes change but dependencies don't.
-		if lastcfg != None and lastcfg != buildcfg and 'clean' not in args:
-			print('%s: warning: No clean since build for config \'%s\'. Now building for config \'%s\'.' %
-				(sys.argv[0], lastcfg, buildcfg), file=sys.stderr)
-
 		# Specify '-j' argument to use all available processors unless '-j' is already specified
 		if '-j' not in args: args = ['-j', str(multiprocessing.cpu_count())] + args
 
@@ -290,14 +277,22 @@ if __name__ == '__main__':
 		except Exception as e:
 			raise Exception('failed to process %s: %s' % (sh_esc(cfgfile), str(e)))
 
-		result = subprocess.run(('make', '-f', '.build/makefile', *args))
+		# Check what the last build configuration was
+		lastcfg = None
+		try:
+			file = open('.build/lastcfg')
+			lastcfg = file.readline().strip()
+			file.close()
+		except FileNotFoundError as e:
+			pass
 
-		if not ('clean' in targets and len(targets) == 1):
-			# Record current build configuration unless we only cleaned
+		if lastcfg != buildcfg:
+			# Record current build configuration if different from last
 			file = open('.build/lastcfg', 'w')
 			file.write(buildcfg)
 			file.close()
 
+		result = subprocess.run(('make', '-f', '.build/makefile', *args))
 		result.check_returncode();
 
 	except Exception as e:
