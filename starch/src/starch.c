@@ -307,6 +307,7 @@ static const char *op_names[] = {
 	//
 	// Special Operations
 	//
+	[op_pushsfp] = "pushsfp",
 	[op_setsbp] = "setsbp",
 	[op_setsfp] = "setsfp",
 	[op_setsp] = "setsp",
@@ -831,6 +832,9 @@ int imm_type_for_opcode(int opcode)
 	//
 	// Special Operations
 	//
+	case op_pushsfp:
+		ret = SDT_VOID;
+		break;
 	case op_setsbp:
 	case op_setsfp:
 	case op_setsp:

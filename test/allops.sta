@@ -237,6 +237,7 @@ storerpopsfp8
 storerpopsfp16
 storerpopsfp32
 storerpopsfp64
+pushsfp
 setsbp 0
 setsfp 0
 setsp 0

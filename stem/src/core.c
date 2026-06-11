@@ -2943,6 +2943,12 @@ int core_step(struct core *core, struct mem *mem)
 	//
 	// Special Operations
 	//
+	case op_pushsfp:
+		ret = core_frame_write64(core, mem, core->sp, core->sfp); // Write to stack
+		if (ret) break;
+		core->sp += 8;
+		core->pc += 1;
+		break;
 	case op_setsbp:
 		ret = core_mem_read64(core, mem, core->pc + 1, &temp_u64); // Read addr
 		if (ret) break;

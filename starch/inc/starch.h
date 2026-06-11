@@ -311,13 +311,14 @@ enum {
 	//
 	// Special Operations
 	//
-	op_setsbp, // Set SBP 64 bit imm
-	op_setsfp, // Set SFP to 64 bit imm
-	op_setsp,  // Set SP to 64 bit imm
-	op_setslp, // Set SLP to 64 bit imm
-	op_halt,   // Halts the processor with 8 bit unsigned imm exit code
-	op_ext,    // Introduces an extended operation
-	op_nop,    // No op
+	op_pushsfp, // Push 64 bit SFP value
+	op_setsbp,  // Set SBP 64 bit imm
+	op_setsfp,  // Set SFP to 64 bit imm
+	op_setsp,   // Set SP to 64 bit imm
+	op_setslp,  // Set SLP to 64 bit imm
+	op_halt,    // Halts the processor with 8 bit unsigned imm exit code
+	op_ext,     // Introduces an extended operation
+	op_nop,     // No op
 };
 
 // Returns the name of the given opcode, or NULL for an invalid opcode
