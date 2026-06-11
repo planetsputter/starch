@@ -36,6 +36,7 @@ enum {
 	op_pop16, // Pop top 2 byte
 	op_pop32, // Pop top 4 byte
 	op_pop64, // Pop top 8 byte
+	op_popn,  // Pop by top 64-bit signed integer
 
 	//
 	// Duplication operations

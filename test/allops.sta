@@ -20,6 +20,7 @@ pop8
 pop16
 pop32
 pop64
+popn
 dup8
 dup16
 dup32

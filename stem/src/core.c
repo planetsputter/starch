@@ -602,6 +602,12 @@ int core_step(struct core *core, struct mem *mem)
 		core->sp -= 8;
 		core->pc += 1;
 		break;
+	case op_popn:
+		ret = core_frame_read64(core, mem, core->sp - 8, &temp_u64);
+		if (ret) break;
+		core->sp += (int64_t)temp_u64 - 8;
+		core->pc += 1;
+		break;
 
 	//
 	// Duplication operations

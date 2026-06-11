@@ -129,12 +129,15 @@ These operations are used to push immediate data (data in program memory) onto t
 
 These operations are used to pop data from the stack.
 
-| Op Code | PC After | Stack Before | Stack After |
-|:------- |:-------- |:------------ |:----------- |
-| pop8    | PC+1     | a8           |             |
-| pop16   | PC+1     | a16          |             |
-| pop32   | PC+1     | a32          |             |
-| pop64   | PC+1     | a64          |             |
+| Op Code | PC After | Stack Before | SFP After  |
+|:------- |:-------- |:------------ |:---------- |
+| pop8    | PC+1     | a8           | SFP-1      |
+| pop16   | PC+1     | a16          | SFP-2      |
+| pop32   | PC+1     | a32          | SFP-4      |
+| pop64   | PC+1     | a64          | SFP-8      |
+| popn    | PC+1     | ai64         | SFP+ai64-8 |
+
+The popn instruction pops a variable number of bytes from the stack. Negative values allow pushing uninitialized data onto the stack, as for stack-based arrays.
 
 ### Duplication Operations
 

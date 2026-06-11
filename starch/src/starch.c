@@ -34,6 +34,7 @@ static const char *op_names[] = {
 	[op_pop16] = "pop16",
 	[op_pop32] = "pop32",
 	[op_pop64] = "pop64",
+	[op_popn] = "popn",
 
 	//
 	// Duplication operations
@@ -543,6 +544,7 @@ int imm_type_for_opcode(int opcode)
 	case op_pop16:
 	case op_pop32:
 	case op_pop64:
+	case op_popn:
 
 	//
 	// Duplication operations
