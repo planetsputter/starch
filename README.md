@@ -17,6 +17,7 @@ Projects
  * [stem](stem) is a Starch emulator. It executes Starch code in a emulated environment on the host machine.
  * [stub](stub) is a custom binary file format used by Starch projects.
  * [util](util) is a collection of utilities used by Starch projects.
+ * [.vim](.vim) is a collection of syntax highlighting files for viewing Starch assembly in Vim. The syntax highlighting files can be installed for a user by copying them to the user's home directory, as in `cp -r .vim ~`.
 
 How to Build
 ------------
