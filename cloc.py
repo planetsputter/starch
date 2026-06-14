@@ -112,6 +112,7 @@ parsers = {
 	'c' : parse_c_line,
 	'h' : parse_c_line,
 	'md' :  parse_md_line,
+	'sta' : parse_c_line, # Starch assembly files can be counted with C parser
 }
 
 # Returns the extension of the given path, or empty string if there is none
