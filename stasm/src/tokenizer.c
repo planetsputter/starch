@@ -84,6 +84,17 @@ static void tokenizer_enqueue(struct tokenizer *tz)
 		else {
 			tz->token1 = tz->ctoken;
 		}
+		/*
+		// The current token is a value if it is not an operator
+		// and is not the first token in a statement
+		tz->afterval = tz->iws > 0 && !isop(tz->ctoken[0]);
+		if (tz->ctoken[0] == ';' || tz->ctoken[0] == '\n') {
+			tz->iws = 0;
+		}
+		else {
+			tz->iws++;
+		}
+		*/
 		tz->ctoken = NULL;
 	}
 }
@@ -139,8 +150,22 @@ int tokenizer_parse(struct tokenizer *tz, ucp c)
 			bool enqueue = true; // Whether to enqueue token immediately
 			switch (tz->ctoken[0]) {
 			case '-':
+				if (c == '-' || c == '>') { // Check for "--" or "->"
+					combine = true;
+				}
+				else if (!tz->afterval && isdigit(c)) { // Sign begins literal
+					combine = true;
+					enqueue = false;
+				}
+				else { // Sign becomes its own token
+					combine = false;
+				}
+				break;
 			case '+':
-				if (isdigit(c)) { // Sign begins literal
+				if (c == '+') { // Check for "++"
+					combine = true;
+				}
+				else if (!tz->afterval && isdigit(c)) { // Sign begins literal
 					combine = true;
 					enqueue = false;
 				}

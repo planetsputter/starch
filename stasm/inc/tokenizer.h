@@ -10,6 +10,8 @@ struct tokenizer {
 	int state;
 	// Current token and two enqueued tokens
 	bchar *ctoken, *token1, *token2;
+	bool afterval; // Whether last enqueued token was a value
+	int iws; // Index of current token within statement
 };
 
 // Initializes the tokenizer

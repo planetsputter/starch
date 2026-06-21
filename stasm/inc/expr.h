@@ -37,10 +37,11 @@ struct expr_parser {
 	struct expr *expr; // Current expression
 	bool afterval; // Whether we just parsed a value as opposed to an operator
 	struct expr_parser *subp; // Parser for parenthetical sub-expression
+	bchar *group_char; // "(", "[", or "{" for grouped, or NULL for ungrouped
 };
 
-// Initializes the given expression parser
-void expr_parser_init(struct expr_parser*);
+// Initializes the given expression parser with the given group character
+void expr_parser_init(struct expr_parser*, bchar *group_char);
 
 // Destroys the given expression parser and releases its resources
 void expr_parser_destroy(struct expr_parser*);

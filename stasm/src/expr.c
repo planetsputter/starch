@@ -202,11 +202,12 @@ int expr_eval(struct expr *e, int64_t *val)
 	return ret;
 }
 
-void expr_parser_init(struct expr_parser *p)
+void expr_parser_init(struct expr_parser *p, bchar *group_char)
 {
 	p->expr = NULL;
 	p->afterval = false;
 	p->subp = NULL;
+	p->group_char = group_char;
 }
 
 void expr_parser_destroy(struct expr_parser *p)
@@ -220,6 +221,10 @@ void expr_parser_destroy(struct expr_parser *p)
 		expr_parser_destroy(p->subp);
 		free(p->subp);
 		p->subp = NULL;
+	}
+	if (p->group_char) {
+		bfree(p->group_char);
+		p->group_char = NULL;
 	}
 }
 
@@ -280,13 +285,19 @@ int expr_parser_parse(struct expr_parser *p, bchar *token)
 	// @todo: Use line and character numbers for error messages
 	struct expr *e = NULL;
 	int ret = 0;
-	if (token[0] == ')') {
+	if (token[0] == ')' || token[0] == ']' || token[0] == '}') {
 		if (!p->subp) {
-			stmsgf(SMT_ERROR, "unmatched \")\"");
+			stmsgf(SMT_ERROR, "unmatched \"%c\"", token[0]);
 			ret = 1;
 		}
 		else if (!p->subp->subp) { // This finishes p->subp
-			if (!expr_parser_complete(p->subp)) {
+			if ((p->subp->group_char[0] == '(' && token[0] != ')') ||
+				(p->subp->group_char[0] == '[' && token[0] != ']') ||
+				(p->subp->group_char[0] == '{' && token[0] != '}')) {
+				stmsgf(SMT_ERROR, "unmatched \"%c\"", token[0]);
+				ret = 1;
+			}
+			else if (!expr_parser_complete(p->subp)) {
 				stmsgf(SMT_ERROR, "incomplete expression");
 				ret = 1;
 			}
@@ -297,6 +308,8 @@ int expr_parser_parse(struct expr_parser *p, bchar *token)
 				expr_init(e, NULL);
 				e->lhs = p->subp->expr;
 				p->subp->expr = NULL;
+				e->op_val = p->subp->group_char;
+				p->subp->group_char = NULL;
 				expr_parser_destroy(p->subp);
 				free(p->subp);
 				p->subp = NULL;
@@ -317,7 +330,8 @@ int expr_parser_parse(struct expr_parser *p, bchar *token)
 	bool is_unary;
 	bool this_op = is_op(token, &is_unary);
 	if (p->afterval) { // Expect operator
-		if (!this_op || is_unary || token[0] == '(') {
+		if (!this_op || is_unary || token[0] == '(' || token[0] == '[' ||
+			token[0] == '{') {
 			stmsgf(SMT_ERROR, "expected operator, not \"%s\"", token);
 			ret = 1;
 		}
@@ -342,13 +356,13 @@ int expr_parser_parse(struct expr_parser *p, bchar *token)
 			p->afterval = false;
 		}
 	}
-	else if (token[0] == '(') {
+	else if (token[0] == '(' || token[0] == '[' || token[0] == '{') {
 		p->subp = (struct expr_parser*)malloc(sizeof(struct expr_parser));
-		expr_parser_init(p->subp);
-		bfree(token);
+		expr_parser_init(p->subp, token);
 	}
 	// Expect value or unary operator
-	else if (this_op && !is_unary && token[0] != ')') {
+	else if (this_op && !is_unary && token[0] != ')' && token[0] != ']' &&
+		token[0] != '}') {
 		// @todo: Don't fail for unary operators that modify a single value like '!'
 		stmsgf(SMT_ERROR, "expected value, not \"%s\"", token);
 		ret = 1;
@@ -391,9 +405,5 @@ int expr_parser_parse(struct expr_parser *p, bchar *token)
 bool expr_parser_complete(struct expr_parser *p)
 {
 	// @todo: Check for unfinished sub-expressions
-	bool complete = !p->subp && (!p->expr || p->afterval);
-	if (!complete) {
-		stmsgf(SMT_ERROR, "incomplete expression");
-	}
-	return complete;
+	return !p->subp && (!p->expr || p->afterval);
 }

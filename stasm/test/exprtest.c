@@ -14,7 +14,7 @@ static int parse_expr(const char *expr, struct expr **e)
 {
 	// Initialize expression parser
 	struct expr_parser p;
-	expr_parser_init(&p);
+	expr_parser_init(&p, NULL);
 
 	// Initialize tokenizer
 	struct tokenizer tz;
@@ -111,28 +111,58 @@ int main()
 	expr_destroy(e);
 	free(e);
 
-	// Test rejection of unmatched parenthesis
+	// Test rejection of unmatched grouping characters
 	ret = parse_expr(")", &e);
 	assert(ret != 0 && !e);
 	ret = parse_expr("(", &e);
 	assert(ret != 0 && !e);
+	ret = parse_expr("[", &e);
+	assert(ret != 0 && !e);
+	ret = parse_expr("]", &e);
+	assert(ret != 0 && !e);
+	ret = parse_expr("{", &e);
+	assert(ret != 0 && !e);
+	ret = parse_expr("}", &e);
+	assert(ret != 0 && !e);
+	ret = parse_expr("{]", &e);
+	assert(ret != 0 && !e);
+	ret = parse_expr("[)", &e);
+	assert(ret != 0 && !e);
+	ret = parse_expr("(}", &e);
+	assert(ret != 0 && !e);
 
-	// Test rejection of parenthesis where operator expected
+	// Test rejection of groups where operator expected
 	ret = parse_expr("A()", &e);
 	assert(ret != 0 && e && bstrcmpc(e->op_val, "A") == 0 && !e->lhs && !e->rhs);
 	expr_destroy(e);
 	free(e);
+	ret = parse_expr("A[]", &e);
+	assert(ret != 0 && e && bstrcmpc(e->op_val, "A") == 0 && !e->lhs && !e->rhs);
+	expr_destroy(e);
+	free(e);
+	ret = parse_expr("A{}", &e);
+	assert(ret != 0 && e && bstrcmpc(e->op_val, "A") == 0 && !e->lhs && !e->rhs);
+	expr_destroy(e);
+	free(e);
 
-	// Test acceptance of expressions with empty parenthesis
+	// Test acceptance of expressions with empty groups
 	ret = parse_expr("()", &e);
-	assert(ret == 0 && e && e->op_val == NULL && !e->lhs && !e->rhs);
+	assert(ret == 0 && e && bstrcmpc(e->op_val, "(") == 0 && !e->lhs && !e->rhs);
+	expr_destroy(e);
+	free(e);
+	ret = parse_expr("[]", &e);
+	assert(ret == 0 && e && bstrcmpc(e->op_val, "[") == 0 && !e->lhs && !e->rhs);
+	expr_destroy(e);
+	free(e);
+	ret = parse_expr("{}", &e);
+	assert(ret == 0 && e && bstrcmpc(e->op_val, "{") == 0 && !e->lhs && !e->rhs);
 	expr_destroy(e);
 	free(e);
 
 	ret = parse_expr("A*()", &e);
 	assert(ret == 0 && e && bstrcmpc(e->op_val, "*") == 0 && e->lhs &&
 		bstrcmpc(e->lhs->op_val, "A") == 0 && !e->lhs->lhs && !e->lhs->rhs &&
-		e->rhs && !e->rhs->op_val && !e->rhs->lhs && !e->rhs->rhs);
+		e->rhs && bstrcmpc(e->rhs->op_val, "(") == 0 && !e->rhs->lhs && !e->rhs->rhs);
 	expr_destroy(e);
 	free(e);
 
@@ -140,7 +170,7 @@ int main()
 	assert(ret == 0 && e && bstrcmpc(e->op_val, "-") == 0 && e->lhs &&
 		bstrcmpc(e->lhs->op_val, "*") == 0 && e->lhs->lhs &&
 		bstrcmpc(e->lhs->lhs->op_val, "A") == 0 && !e->lhs->lhs->lhs && !e->lhs->lhs->rhs &&
-		e->lhs->rhs && !e->lhs->rhs->op_val && !e->lhs->rhs->lhs && !e->lhs->rhs->rhs &&
+		e->lhs->rhs && bstrcmpc(e->lhs->rhs->op_val, "(") == 0 && !e->lhs->rhs->lhs && !e->lhs->rhs->rhs &&
 		e->rhs && bstrcmpc(e->rhs->op_val, "B") == 0 && !e->rhs->lhs && !e->rhs->rhs);
 	expr_destroy(e);
 	free(e);
