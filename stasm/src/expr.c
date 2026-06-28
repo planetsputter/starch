@@ -148,7 +148,6 @@ int expr_eval(struct expr *e, int64_t *val, void *userptr, expr_lookup_func f)
 					}
 					break;
 				case '>':
-					op++;
 					if (*op == '>') {
 						op++;
 						*val = lv >> rv;

@@ -63,7 +63,7 @@ static int parse_expr(const char *expr, struct expr **e)
 	return ret;
 }
 
-int64_t A = 0, B = 0, C = 0;
+int64_t A = 0, B = 0, C = 0, D = 0, E = 0;
 
 // Lookup function for evaluation of non-literal values
 bool nonlit_lookup(void *userptr, bchar *strval, int64_t *intval)
@@ -77,6 +77,12 @@ bool nonlit_lookup(void *userptr, bchar *strval, int64_t *intval)
 	}
 	else if (bstrcmpc(strval, "C") == 0) {
 		*intval = C;
+	}
+	else if (bstrcmpc(strval, "D") == 0) {
+		*intval = D;
+	}
+	else if (bstrcmpc(strval, "E") == 0) {
+		*intval = E;
 	}
 	else {
 		return false;
@@ -95,6 +101,14 @@ void test_expr(const char *expr, int64_t val)
 	assert(ret == 0 && test_val == val);
 	expr_destroy(e);
 	free(e);
+}
+
+// Return a random 64-bit integer, weighted toward lower absolute values
+int64_t lograndi64()
+{
+	int64_t i = ((int64_t)random() << 32) ^ random();
+	int s = random() & 63;
+	return i >> s;
 }
 
 int main()
@@ -255,26 +269,86 @@ int main()
 
 	enum { TEST_ITER = 100 };
 	for (int i = 0; i < TEST_ITER; i++) {
+		// Generate random numbers
+		A = lograndi64();
+		B = lograndi64();
+		C = lograndi64();
+		D = random() & 63; // For bit shifts
+		E = random() & 63; // For bit shifts
+
 		// Test evaluation of expressions
-		A = random(), B = random(), C = random();
-		// Test * to /
-		test_expr("A * B / C", A * B / C);
-		test_expr("A / B * C", A / B * C);
-		// Test * to %
-		test_expr("A * B % C", A * B % C);
-		test_expr("A % B * C", A % B * C);
-		// Test * to +
+		// Test * to / precedence
+		if (C != 0) { // Avoid division by zero
+			test_expr("A * B / C", A * B / C);
+		}
+		if (B != 0) { // Avoid division by zero
+			test_expr("A / B * C", A / B * C);
+		}
+		// Test / associativity
+		if (B != 0 && C != 0) {
+			test_expr("A / B / C", A / B / C);
+		}
+		// Test * to % precedence
+		if (C != 0) { // Avoid division by zero
+			test_expr("A * B % C", A * B % C);
+		}
+		if (B != 0) { // Avoid division by zero
+			test_expr("A % B * C", A % B * C);
+		}
+		// Test % associativity
+		if (B != 0 && C != 0) {
+			test_expr("A % B % C", A % B % C);
+		}
+		// Test * to + precedence
 		test_expr("A * B + C", A * B + C);
 		test_expr("A + B * C", A + B * C);
-		// Test + to -
+		// Test + to - precedence
 		test_expr("A + B - C", A + B - C);
 		test_expr("A - B + C", A - B + C);
-		// Test + to <<
-		test_expr("A + B << (C & 63)", A + B << (C & 63));
-		test_expr("A << ((B + C) & 63)", A << ((B + C) & 63));
-		// Test + to >> @todo: debug
-		//test_expr("A + B >> (C & 63)", A + B >> (C & 63));
-		//test_expr("A >> ((B + C) & 63)", A >> ((B + C) & 63));
+		// Test - associativity
+		test_expr("A - B - C", A - B - C);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wparentheses"
+		// Test + to << precedence
+		test_expr("A + B << D", A + B << D);
+		test_expr("A << D + E", A << D + E);
+		// Test << associativity
+		test_expr("A << D << E", A << D << E);
+		// Test << to >> precedence
+		test_expr("A << D >> E", A << D >> E);
+		test_expr("A >> D << E", A >> D << E);
+		// Test >> associativity
+		test_expr("A >> D >> E", A >> D >> E);
+		// Test << to < precedence
+		test_expr("A << B < C", A << B < C);
+		test_expr("A < B << D", A < B << D);
+		// Test < associativity
+		test_expr("A < B < C", A < B < C);
+		// Test < to > precedence
+		test_expr("A < B > C", A < B > C);
+		test_expr("A > B < C", A > B < C);
+		// Test > associativity
+		test_expr("A > B > C", A > B > C);
+		// Test < to & precedence
+		test_expr("A < B & C", A < B & C);
+		test_expr("A & B < C", A & B < C);
+		// Test & to ^ precedence
+		test_expr("A & B ^ C", A & B ^ C);
+		test_expr("A ^ B & C", A ^ B & C);
+		// Test ^ to | precedence
+		test_expr("A ^ B | C", A ^ B | C);
+		test_expr("A | B ^ C", A | B ^ C);
+		// Test | to && precedence
+		test_expr("A | B && C", A | B && C);
+		test_expr("A && B | C", A && B | C);
+		// Test && to || precedence
+		test_expr("A && B || C", A && B || C);
+		test_expr("A || B && C", A || B && C);
+		// Test || to , precedence
+#pragma GCC diagnostic ignored "-Wunused-value"
+		test_expr("A || B , C", (A || B , C));
+		test_expr("A , B || C", (A , B || C));
+#pragma GCC diagnostic pop
 	}
 
 	return 0;
