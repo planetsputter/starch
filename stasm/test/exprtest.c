@@ -267,7 +267,7 @@ int main()
 	// Seed random number generator with current time in microseconds
 	srandom(tv.tv_usec + tv.tv_sec * 1000000);
 
-	enum { TEST_ITER = 100 };
+	enum { TEST_ITER = 500 };
 	for (int i = 0; i < TEST_ITER; i++) {
 		// Generate random numbers
 		A = lograndi64();
@@ -277,6 +277,9 @@ int main()
 		E = random() & 63; // For bit shifts
 
 		// Test evaluation of expressions
+		// Test ! to * precedence
+		test_expr("!A * B", !A * B);
+		test_expr("A * !B", A * !B);
 		// Test * to / precedence
 		if (C != 0) { // Avoid division by zero
 			test_expr("A * B / C", A * B / C);
