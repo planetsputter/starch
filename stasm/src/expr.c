@@ -8,6 +8,18 @@
 #include "lits.h"
 #include "stmsg.h"
 
+// Returns whether the given token begins a group
+static bool begins_group(const bchar *token)
+{
+	return token[0] == '(' || token[0] == '[' || token[0] == '{';
+}
+
+// Returns whether the given token ends a group
+static bool ends_group(const bchar *token)
+{
+	return token[0] == ')' || token[0] == ']' || token[0] == '}';
+}
+
 // Returns whether the given token is an operator.
 // Sets *is_unary to whether the operator is a unary operator.
 static bool is_op(const bchar *token, bool *is_unary)
@@ -20,7 +32,8 @@ static bool is_op(const bchar *token, bool *is_unary)
 	if (fb >= 0x7f || fb <= ' ' || fb == '"' || fb == '\'') return false;
 
 	// Check for unary operators
-	if ((fb == '!' && token[1] == '\0') || fb == '~') {
+	if ((fb == '!' && token[1] == '\0') || fb == '~' ||
+		begins_group(token) || ends_group(token)) {
 		*is_unary = true;
 		return true;
 	}
@@ -61,17 +74,12 @@ void expr_destroy(struct expr *e)
 	}
 }
 
-int expr_eval(struct expr *e, int64_t *val)
+int expr_eval(struct expr *e, int64_t *val, void *userptr, expr_lookup_func f)
 {
 	int ret;
 	if (!e->op_val) { // Null expression
-		if (!e->lhs || e->rhs) {
-			stmsgf(SMT_ERROR, "cannot evaluate null expression");
-			ret = 1;
-		}
-		else {
-			ret = expr_eval(e->lhs, val);
-		}
+		stmsgf(SMT_ERROR, "cannot evaluate null expression");
+		ret = 1;
 	}
 	else if (e->lhs) { // This must be an operator
 		const bchar *op = e->op_val;
@@ -91,14 +99,14 @@ int expr_eval(struct expr *e, int64_t *val)
 		else {
 			// Evaluate lhs and rhs
 			int64_t lv, rv;
-			ret = expr_eval(e->lhs, &lv);
+			ret = expr_eval(e->lhs, &lv, userptr, f);
 			if (!ret && e->rhs) {
-				ret = expr_eval(e->rhs, &rv);
+				ret = expr_eval(e->rhs, &rv, userptr, f);
 			}
 			// Combine lhs and rhs using operator
 			if (!ret) {
 				bool unrec = false;
-				switch (*op) {
+				switch (*(op++)) {
 				case '*':
 					*val = lv * rv;
 					break;
@@ -109,42 +117,65 @@ int expr_eval(struct expr *e, int64_t *val)
 					*val = lv % rv;
 					break;
 				case '+':
-					*val = lv + rv;
+					if (*op == '+') {
+						op++;
+						unrec = true; // Don't know how to handle "++"
+					}
+					else {
+						*val = lv + rv;
+					}
 					break;
 				case '-':
-					*val = lv - rv;
+					if (*op == '-') {
+						op++;
+						unrec = true; // Don't know how to handle "--"
+					}
+					else {
+						*val = lv - rv;
+					}
 					break;
 				case '<':
-					op++;
-					if (*op == '<') *val = lv << rv;
-					else if (*op == '=') *val = lv <= rv;
+					if (*op == '<') {
+						op++;
+						*val = lv << rv;
+					}
+					else if (*op == '=') {
+						op++;
+						*val = lv <= rv;
+					}
 					else {
-						op--;
 						*val = lv < rv;
 					}
 					break;
 				case '>':
 					op++;
-					if (*op == '>') *val = lv >> rv;
-					else if (*op == '=') *val = lv >= rv;
+					if (*op == '>') {
+						op++;
+						*val = lv >> rv;
+					}
+					else if (*op == '=') {
+						op++;
+						*val = lv >= rv;
+					}
 					else {
-						op--;
 						*val = lv > rv;
 					}
 					break;
 				case '=':
-					op++;
-					if (*op == '=') *val = lv == rv;
+					if (*op == '=') {
+						op++;
+						*val = lv == rv;
+					}
 					else {
-						op--;
 						unrec = true; // Don't know how to handle assignment operator
 					}
 					break;
 				case '&':
-					op++;
-					if (*op == '&') *val = lv && rv;
+					if (*op == '&') {
+						op++;
+						*val = lv && rv;
+					}
 					else {
-						op--;
 						*val = lv & rv;
 					}
 					break;
@@ -152,35 +183,38 @@ int expr_eval(struct expr *e, int64_t *val)
 					*val = lv ^ rv;
 					break;
 				case '|':
-					op++;
-					if (*op == '|') *val = lv || rv;
+					if (*op == '|') {
+						op++;
+						*val = lv || rv;
+					}
 					else {
-						op--;
 						*val = lv | rv;
 					}
 					break;
 				case '!':
-					op++;
-					if (*op == '=') *val = lv != rv;
+					if (*op == '=') {
+						op++;
+						*val = lv != rv;
+					}
 					else {
-						op--;
-						assert(is_unary);
 						*val = !lv;
 					}
 					break;
 				case '~':
-					assert(is_unary);
 					*val = ~lv;
 					break;
 				case ',':
 					*val = rv;
 					break;
+				case '(': // Parenthetical group
+					*val = lv;
+					break;
 				default:
 					unrec = true;
 				}
-				assert(*(++op) == '\0');
+				assert(*op == '\0');
 				if (unrec) {
-					stmsgf(SMT_ERROR, "unrecognized operator \"%s\"", op);
+					stmsgf(SMT_ERROR, "unrecognized operator \"%s\"", e->op_val);
 					ret = 1;
 				}
 			}
@@ -191,8 +225,8 @@ int expr_eval(struct expr *e, int64_t *val)
 			stmsgf(SMT_ERROR, "unexpected rhs when evaluating expression");
 			ret = 1;
 		}
-		else if (!parse_int(e->op_val, val)) {
-			stmsgf(SMT_ERROR, "failed to parse integer literal \"%s\"", e->op_val);
+		else if (!parse_int(e->op_val, val) && (!f || !f(userptr, e->op_val, val))) {
+			stmsgf(SMT_ERROR, "failed to parse term \"%s\"", e->op_val);
 			ret = 1;
 		}
 		else {
@@ -285,7 +319,7 @@ int expr_parser_parse(struct expr_parser *p, bchar *token)
 	// @todo: Use line and character numbers for error messages
 	struct expr *e = NULL;
 	int ret = 0;
-	if (token[0] == ')' || token[0] == ']' || token[0] == '}') {
+	if (ends_group(token)) {
 		if (!p->subp) {
 			stmsgf(SMT_ERROR, "unmatched \"%c\"", token[0]);
 			ret = 1;
@@ -330,8 +364,7 @@ int expr_parser_parse(struct expr_parser *p, bchar *token)
 	bool is_unary;
 	bool this_op = is_op(token, &is_unary);
 	if (p->afterval) { // Expect operator
-		if (!this_op || is_unary || token[0] == '(' || token[0] == '[' ||
-			token[0] == '{') {
+		if (!this_op || is_unary) {
 			stmsgf(SMT_ERROR, "expected operator, not \"%s\"", token);
 			ret = 1;
 		}
@@ -356,18 +389,18 @@ int expr_parser_parse(struct expr_parser *p, bchar *token)
 			p->afterval = false;
 		}
 	}
-	else if (token[0] == '(' || token[0] == '[' || token[0] == '{') {
+	else if (begins_group(token)) {
 		p->subp = (struct expr_parser*)malloc(sizeof(struct expr_parser));
 		expr_parser_init(p->subp, token);
 	}
 	// Expect value or unary operator
-	else if (this_op && !is_unary && token[0] != ')' && token[0] != ']' &&
-		token[0] != '}') {
-		// @todo: Don't fail for unary operators that modify a single value like '!'
+	else if (this_op && !is_unary) {
+		// Don't fail for unary operators that modify a single value like '!'
 		stmsgf(SMT_ERROR, "expected value, not \"%s\"", token);
 		ret = 1;
 	}
 	else {
+		p->afterval = !this_op || ends_group(token);
 		if (!e) { // Create expression to store token
 			e = (struct expr*)malloc(sizeof(struct expr));
 			expr_init(e, token);
@@ -393,7 +426,6 @@ int expr_parser_parse(struct expr_parser *p, bchar *token)
 				rmost->rhs = e; // Append value to rightmost
 			}
 		}
-		p->afterval = !is_unary;
 	}
 
 	if (ret) {
@@ -404,6 +436,7 @@ int expr_parser_parse(struct expr_parser *p, bchar *token)
 
 bool expr_parser_complete(struct expr_parser *p)
 {
-	// @todo: Check for unfinished sub-expressions
+	// Check that current expression is finished (after a value)
+	// and that no subexpression is in progress.
 	return !p->subp && (!p->expr || p->afterval);
 }

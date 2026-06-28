@@ -26,9 +26,14 @@ void expr_init(struct expr*, bchar *op_val);
 // Destroys the given expression and all sub-expressions
 void expr_destroy(struct expr*);
 
-// Evaluates the given expression, which must consist of integer literals.
+// Type of function that returns whether the given non-literal string value
+// could be converted to an integer value, and if so sets *intval.
+typedef bool expr_lookup_func(void *userptr, bchar *strval, int64_t *intval);
+
+// Evaluates the given expression. Calls the given function if not NULL for
+// terms that are not integer literals.
 // Returns zero on success.
-int expr_eval(struct expr*, int64_t *val);
+int expr_eval(struct expr*, int64_t *val, void *userptr, expr_lookup_func f);
 
 //
 // Expression parser

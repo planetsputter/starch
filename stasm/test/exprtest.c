@@ -1,7 +1,9 @@
 // exprtest.c
 
 #include <assert.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <sys/time.h>
 
 #include "expr.h"
 #include "tokenizer.h"
@@ -59,6 +61,40 @@ static int parse_expr(const char *expr, struct expr **e)
 	p.expr = NULL;
 	expr_parser_destroy(&p);
 	return ret;
+}
+
+int64_t A = 0, B = 0, C = 0;
+
+// Lookup function for evaluation of non-literal values
+bool nonlit_lookup(void *userptr, bchar *strval, int64_t *intval)
+{
+	assert(userptr == NULL);
+	if (bstrcmpc(strval, "A") == 0) {
+		*intval = A;
+	}
+	else if (bstrcmpc(strval, "B") == 0) {
+		*intval = B;
+	}
+	else if (bstrcmpc(strval, "C") == 0) {
+		*intval = C;
+	}
+	else {
+		return false;
+	}
+	return true;
+}
+
+// Asserts that the expression evaluates to the given value
+void test_expr(const char *expr, int64_t val)
+{
+	struct expr *e = NULL;
+	int ret = parse_expr(expr, &e);
+	assert(ret == 0);
+	int64_t test_val;
+	ret = expr_eval(e, &test_val, NULL, nonlit_lookup);
+	assert(ret == 0 && test_val == val);
+	expr_destroy(e);
+	free(e);
 }
 
 int main()
@@ -205,6 +241,41 @@ int main()
 		e->rhs && bstrcmpc(e->rhs->op_val, "3") == 0 && !e->rhs->lhs && !e->rhs->rhs);
 	expr_destroy(e);
 	free(e);
+
+	// Get current time
+	struct timeval tv;
+	ret = gettimeofday(&tv, NULL);
+	if (ret != 0) {
+		fprintf(stderr, "error: failed to get current time\n");
+		return 1;
+	}
+
+	// Seed random number generator with current time in microseconds
+	srandom(tv.tv_usec + tv.tv_sec * 1000000);
+
+	enum { TEST_ITER = 100 };
+	for (int i = 0; i < TEST_ITER; i++) {
+		// Test evaluation of expressions
+		A = random(), B = random(), C = random();
+		// Test * to /
+		test_expr("A * B / C", A * B / C);
+		test_expr("A / B * C", A / B * C);
+		// Test * to %
+		test_expr("A * B % C", A * B % C);
+		test_expr("A % B * C", A % B * C);
+		// Test * to +
+		test_expr("A * B + C", A * B + C);
+		test_expr("A + B * C", A + B * C);
+		// Test + to -
+		test_expr("A + B - C", A + B - C);
+		test_expr("A - B + C", A - B + C);
+		// Test + to <<
+		test_expr("A + B << (C & 63)", A + B << (C & 63));
+		test_expr("A << ((B + C) & 63)", A << ((B + C) & 63));
+		// Test + to >> @todo: debug
+		//test_expr("A + B >> (C & 63)", A + B >> (C & 63));
+		//test_expr("A >> ((B + C) & 63)", A >> ((B + C) & 63));
+	}
 
 	return 0;
 }
