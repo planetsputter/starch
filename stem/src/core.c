@@ -279,7 +279,7 @@ static int core_mem_read8(struct core *core, struct mem *mem, uint64_t addr, uin
 			return core_read_stdin(core, data);
 		}
 		if (addr == IO_URAND_ADDR) {
-			return core_get_random(data, 1);
+			return core_get_random(data, sizeof(*data));
 		}
 		return STINT_BAD_IO_ACCESS; // No 8-bit IO read operations currently
 	}
@@ -318,7 +318,7 @@ static int core_mem_read16(struct core *core, struct mem *mem, uint64_t addr, ui
 	// Check IO memory
 	if (addr < END_IO_ADDR) {
 		if (addr == IO_URAND_ADDR) {
-			return core_get_random(data, 2);
+			return core_get_random(data, sizeof(*data));
 		}
 		return STINT_BAD_IO_ACCESS; // No 16-bit IO read operations currently
 	}
@@ -357,7 +357,7 @@ static int core_mem_read32(struct core *core, struct mem *mem, uint64_t addr, ui
 	// Check IO memory
 	if (addr < END_IO_ADDR) {
 		if (addr == IO_URAND_ADDR) {
-			return core_get_random(data, 4);
+			return core_get_random(data, sizeof(*data));
 		}
 		return STINT_BAD_IO_ACCESS;
 	}
@@ -396,7 +396,7 @@ static int core_mem_read64(struct core *core, struct mem *mem, uint64_t addr, ui
 	// Check IO memory
 	if (addr < END_IO_ADDR) {
 		if (addr == IO_URAND_ADDR) {
-			return core_get_random(data, 8);
+			return core_get_random(data, sizeof(*data));
 		}
 		return STINT_BAD_IO_ACCESS; // No 64-bit IO read operations currently
 	}
