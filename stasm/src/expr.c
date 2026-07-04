@@ -49,7 +49,7 @@ static bool is_op(const bchar *token, bool *is_unary)
 	return !isalnum(fb) && fb != '_' && fb != '$' && fb != ':';
 }
 
-void expr_init(struct expr *e, bchar *op_val)
+void expr_init(struct expr *e, struct token *op_val)
 {
 	e->lhs = NULL;
 	e->rhs = NULL;
@@ -59,7 +59,7 @@ void expr_init(struct expr *e, bchar *op_val)
 void expr_destroy(struct expr *e)
 {
 	if (e->op_val) {
-		bfree(e->op_val);
+		token_free(e->op_val);
 		e->op_val = NULL;
 	}
 	if (e->lhs) {
@@ -82,18 +82,21 @@ int expr_eval(struct expr *e, int64_t *val, void *userptr, expr_lookup_func f)
 		ret = 1;
 	}
 	else if (e->lhs) { // This must be an operator
-		const bchar *op = e->op_val;
+		const bchar *op = e->op_val->str;
 		bool is_unary;
 		if (!is_op(op, &is_unary)) {
-			stmsgf(SMT_ERROR, "expected operator, not \"%s\"", op);
+			stmsgtf(SMT_ERROR, e->op_val->lineno, e->op_val->charno,
+				"expected operator, not \"%s\"", op);
 			ret = 1;
 		}
 		else if (!is_unary && !e->rhs) {
-			stmsgf(SMT_ERROR, "expected rhs when evaluating operator \"%s\"", op);
+			stmsgtf(SMT_ERROR, e->op_val->lineno, e->op_val->charno,
+				"expected rhs when evaluating operator \"%s\"", op);
 			ret = 1;
 		}
 		else if (is_unary && e->rhs) {
-			stmsgf(SMT_ERROR, "unexpected rhs when evaluating unary operator \"%s\"", op);
+			stmsgtf(SMT_ERROR, e->op_val->lineno, e->op_val->charno,
+				"unexpected rhs when evaluating unary operator \"%s\"", op);
 			ret = 1;
 		}
 		else {
@@ -213,7 +216,8 @@ int expr_eval(struct expr *e, int64_t *val, void *userptr, expr_lookup_func f)
 				}
 				assert(*op == '\0');
 				if (unrec) {
-					stmsgf(SMT_ERROR, "unrecognized operator \"%s\"", e->op_val);
+					stmsgtf(SMT_ERROR, e->op_val->lineno, e->op_val->charno,
+						"unrecognized operator \"%s\"", e->op_val->str);
 					ret = 1;
 				}
 			}
@@ -221,11 +225,13 @@ int expr_eval(struct expr *e, int64_t *val, void *userptr, expr_lookup_func f)
 	}
 	else { // This must be a value
 		if (e->rhs) {
-			stmsgf(SMT_ERROR, "unexpected rhs when evaluating expression");
+			stmsgtf(SMT_ERROR, e->op_val->lineno, e->op_val->charno,
+				"unexpected rhs when evaluating expression");
 			ret = 1;
 		}
-		else if (!parse_int(e->op_val, val) && (!f || !f(userptr, e->op_val, val))) {
-			stmsgf(SMT_ERROR, "failed to parse term \"%s\"", e->op_val);
+		else if (!parse_int(e->op_val->str, val) && (!f || !f(userptr, e->op_val->str, val))) {
+			stmsgtf(SMT_ERROR, e->op_val->lineno, e->op_val->charno,
+				"failed to parse term \"%s\"", e->op_val->str);
 			ret = 1;
 		}
 		else {
@@ -235,7 +241,7 @@ int expr_eval(struct expr *e, int64_t *val, void *userptr, expr_lookup_func f)
 	return ret;
 }
 
-void expr_parser_init(struct expr_parser *p, bchar *group_char)
+void expr_parser_init(struct expr_parser *p, struct token *group_char)
 {
 	p->expr = NULL;
 	p->afterval = false;
@@ -256,7 +262,7 @@ void expr_parser_destroy(struct expr_parser *p)
 		p->subp = NULL;
 	}
 	if (p->group_char) {
-		bfree(p->group_char);
+		token_free(p->group_char);
 		p->group_char = NULL;
 	}
 }
@@ -313,25 +319,26 @@ static int prec_val(const bchar *op)
 	return ret;
 }
 
-int expr_parser_parse(struct expr_parser *p, bchar *token)
+int expr_parser_parse(struct expr_parser *p, struct token *token)
 {
-	// @todo: Use line and character numbers for error messages
+	const bchar *ts = token->str;
 	struct expr *e = NULL;
 	int ret = 0;
-	if (ends_group(token)) {
+	if (ends_group(ts)) {
 		if (!p->subp) {
-			stmsgf(SMT_ERROR, "unmatched \"%c\"", token[0]);
+			stmsgtf(SMT_ERROR, token->lineno, token->charno, "unmatched \"%c\"", ts[0]);
 			ret = 1;
 		}
 		else if (!p->subp->subp) { // This finishes p->subp
-			if ((p->subp->group_char[0] == '(' && token[0] != ')') ||
-				(p->subp->group_char[0] == '[' && token[0] != ']') ||
-				(p->subp->group_char[0] == '{' && token[0] != '}')) {
-				stmsgf(SMT_ERROR, "unmatched \"%c\"", token[0]);
+			const bchar *group_name = p->subp->group_char->str;
+			if ((group_name[0] == '(' && ts[0] != ')') ||
+				(group_name[0] == '[' && ts[0] != ']') ||
+				(group_name[0] == '{' && ts[0] != '}')) {
+				stmsgtf(SMT_ERROR, token->lineno, token->charno, "unmatched \"%c\"", ts[0]);
 				ret = 1;
 			}
 			else if (!expr_parser_complete(p->subp)) {
-				stmsgf(SMT_ERROR, "incomplete expression");
+				stmsgtf(SMT_ERROR, token->lineno, token->charno, "incomplete expression");
 				ret = 1;
 			}
 			else {
@@ -350,7 +357,7 @@ int expr_parser_parse(struct expr_parser *p, bchar *token)
 		}
 	}
 	if (ret) {
-		bfree(token);
+		token_free(token);
 		return ret;
 	}
 	if (p->subp) { // Active subexpression
@@ -361,15 +368,15 @@ int expr_parser_parse(struct expr_parser *p, bchar *token)
 	// that have single-byte representation in UTF-8, and that no other tokens will
 	// begin with these bytes.
 	bool is_unary;
-	bool this_op = is_op(token, &is_unary);
+	bool this_op = is_op(ts, &is_unary);
 	if (p->afterval) { // Expect operator
 		if (!this_op || is_unary) {
-			stmsgf(SMT_ERROR, "expected operator, not \"%s\"", token);
+			stmsgtf(SMT_ERROR, token->lineno, token->charno, "expected operator, not \"%s\"", ts);
 			ret = 1;
 		}
 		else {
 			// Get operator precedence value
-			int pval = prec_val(token);
+			int pval = prec_val(ts);
 			assert(pval >= 0);
 
 			// Create expression to store token
@@ -379,7 +386,7 @@ int expr_parser_parse(struct expr_parser *p, bchar *token)
 			// Insert operator into tree according to precedence
 			struct expr **root = &p->expr;
 			assert(*root);
-			while ((*root)->op_val && prec_val((*root)->op_val) > pval) {
+			while ((*root)->op_val && prec_val((*root)->op_val->str) > pval) {
 				root = &(*root)->rhs;
 				assert(*root);
 			}
@@ -388,24 +395,24 @@ int expr_parser_parse(struct expr_parser *p, bchar *token)
 			p->afterval = false;
 		}
 	}
-	else if (begins_group(token)) {
+	else if (begins_group(ts)) {
 		p->subp = (struct expr_parser*)malloc(sizeof(struct expr_parser));
 		expr_parser_init(p->subp, token);
 	}
 	// Expect value or unary operator
 	else if (this_op && !is_unary) {
 		// Don't fail for unary operators that modify a single value like '!'
-		stmsgf(SMT_ERROR, "expected value, not \"%s\"", token);
+		stmsgtf(SMT_ERROR, token->lineno, token->charno, "expected value, not \"%s\"", ts);
 		ret = 1;
 	}
 	else {
-		p->afterval = !this_op || ends_group(token);
+		p->afterval = !this_op || ends_group(ts);
 		if (!e) { // Create expression to store token
 			e = (struct expr*)malloc(sizeof(struct expr));
 			expr_init(e, token);
 		}
 		else { // Expression already created, free token
-			bfree(token);
+			token_free(token);
 		}
 		if (!p->expr) { // First value in expression
 			p->expr = e;
@@ -415,7 +422,7 @@ int expr_parser_parse(struct expr_parser *p, bchar *token)
 			for (rmost = p->expr; rmost->rhs; rmost = rmost->rhs);
 			// See if rightmost is unary
 			bool isrmostu;
-			assert(is_op(rmost->op_val, &isrmostu));
+			assert(is_op(rmost->op_val->str, &isrmostu));
 			if (isrmostu) { // If it is, append to leftmost from rightmost
 				struct expr *lmfr;
 				for (lmfr = rmost; lmfr->lhs; lmfr = lmfr->lhs);
@@ -428,7 +435,7 @@ int expr_parser_parse(struct expr_parser *p, bchar *token)
 	}
 
 	if (ret) {
-		bfree(token);
+		token_free(token);
 	}
 	return ret;
 }

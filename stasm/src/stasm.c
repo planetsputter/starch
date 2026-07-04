@@ -215,39 +215,23 @@ int main(int argc, const char *argv[])
 
 	bool pop_inc = false;
 	ucp c = 0;
-	bool tip = false; // Token in progress
-
-	// Token line and character number
-	int tlineno = 0, tcharno = 0;
-	// Current line and character number
-	int lineno = 1, charno = 0;
 
 	// Parse each byte of the source file and each included file
 	while (inc_chain) {
-		// Check whether a token is in progress
-		if (!tip && tokenizer_in_progress(&tokenizer)) {
-			tip = true;
-			tlineno = lineno;
-			tcharno = charno;
-		}
-
 		// Assemble any emitted tokens
-		bchar *token = NULL;
-		tokenizer_emit(&tokenizer, &token);
+		struct token *token = tokenizer_emit(&tokenizer);
 		if (token) {
-			tip = false;
 			// Assemble the token
-			ret = assembler_handle_token(&as, token, tlineno, tcharno);
+			ret = assembler_handle_token(&as, token);
 			if (ret) break;
 
 			// Check for included file
-			bchar *filename = NULL;
-			assembler_get_include(&as, &filename);
+			struct token *filename = assembler_get_include(&as);
 			if (filename) {
 				// Check that filename does not include an embedded null byte
-				size_t ni = bstrfindbyte(filename, '\0');
-				if (ni == bstrlen(filename)) {
-					stmsgtf(SMT_ERROR, tlineno, tcharno, "embedded null in include file name");
+				size_t ni = bstrfindbyte(filename->str, '\0');
+				if (ni != bstrlen(filename->str)) {
+					stmsgtf(SMT_ERROR, filename->lineno, filename->charno, "embedded null in include file name");
 					ret = 1;
 					break;
 				}
@@ -262,11 +246,11 @@ int main(int argc, const char *argv[])
 						bfree(path);
 					}
 					if (inc_dir) {
-						path = bstrcatb(bstrdupb(inc_dir->dir), filename);
+						path = bstrcatb(bstrdupb(inc_dir->dir), filename->str);
 						inc_dir = inc_dir->next;
 					}
 					else {
-						path = bstrdupb(filename);
+						path = bstrdupb(filename->str);
 						inc_dir = inc_dirs;
 					}
 					statret = stat(path, &inc_stat);
@@ -277,17 +261,17 @@ int main(int argc, const char *argv[])
 
 				if (statret == ENOENT) {
 					// Failed to find file
-					stmsgtf(SMT_ERROR, tlineno, tcharno, "failed to find included file \"%s\"", filename);
+					stmsgtf(SMT_ERROR, filename->lineno, filename->charno, "failed to find included file \"%s\"", filename->str);
 					ret = 1;
 					bfree(path);
-					bfree(filename);
+					token_free(filename);
 					break;
 				}
-				bfree(filename);
+				token_free(filename);
 
 				if (statret != 0) {
 					// The file exists, but we failed to stat it
-					stmsgtf(SMT_ERROR, tlineno, tcharno, "failed to stat file \"%s\", errno %d", path, statret);
+					stmsgtf(SMT_ERROR, filename->lineno, filename->charno, "failed to stat file \"%s\", errno %d", path, statret);
 					ret = 1;
 					bfree(path);
 					break;
@@ -296,15 +280,15 @@ int main(int argc, const char *argv[])
 				// Open included file
 				FILE *incfile = fopen(path, "r");
 				if (!incfile) {
-					stmsgtf(SMT_ERROR, tlineno, tcharno, "failed to open \"%s\", errno %d", path, errno);
+					stmsgtf(SMT_ERROR, filename->lineno, filename->charno, "failed to open \"%s\", errno %d", path, errno);
 					ret = 1;
 					bfree(path);
 					break;
 				}
 
 				// Add link to chain
-				inc_chain->lineno = lineno;
-				inc_chain->charno = charno;
+				inc_chain->lineno = tokenizer.lineno;
+				inc_chain->charno = tokenizer.charno;
 				struct inc_link *link = (struct inc_link*)malloc(sizeof(struct inc_link));
 				inc_link_init(link, strdup(path), incfile);
 				bfree(path);
@@ -324,16 +308,8 @@ int main(int argc, const char *argv[])
 			free(inc_chain);
 			inc_chain = prev;
 			if (!inc_chain) break; // Assembled all files
-			lineno = inc_chain->lineno;
-			charno = inc_chain->charno;
-		}
-		// Keep track of line and character numbers
-		else if (c == '\n') {
-			lineno++;
-			charno = 1;
-		}
-		else {
-			charno++;
+			tokenizer.lineno = inc_chain->lineno;
+			tokenizer.charno = inc_chain->charno;
 		}
 
 		// Get a character from the current input file
@@ -347,7 +323,7 @@ int main(int argc, const char *argv[])
 				}
 				// Ensure the decoder and tokenizer can terminate now
 				if (!utf8_decoder_can_terminate(&decoder) || !tokenizer_finish(&tokenizer)) {
-					stmsgtf(SMT_ERROR, lineno, charno, "unexpected EOF");
+					stmsgtf(SMT_ERROR, tokenizer.lineno, tokenizer.charno, "unexpected EOF");
 					ret = 1;
 					break;
 				}
@@ -360,7 +336,7 @@ int main(int argc, const char *argv[])
 			// Decode byte
 			ucp *cp = utf8_decoder_decode(&decoder, b, &c, &ret);
 			if (ret) { // Encoding error
-				stmsgf(SMT_ERROR, "encoding error");
+				stmsgtf(SMT_ERROR, tokenizer.lineno, tokenizer.charno, "encoding error");
 				break;
 			}
 			if (cp != &c) break; // Character generated
@@ -372,7 +348,7 @@ int main(int argc, const char *argv[])
 		if (ret) break;
 	}
 
-	int finret = assembler_finish(&as, lineno, charno);
+	int finret = assembler_finish(&as, tokenizer.lineno, tokenizer.charno);
 	if (ret == 0) {
 		ret = finret;
 	}

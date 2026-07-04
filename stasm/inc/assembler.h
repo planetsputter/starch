@@ -10,6 +10,7 @@
 #include "bmap.h"
 #include "label.h"
 #include "stub.h"
+#include "token.h"
 
 // Assembler
 struct assembler {
@@ -17,8 +18,7 @@ struct assembler {
 	FILE *outfile;
 	struct bmap *defs; // Symbol definitions
 	int code; // Current opcode
-	bchar *word1, *word2, *include;
-	int tlineno1, tcharno1, tlineno2, tcharno2;
+	struct token *word1, *word2, *include;
 	bool pret1, pret2; // Parse return values
 	int64_t pval1, pval2; // Parse values
 
@@ -35,13 +35,14 @@ void assembler_init(struct assembler*, FILE *outfile);
 // Destroys the given asesmbler
 void assembler_destroy(struct assembler*);
 
-// Parses and takes ownership of the given B-string token.
+// Parses and takes ownership of the given token.
 // Returns zero on success.
-int assembler_handle_token(struct assembler*, bchar *token, int tlineno, int tcharno);
+int assembler_handle_token(struct assembler*, struct token *token);
 
-// Sets *filename to the B-string filename included as a result of the last parsed byte,
-// or NULL if there is none. Caller must release the B-string.
-void assembler_get_include(struct assembler*, bchar **filename);
+// Returns a token containing the parsed filename string literal included
+// as a result of the last parsed byte, or NULL if there is none.
+// Caller takes ownership of the token.
+struct token *assembler_get_include(struct assembler*);
 
 // Indicates that the input token stream has finished.
 // The current statement must be complete and all labels must be defined.

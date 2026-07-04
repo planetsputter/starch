@@ -9,9 +9,12 @@ trap 'echo test.sh failed on line $LINENO' ERR
 # Change to test directory
 cd test
 
-DISTASM=../distasm/bin/distasm
-STASM=../stasm/bin/stasm
-STEM=../stem/bin/stem
+# Allow a memory profiler to be specified with the MEMPROF environment variable.
+# If not specified, don't use one.
+: ${MEMPROF:= }
+DISTASM="$MEMPROF ../distasm/bin/distasm"
+STASM="$MEMPROF ../stasm/bin/stasm"
+STEM="$MEMPROF ../stem/bin/stem"
 
 # Run unit test executables
 echo testing smap

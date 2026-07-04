@@ -25,9 +25,9 @@ static int parse_expr(const char *expr, struct expr **e)
 	// Parse tokens
 	int ret = 0;
 	for (int i = 0; ;) {
-		bchar *token = NULL;
+		struct token *token;
 		do {
-			tokenizer_emit(&tz, &token);
+			token = tokenizer_emit(&tz);
 			if (token) {
 				ret = expr_parser_parse(&p, token);
 				if (ret) {
@@ -120,7 +120,7 @@ int main()
 
 	// Test acceptance of a single value
 	ret = parse_expr("A", &e);
-	assert(ret == 0 && e && e->op_val && bstrcmpc(e->op_val, "A") == 0);
+	assert(ret == 0 && e && e->op_val && bstrcmpc(e->op_val->str, "A") == 0);
 	expr_destroy(e);
 	free(e);
 
@@ -134,30 +134,30 @@ int main()
 
 	// Test rejection of incomplete expression
 	ret = parse_expr("A*", &e);
-	assert(ret != 0 && e && bstrcmpc(e->op_val, "*") == 0 && e->lhs &&
-		bstrcmpc(e->lhs->op_val, "A") == 0 && !e->lhs->lhs && !e->lhs->rhs &&
+	assert(ret != 0 && e && bstrcmpc(e->op_val->str, "*") == 0 && e->lhs &&
+		bstrcmpc(e->lhs->op_val->str, "A") == 0 && !e->lhs->lhs && !e->lhs->rhs &&
 		!e->rhs);
 	expr_destroy(e);
 	free(e);
 
 	// Test rejection of paired values
 	ret = parse_expr("A B", &e);
-	assert(ret != 0 && e && bstrcmpc(e->op_val, "A") == 0 && !e->lhs && !e->rhs);
+	assert(ret != 0 && e && bstrcmpc(e->op_val->str, "A") == 0 && !e->lhs && !e->rhs);
 	expr_destroy(e);
 	free(e);
 
 	// Test rejection of paired operators
 	ret = parse_expr("A*/", &e);
-	assert(ret != 0 && e && bstrcmpc(e->op_val, "*") == 0 && e->lhs &&
-		bstrcmpc(e->lhs->op_val, "A") == 0 && !e->lhs->lhs && !e->lhs->rhs && !e->rhs);
+	assert(ret != 0 && e && bstrcmpc(e->op_val->str, "*") == 0 && e->lhs &&
+		bstrcmpc(e->lhs->op_val->str, "A") == 0 && !e->lhs->lhs && !e->lhs->rhs && !e->rhs);
 	expr_destroy(e);
 	free(e);
 
 	// Test acceptance of complete expression
 	ret = parse_expr("A*B", &e);
-	assert(ret == 0 && e && bstrcmpc(e->op_val, "*") == 0 && e->lhs &&
-		bstrcmpc(e->lhs->op_val, "A") == 0 && !e->lhs->lhs && !e->lhs->rhs &&
-		bstrcmpc(e->rhs->op_val, "B") == 0 && !e->rhs->lhs && !e->rhs->rhs);
+	assert(ret == 0 && e && bstrcmpc(e->op_val->str, "*") == 0 && e->lhs &&
+		bstrcmpc(e->lhs->op_val->str, "A") == 0 && !e->lhs->lhs && !e->lhs->rhs &&
+		bstrcmpc(e->rhs->op_val->str, "B") == 0 && !e->rhs->lhs && !e->rhs->rhs);
 	expr_destroy(e);
 	free(e);
 
@@ -183,76 +183,76 @@ int main()
 
 	// Test rejection of groups where operator expected
 	ret = parse_expr("A()", &e);
-	assert(ret != 0 && e && bstrcmpc(e->op_val, "A") == 0 && !e->lhs && !e->rhs);
+	assert(ret != 0 && e && bstrcmpc(e->op_val->str, "A") == 0 && !e->lhs && !e->rhs);
 	expr_destroy(e);
 	free(e);
 	ret = parse_expr("A[]", &e);
-	assert(ret != 0 && e && bstrcmpc(e->op_val, "A") == 0 && !e->lhs && !e->rhs);
+	assert(ret != 0 && e && bstrcmpc(e->op_val->str, "A") == 0 && !e->lhs && !e->rhs);
 	expr_destroy(e);
 	free(e);
 	ret = parse_expr("A{}", &e);
-	assert(ret != 0 && e && bstrcmpc(e->op_val, "A") == 0 && !e->lhs && !e->rhs);
+	assert(ret != 0 && e && bstrcmpc(e->op_val->str, "A") == 0 && !e->lhs && !e->rhs);
 	expr_destroy(e);
 	free(e);
 
 	// Test acceptance of expressions with empty groups
 	ret = parse_expr("()", &e);
-	assert(ret == 0 && e && bstrcmpc(e->op_val, "(") == 0 && !e->lhs && !e->rhs);
+	assert(ret == 0 && e && bstrcmpc(e->op_val->str, "(") == 0 && !e->lhs && !e->rhs);
 	expr_destroy(e);
 	free(e);
 	ret = parse_expr("[]", &e);
-	assert(ret == 0 && e && bstrcmpc(e->op_val, "[") == 0 && !e->lhs && !e->rhs);
+	assert(ret == 0 && e && bstrcmpc(e->op_val->str, "[") == 0 && !e->lhs && !e->rhs);
 	expr_destroy(e);
 	free(e);
 	ret = parse_expr("{}", &e);
-	assert(ret == 0 && e && bstrcmpc(e->op_val, "{") == 0 && !e->lhs && !e->rhs);
+	assert(ret == 0 && e && bstrcmpc(e->op_val->str, "{") == 0 && !e->lhs && !e->rhs);
 	expr_destroy(e);
 	free(e);
 
 	ret = parse_expr("A*()", &e);
-	assert(ret == 0 && e && bstrcmpc(e->op_val, "*") == 0 && e->lhs &&
-		bstrcmpc(e->lhs->op_val, "A") == 0 && !e->lhs->lhs && !e->lhs->rhs &&
-		e->rhs && bstrcmpc(e->rhs->op_val, "(") == 0 && !e->rhs->lhs && !e->rhs->rhs);
+	assert(ret == 0 && e && bstrcmpc(e->op_val->str, "*") == 0 && e->lhs &&
+		bstrcmpc(e->lhs->op_val->str, "A") == 0 && !e->lhs->lhs && !e->lhs->rhs &&
+		e->rhs && bstrcmpc(e->rhs->op_val->str, "(") == 0 && !e->rhs->lhs && !e->rhs->rhs);
 	expr_destroy(e);
 	free(e);
 
 	ret = parse_expr("A*()-B", &e);
-	assert(ret == 0 && e && bstrcmpc(e->op_val, "-") == 0 && e->lhs &&
-		bstrcmpc(e->lhs->op_val, "*") == 0 && e->lhs->lhs &&
-		bstrcmpc(e->lhs->lhs->op_val, "A") == 0 && !e->lhs->lhs->lhs && !e->lhs->lhs->rhs &&
-		e->lhs->rhs && bstrcmpc(e->lhs->rhs->op_val, "(") == 0 && !e->lhs->rhs->lhs && !e->lhs->rhs->rhs &&
-		e->rhs && bstrcmpc(e->rhs->op_val, "B") == 0 && !e->rhs->lhs && !e->rhs->rhs);
+	assert(ret == 0 && e && bstrcmpc(e->op_val->str, "-") == 0 && e->lhs &&
+		bstrcmpc(e->lhs->op_val->str, "*") == 0 && e->lhs->lhs &&
+		bstrcmpc(e->lhs->lhs->op_val->str, "A") == 0 && !e->lhs->lhs->lhs && !e->lhs->lhs->rhs &&
+		e->lhs->rhs && bstrcmpc(e->lhs->rhs->op_val->str, "(") == 0 && !e->lhs->rhs->lhs && !e->lhs->rhs->rhs &&
+		e->rhs && bstrcmpc(e->rhs->op_val->str, "B") == 0 && !e->rhs->lhs && !e->rhs->rhs);
 	expr_destroy(e);
 	free(e);
 
 	// Test treatment of quoted strings as values
 	ret = parse_expr("\"hello\"+ 1", &e);
-	assert(ret == 0 && e && bstrcmpc(e->op_val, "+") == 0 && e->lhs &&
-		bstrcmpc(e->lhs->op_val, "\"hello\"") == 0 && !e->lhs->lhs && !e->lhs->rhs &&
-		e->rhs && bstrcmpc(e->rhs->op_val, "1") == 0 && !e->rhs->lhs && !e->rhs->rhs);
+	assert(ret == 0 && e && bstrcmpc(e->op_val->str, "+") == 0 && e->lhs &&
+		bstrcmpc(e->lhs->op_val->str, "\"hello\"") == 0 && !e->lhs->lhs && !e->lhs->rhs &&
+		e->rhs && bstrcmpc(e->rhs->op_val->str, "1") == 0 && !e->rhs->lhs && !e->rhs->rhs);
 	expr_destroy(e);
 	free(e);
 
 	ret = parse_expr("'h'+ 1", &e);
-	assert(ret == 0 && e && bstrcmpc(e->op_val, "+") == 0 && e->lhs &&
-		bstrcmpc(e->lhs->op_val, "'h'") == 0 && !e->lhs->lhs && !e->lhs->rhs &&
-		e->rhs && bstrcmpc(e->rhs->op_val, "1") == 0 && !e->rhs->lhs && !e->rhs->rhs);
+	assert(ret == 0 && e && bstrcmpc(e->op_val->str, "+") == 0 && e->lhs &&
+		bstrcmpc(e->lhs->op_val->str, "'h'") == 0 && !e->lhs->lhs && !e->lhs->rhs &&
+		e->rhs && bstrcmpc(e->rhs->op_val->str, "1") == 0 && !e->rhs->lhs && !e->rhs->rhs);
 	expr_destroy(e);
 	free(e);
 
 	// Test treatment of symbols as values
 	ret = parse_expr("$sym*2", &e);
-	assert(ret == 0 && e && bstrcmpc(e->op_val, "*") == 0 && e->lhs &&
-		bstrcmpc(e->lhs->op_val, "$sym") == 0 && !e->lhs->lhs && !e->lhs->rhs &&
-		e->rhs && bstrcmpc(e->rhs->op_val, "2") == 0 && !e->rhs->lhs && !e->rhs->rhs);
+	assert(ret == 0 && e && bstrcmpc(e->op_val->str, "*") == 0 && e->lhs &&
+		bstrcmpc(e->lhs->op_val->str, "$sym") == 0 && !e->lhs->lhs && !e->lhs->rhs &&
+		e->rhs && bstrcmpc(e->rhs->op_val->str, "2") == 0 && !e->rhs->lhs && !e->rhs->rhs);
 	expr_destroy(e);
 	free(e);
 
 	// Test treatment of labels as values
 	ret = parse_expr(":lbl/3", &e);
-	assert(ret == 0 && e && bstrcmpc(e->op_val, "/") == 0 && e->lhs &&
-		bstrcmpc(e->lhs->op_val, ":lbl") == 0 && !e->lhs->lhs && !e->lhs->rhs &&
-		e->rhs && bstrcmpc(e->rhs->op_val, "3") == 0 && !e->rhs->lhs && !e->rhs->rhs);
+	assert(ret == 0 && e && bstrcmpc(e->op_val->str, "/") == 0 && e->lhs &&
+		bstrcmpc(e->lhs->op_val->str, ":lbl") == 0 && !e->lhs->lhs && !e->lhs->rhs &&
+		e->rhs && bstrcmpc(e->rhs->op_val->str, "3") == 0 && !e->rhs->lhs && !e->rhs->rhs);
 	expr_destroy(e);
 	free(e);
 

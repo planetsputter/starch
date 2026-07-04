@@ -4,14 +4,15 @@
 
 #include <stdbool.h>
 
-#include "bstr.h"
+#include "token.h"
 
 struct tokenizer {
 	int state;
 	// Current token and two enqueued tokens
-	bchar *ctoken, *token1, *token2;
+	struct token *ctoken, *token1, *token2;
 	bool afterval; // Whether last enqueued token was a value
 	int iws; // Index of current token within statement
+	int lineno, charno;
 };
 
 // Initializes the tokenizer
@@ -26,9 +27,10 @@ bool tokenizer_in_progress(struct tokenizer*);
 // Parses the given character
 int tokenizer_parse(struct tokenizer*, ucp c);
 
-// Sets *token to an emitted token, or to NULL if there are no more tokens to emit.
-// Call until it sets *token to NULL to emit all tokens for each parsed character.
-void tokenizer_emit(struct tokenizer*, bchar **token);
+// Returns an emitted token, or NULL if there are no more tokens to emit.
+// Call until it returns NULL to emit all tokens for each parsed character.
+// The caller takes ownership of the emitted token.
+struct token *tokenizer_emit(struct tokenizer*);
 
 // Finishes the input stream, possibly emitting tokens.
 // Returns whether the input stream could be finished successfully.
