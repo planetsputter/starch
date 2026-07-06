@@ -12,6 +12,7 @@
 #include "stem.h"
 #include "stmsg.h"
 #include "util.h"
+#include "viewline.h"
 
 static int do_help(size_t argc, const char *argv[], int *flags);
 
@@ -474,25 +475,14 @@ int do_menu(int *flags)
 		}
 
 		char *line = NULL;
-		size_t linesize = 0;
 
 		do {
 			// Print prompt
 			printf("> ");
 
 			// Read line from user
-			// @todo: Handle common terminal escape sequences such as those for arrow keys
-			ssize_t nread = getline(&line, &linesize, stdin);
-			if (nread <= 0) {
-				if (ferror(stdin)) { // error
-					stmsgf(SMT_ERROR, "failed to read from stdin");
-				}
-				else { // EOF
-					stmsgf(SMT_ERROR, "EOF while reading from stdin");
-				}
-				ret = 1;
-				break;
-			}
+			free(line);
+			line = viewline_get();
 
 			// Get tokens from line
 			enum { MAX_TOKENS = 3 };
@@ -525,4 +515,9 @@ int do_menu(int *flags)
 	}
 
 	return ret;
+}
+
+void end_menu(void)
+{
+	viewline_end();
 }

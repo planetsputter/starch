@@ -272,5 +272,6 @@ int main(int argc, const char *argv[])
 	}
 	fclose(infile);
 	bpmap_delete(bpmap);
+	end_menu();
 	return ret;
 }

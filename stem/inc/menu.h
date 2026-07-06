@@ -7,3 +7,6 @@
 // Menu will not be presented if SF_RUN or SF_EXIT flags are present.
 // Returns zero on success, non-zero on failure.
 int do_menu(int *flags);
+
+// Cleans up any resources allocated during menu use.
+void end_menu(void);
