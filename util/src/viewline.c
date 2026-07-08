@@ -197,11 +197,8 @@ char *viewline_get()
 				case 'B': // ESC[A: Down arrow
 					struct viewline *toline = c == 'A' ? current_line->prev : current_line->next;
 					if (!toline) break; // No line to move to
-					// Erase printed line
-					size_t linelen = strlen(viewlines->line);
-					for (size_t i = 0; i < linelen; i++) {
-						printf("\b \b");
-					}
+					// Record original line length
+					size_t origlinelen = strlen(viewlines->line);
 					// If moving from the most recent line, save what was edited
 					if (current_line == viewlines) {
 						assert(edit_line == NULL);
@@ -220,14 +217,26 @@ char *viewline_get()
 						src_line = strdup(current_line->line);
 					}
 					// Copy source line to head of list (editing line)
-					linelen = strlen(src_line);
+					size_t linelen = strlen(src_line);
 					free(viewlines->line);
 					viewlines->line = src_line;
 					viewlines->bufsize = linelen + 1;
 
+					// Go to beginning of line
+					for (; cursor_pos > 0; cursor_pos--) {
+						printf("\b");
+					}
 					// Print new line contents
 					printf("%s", viewlines->line);
 					cursor_pos = linelen;
+					// Erase any remnants of original line
+					for (; cursor_pos < origlinelen; cursor_pos++) {
+						printf(" ");
+					}
+					// Go back to end of new line contents
+					for (; cursor_pos > linelen; cursor_pos--) {
+						printf("\b");
+					}
 					break;
 				case 'C': // ESC[A: Right arrow
 					linelen = strlen(viewlines->line);
