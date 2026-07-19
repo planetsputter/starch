@@ -390,10 +390,10 @@ static int assembler_handle_section(struct assembler *as, uint64_t addr)
 }
 
 // Handles the "strings" assembler command at the current position
-static int assembler_handle_strings(struct assembler *as)
+static int assembler_handle_strings(struct assembler *as, int lineno)
 {
 	if (as->sec_count == 0) {
-		stmsgf(SMT_ERROR, "expected section definition before strings");
+		stmsgtf(SMT_ERROR, lineno, 0, "expected section definition before strings");
 		return 1;
 	}
 
@@ -816,7 +816,7 @@ int assembler_handle_token(struct assembler *as, struct token *token)
 	case APS_STORE7_BRKT_SFP_END:
 		// Disallow newlines
 		if (symbol[0] == '\n' || symbol[0] == ';') {
-			stmsgf(SMT_ERROR, "unexpected end of statement", symbol);
+			stmsgtf(SMT_ERROR, token->lineno, token->charno, "unexpected end of statement", symbol);
 			nextstate = APS_DEFAULT;
 			ret = 1;
 			break;
@@ -1118,7 +1118,7 @@ int assembler_handle_token(struct assembler *as, struct token *token)
 			break;
 
 		case APS_STRINGS:
-			ret = assembler_handle_strings(as);
+			ret = assembler_handle_strings(as, token->lineno);
 			break;
 
 		default:
