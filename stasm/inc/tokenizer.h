@@ -12,7 +12,6 @@ struct tokenizer {
 	struct token *ctoken, *token1, *token2;
 	bool afterval; // Whether last enqueued token was a value
 	int iws; // Index of current token within statement
-	int lineno, charno;
 };
 
 // Initializes the tokenizer
@@ -25,7 +24,7 @@ void tokenizer_destroy(struct tokenizer*);
 bool tokenizer_in_progress(struct tokenizer*);
 
 // Parses the given character
-int tokenizer_parse(struct tokenizer*, ucp c);
+int tokenizer_parse(struct tokenizer*, ucp c, int lineno, int charno);
 
 // Returns an emitted token, or NULL if there are no more tokens to emit.
 // Call until it returns NULL to emit all tokens for each parsed character.

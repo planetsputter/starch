@@ -22,7 +22,7 @@ struct autosym {
 	uint64_t val;
 };
 // Automatic symbols, besides instruction opcodes and interrupt numbers, in alphabetic order
-static struct autosym autosyms[] = {
+static const struct autosym autosyms[] = {
 	{ "BEGIN_INT_ADDR", BEGIN_INT_ADDR },
 	{ "INIT_PC_VAL", INIT_PC_VAL },
 	{ "IO_ASSERT_ADDR", IO_ASSERT_ADDR },
@@ -32,7 +32,7 @@ static struct autosym autosyms[] = {
 	{ "IO_URAND_ADDR", IO_URAND_ADDR },
 };
 // Returns a pointer to the autosym struct for the given name, or NULL
-static struct autosym *get_autosym(const char *name)
+static const struct autosym *get_autosym(const char *name)
 {
 	// Use binary search for efficiency
 	int low = 0, high = sizeof(autosyms) / sizeof(*autosyms) - 1, mid;
@@ -54,7 +54,7 @@ static struct autosym *get_autosym(const char *name)
 
 // Performs symbolic substitution on the given token using manual and automatic symbols.
 // Sets *val to token->str if no substitution was performed.
-// If token begins with '$', attempts to look up a symbol value
+// If token->str begins with '$', attempts to look up a symbol value
 // and sets *val to a string from the assembler symbol map on success.
 // Returns zero on success and sets *val non-NULL.
 // Returns non-zero on failure and sets *val to NULL.
@@ -105,7 +105,7 @@ static int symbol_sub(struct assembler *as, struct token *token, bchar **val)
 				}
 				else {
 					// Look up other automatic symbols
-					struct autosym *as = get_autosym(name);
+					const struct autosym *as = get_autosym(name);
 					if (as) {
 						sprintf(symbuf, "%#"PRIx64, as->val);
 						symbol = bstrdupc(symbuf);

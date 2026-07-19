@@ -55,8 +55,6 @@ void tokenizer_init(struct tokenizer *tz)
 	tz->token2 = NULL;
 	tz->afterval = false;
 	tz->iws = 0;
-	tz->lineno = 1;
-	tz->charno = 1;
 }
 
 void tokenizer_destroy(struct tokenizer *tz)
@@ -107,7 +105,7 @@ static void tokenizer_enqueue(struct tokenizer *tz)
 	}
 }
 
-int tokenizer_parse(struct tokenizer *tz, ucp c)
+int tokenizer_parse(struct tokenizer *tz, ucp c, int lineno, int charno)
 {
 	bool again;
 	int ret = 0;
@@ -133,7 +131,7 @@ int tokenizer_parse(struct tokenizer *tz, ucp c)
 					capture = false;
 				}
 				if (capture) {
-					tz->ctoken = token_alloc(bstrdupu(&c, 1, &error), tz->lineno, tz->charno);
+					tz->ctoken = token_alloc(bstrdupu(&c, 1, &error), lineno, charno);
 				}
 				if (enqueue) {
 					tokenizer_enqueue(tz);
@@ -141,7 +139,7 @@ int tokenizer_parse(struct tokenizer *tz, ucp c)
 			}
 			else { // Other characters start a token or continue the current one
 				if (!tz->ctoken) {
-					tz->ctoken = token_alloc(balloc(), tz->lineno, tz->charno);
+					tz->ctoken = token_alloc(balloc(), lineno, charno);
 				}
 				tz->ctoken->str = bstrcatu(tz->ctoken->str, &c, 1, &error);
 			}
@@ -266,15 +264,6 @@ int tokenizer_parse(struct tokenizer *tz, ucp c)
 		// not happen since these characters are coming from a decoded stream
 		assert(error == 0);
 	} while (again && !ret);
-
-	// Track line and character number
-	if (c == '\n') {
-		tz->lineno++;
-		tz->charno = 1;
-	}
-	else {
-		tz->charno++;
-	}
 
 	return ret;
 }

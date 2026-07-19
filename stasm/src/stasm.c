@@ -79,14 +79,17 @@ struct inc_dir {
 	bchar *dir;
 	struct inc_dir *next;
 };
-static void inc_dir_destroy(struct inc_dir *inc_dir)
+static struct inc_dir *inc_dirs = NULL;
+static void inc_dir_free_all(void)
 {
-	if (inc_dir->dir) {
-		bfree(inc_dir->dir);
-		inc_dir->dir = NULL;
+	// Destroy included directory list
+	while (inc_dirs) {
+		struct inc_dir *next = inc_dirs->next;
+		bfree(inc_dirs->dir);
+		free(inc_dirs);
+		inc_dirs = next;
 	}
 }
-static struct inc_dir *inc_dirs;
 
 static bool non_help_arg = false;
 static void handle_arg(struct carg_desc *desc, const char *arg)
@@ -133,6 +136,9 @@ static void handle_arg(struct carg_desc *desc, const char *arg)
 int main(int argc, const char *argv[])
 {
 	int ret = 0;
+
+	// Ensure included directory list destroyed at exit
+	atexit(inc_dir_free_all);
 
 	// Parse command-line arguments
 	enum carg_error parse_error = carg_parse_args(
@@ -213,8 +219,10 @@ int main(int argc, const char *argv[])
 	struct assembler as;
 	assembler_init(&as, outfile);
 
+	// Initialize local variables
 	bool pop_inc = false;
 	ucp c = 0;
+	int lineno = 1, charno = 0;
 
 	// Parse each byte of the source file and each included file
 	while (inc_chain) {
@@ -287,8 +295,8 @@ int main(int argc, const char *argv[])
 				}
 
 				// Add link to chain
-				inc_chain->lineno = tokenizer.lineno;
-				inc_chain->charno = tokenizer.charno;
+				inc_chain->lineno = lineno;
+				inc_chain->charno = charno;
 				struct inc_link *link = (struct inc_link*)malloc(sizeof(struct inc_link));
 				inc_link_init(link, strdup(path), incfile);
 				bfree(path);
@@ -308,11 +316,20 @@ int main(int argc, const char *argv[])
 			free(inc_chain);
 			inc_chain = prev;
 			if (!inc_chain) break; // Assembled all files
-			tokenizer.lineno = inc_chain->lineno;
-			tokenizer.charno = inc_chain->charno;
+			lineno = inc_chain->lineno;
+			charno = inc_chain->charno;
 		}
 
-		// Get a character from the current input file
+		// Track line and character number
+		if (c == '\n') {
+			lineno++;
+			charno = 1;
+		}
+		else {
+			charno++;
+		}
+
+		// Get next character from the current input file
 		for (;;) {
 			int b = fgetc(inc_chain->file);
 			if (b == EOF) { // Finish file
@@ -323,7 +340,7 @@ int main(int argc, const char *argv[])
 				}
 				// Ensure the decoder and tokenizer can terminate now
 				if (!utf8_decoder_can_terminate(&decoder) || !tokenizer_finish(&tokenizer)) {
-					stmsgtf(SMT_ERROR, tokenizer.lineno, tokenizer.charno, "unexpected EOF");
+					stmsgtf(SMT_ERROR, lineno, charno, "unexpected EOF");
 					ret = 1;
 					break;
 				}
@@ -336,7 +353,7 @@ int main(int argc, const char *argv[])
 			// Decode byte
 			ucp *cp = utf8_decoder_decode(&decoder, b, &c, &ret);
 			if (ret) { // Encoding error
-				stmsgtf(SMT_ERROR, tokenizer.lineno, tokenizer.charno, "encoding error");
+				stmsgtf(SMT_ERROR, lineno, charno, "encoding error");
 				break;
 			}
 			if (cp != &c) break; // Character generated
@@ -344,11 +361,11 @@ int main(int argc, const char *argv[])
 		if (ret) break;
 
 		// Feed the generated character to the tokenizer
-		ret = tokenizer_parse(&tokenizer, c);
+		ret = tokenizer_parse(&tokenizer, c, lineno, charno);
 		if (ret) break;
 	}
 
-	int finret = assembler_finish(&as, tokenizer.lineno, tokenizer.charno);
+	int finret = assembler_finish(&as, lineno, charno);
 	if (ret == 0) {
 		ret = finret;
 	}
@@ -376,14 +393,6 @@ int main(int argc, const char *argv[])
 		inc_link_destroy(inc_chain);
 		free(inc_chain);
 		inc_chain = prev;
-	}
-
-	// Destroy included directory list
-	while (inc_dirs) {
-		struct inc_dir *next = inc_dirs->next;
-		inc_dir_destroy(inc_dirs);
-		free(inc_dirs);
-		inc_dirs = next;
 	}
 
 	// Close output file

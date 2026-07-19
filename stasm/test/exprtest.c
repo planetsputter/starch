@@ -44,7 +44,7 @@ static int parse_expr(const char *expr, struct expr **e)
 		}
 		// Note: We don't handle non-ASCII characters
 		char c = expr[i++];
-		tokenizer_parse(&tz, c);
+		tokenizer_parse(&tz, c, 1, i);
 		if (expr[i] == '\0') {
 			assert(tokenizer_finish(&tz));
 		}
