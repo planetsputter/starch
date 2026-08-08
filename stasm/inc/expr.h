@@ -26,9 +26,9 @@ void expr_init(struct expr*, struct token *op_val);
 // Destroys the given expression and all sub-expressions
 void expr_destroy(struct expr*);
 
-// Type of function that returns whether the given non-literal string value
+// Type of function that returns whether the given non-literal token
 // could be converted to an integer value, and if so sets *intval.
-typedef bool expr_lookup_func(void *userptr, bchar *strval, int64_t *intval);
+typedef bool expr_lookup_func(void *userptr, struct token *token, int64_t *intval);
 
 // Evaluates the given expression. Calls the given function if not NULL for
 // terms that are not integer literals.

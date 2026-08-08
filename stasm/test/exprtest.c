@@ -66,9 +66,10 @@ static int parse_expr(const char *expr, struct expr **e)
 int64_t A = 0, B = 0, C = 0, D = 0, E = 0;
 
 // Lookup function for evaluation of non-literal values
-bool nonlit_lookup(void *userptr, bchar *strval, int64_t *intval)
+bool nonlit_lookup(void *userptr, struct token *token, int64_t *intval)
 {
 	assert(userptr == NULL);
+	bchar *strval = token->str;
 	if (bstrcmpc(strval, "A") == 0) {
 		*intval = A;
 	}

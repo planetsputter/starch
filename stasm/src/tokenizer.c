@@ -21,9 +21,15 @@ enum { // Tokenizer states
 static const char begin_ops[] = "!&+-/<=>|";
 
 // Returns whether the given character is an operator character
-static bool isop(ucp c)
+static bool isopc(ucp c)
 {
 	return c < 0x7f && c > ' ' && !isalnum(c) && c != '_' && c != '$' && c != ':' && c != '"' && c != '\'';
+}
+
+// Returns whether the given token string is an operator
+static bool isops(const bchar *s)
+{
+	return isopc(s[0]) && (s[1] == '\0' || isopc(s[1]));
 }
 
 // Returns whether the given character begins an operator
@@ -90,17 +96,17 @@ static void tokenizer_enqueue(struct tokenizer *tz)
 		else {
 			tz->token1 = tz->ctoken;
 		}
-		/*
+
 		// The current token is a value if it is not an operator
 		// and is not the first token in a statement
-		tz->afterval = tz->iws > 0 && !isop(tz->ctoken[0]);
-		if (tz->ctoken[0] == ';' || tz->ctoken[0] == '\n') {
+		tz->afterval = tz->iws > 0 && !isops(tz->ctoken->str);
+		// Keep track of token index within statement
+		if (tz->ctoken->str[0] == ';' || tz->ctoken->str[0] == '\n') {
 			tz->iws = 0;
 		}
 		else {
 			tz->iws++;
 		}
-		*/
 		tz->ctoken = NULL;
 	}
 }
@@ -114,7 +120,7 @@ int tokenizer_parse(struct tokenizer *tz, ucp c, int lineno, int charno)
 		int error = 0;
 		switch (tz->state) {
 		case TZS_DEFAULT:
-			if (c == 0 || isspace((int)c) || isop(c) || c == '"' || c == '\'') {
+			if (c == 0 || isspace((int)c) || isopc(c) || c == '"' || c == '\'') {
 				// These characters end the current token, if any
 				tokenizer_enqueue(tz);
 				bool capture = true, enqueue = false;
@@ -124,7 +130,7 @@ int tokenizer_parse(struct tokenizer *tz, ucp c, int lineno, int charno)
 				else if (begins_op(c)) { // Character begins an operator
 					tz->state = TZS_OP;
 				}
-				else if (isop(c) || c == '\n') { // This character is an operator or is treated like one
+				else if (isopc(c) || c == '\n') { // This character is an operator or is treated like one
 					enqueue = true;
 				}
 				else { // Whitespace and null characters end tokens but do not begin tokens

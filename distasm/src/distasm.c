@@ -163,40 +163,45 @@ int main(int argc, const char *argv[])
 			}
 			di++;
 
+			int sdt;
+			int64_t val;
+
 			// Look up opcode name
 			const char *name = name_for_opcode(opcode);
 			if (name == NULL) {
-				stmsgf(SMT_ERROR, "failed to look up name for opcode %02x", opcode);
-				ret = 1;
-				break;
+				// Emit unknown opcodes as data
+				name = "data8";
+				sdt = SDT_U8;
+				val = opcode;
 			}
-
-			// Determine type of immediate value
-			int sdt = imm_type_for_opcode(opcode);
-			if (sdt < 0) {
-				stmsgf(SMT_ERROR, "unable to determine immediate type for opcode 0x%02x",
-					opcode);
-				ret = 1;
-				break;
-			}
-
-			int imm_len = sdt_size(sdt);
-
-			// Read little-endian immediate value
-			int64_t val = 0;
-			int64_t b;
-			ret = 0;
-			for (int j = 0; j < imm_len; j++) {
-				b = fgetc(infile);
-				if (b == EOF) {
-					stmsgf(SMT_ERROR, "unexpected EOF in \"%s\"", arg_bin);
+			else {
+				// Determine type of immediate value
+				sdt = imm_type_for_opcode(opcode);
+				if (sdt < 0) {
+					stmsgf(SMT_ERROR, "unable to determine immediate type for opcode 0x%02x",
+						opcode);
 					ret = 1;
 					break;
 				}
-				di++;
-				val |= b << (j * 8);
+
+				int imm_len = sdt_size(sdt);
+
+				// Read little-endian immediate value
+				val = 0;
+				int64_t b;
+				ret = 0;
+				for (int j = 0; j < imm_len; j++) {
+					b = fgetc(infile);
+					if (b == EOF) {
+						stmsgf(SMT_ERROR, "unexpected EOF in \"%s\"", arg_bin);
+						ret = 1;
+						break;
+					}
+					di++;
+					val |= b << (j * 8);
+				}
+				if (ret) break;
 			}
-			if (ret) break;
 
 			// Print address if requested
 			if (arg_addr) {

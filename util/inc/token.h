@@ -5,7 +5,7 @@
 #include "bstr.h"
 
 struct token {
-	bchar *str;
+	bchar *str; // Token string
 	int lineno, charno;
 };
 

@@ -217,28 +217,9 @@ enum { // Assembler parse states
 	APS_DEFINE1,
 	APS_DEFINE2,
 	APS_DEFINE3,
-	APS_DATA1,
-	APS_DATA2,
 	APS_STRINGS,
 	APS_PSOP1,
 	APS_PSOP2,
-	APS_PUSH1,
-	APS_PUSH2_EOS,
-	APS_PUSH3_BRKT,
-	APS_PUSH4_BRKT_END,
-	APS_PUSH5_BRKT_EOS,
-	APS_PUSH6_BRKT_SFP_OFF,
-	APS_PUSH7_BRKT_SFP_OFF,
-	APS_PUSH8_BRKT_SFP_END,
-	APS_PUSH9_BRKT_SFP_EOS,
-	APS_STORE1,
-	APS_STORE2_BRKT,
-	APS_STORE3_BRKT_END,
-	APS_STORE4_BRKT_EOS,
-	APS_STORE5_BRKT_SFP_OFF,
-	APS_STORE6_BRKT_SFP_OFF,
-	APS_STORE7_BRKT_SFP_END,
-	APS_STORE8_BRKT_SFP_EOS,
 	APS_OPCODE1,
 	APS_OPCODE2,
 	APS_WAIT_EOS,
@@ -253,6 +234,7 @@ void assembler_init(struct assembler *as, FILE *outfile)
 	as->word1 = NULL;
 	as->word2 = NULL;
 	as->include = NULL;
+	expr_parser_init(&as->ep, NULL);
 	as->sec_count = 0;
 	stub_sec_init(&as->curr_sec, 0, 0, 0);
 	as->label_recs = NULL;
@@ -274,6 +256,7 @@ void assembler_destroy(struct assembler *as)
 		token_free(as->include);
 		as->include = NULL;
 	}
+	expr_parser_destroy(&as->ep);
 	for (struct label_rec *rec = as->label_recs; rec;) {
 		struct label_rec *temp = rec->prev;
 		label_rec_destroy(rec);
@@ -463,21 +446,77 @@ static int assembler_handle_strings(struct assembler *as, int lineno)
 	return ret;
 }
 
-// Handles the given token as part of the given opcode or pseudo-op.
-// token may be NULL if there is no immediate value for this opcode.
-static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int code, struct token *token)
+// Looks up the value of a label or other named constant
+bool assembler_lookup_func(void *userptr, struct token *token, int64_t *intval)
+{
+	struct assembler *as = (struct assembler*)userptr;
+	(void)as;
+	(void)token;
+	(void)intval;
+	// @todo: Allow label value lookup
+	return false;
+}
+
+// Handles the statement consisting of the given opcode or pseudo-op followed by the given expression.
+// eos is the token which ended the statement.
+// expr may be NULL if there is no immediate value for this opcode.
+static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int code, struct expr *expr, struct token *eos)
 {
 	if (as->sec_count == 0) {
-		stmsgtf(SMT_ERROR, token->lineno, token->charno,
+		stmsgtf(SMT_ERROR, eos->lineno, eos->charno,
 			"expected section definition before first instruction");
 		return 1;
 	}
 
 	int opcode_size = 1; // For now we assume opcode size is 1 byte
-	int opcode, sdt;
+	int opcode = -1, sdt;
 	if (pseudo_op) {
 		// For pseudo-ops, put the worst-case (max program size) opcode. These may be compacted later.
 		switch (code) {
+		case ASM_CMD_STORE16:
+		case ASM_CMD_POP16:
+			if (expr == NULL) {
+				opcode = code == ASM_CMD_STORE16 ? op_store16 : op_pop16;
+				sdt = SDT_VOID;
+			}
+			else {
+				opcode = op_storerpop16;
+				sdt = SDT_A64; // For address
+			}
+			break;
+		case ASM_CMD_STORE32:
+		case ASM_CMD_POP32:
+			if (expr == NULL) {
+				opcode = code == ASM_CMD_STORE32 ? op_store32 : op_pop32;
+				sdt = SDT_VOID;
+			}
+			else {
+				opcode = op_storerpop32;
+				sdt = SDT_A64; // For address
+			}
+			break;
+		case ASM_CMD_STORE64:
+		case ASM_CMD_POP64:
+			if (expr == NULL) {
+				opcode = code == ASM_CMD_STORE64 ? op_store64 : op_pop64;
+				sdt = SDT_VOID;
+			}
+			else {
+				opcode = op_storerpop64;
+				sdt = SDT_A64; // For address
+			}
+			break;
+		case ASM_CMD_STORE8:
+		case ASM_CMD_POP8:
+			if (expr == NULL) {
+				opcode = code == ASM_CMD_STORE8 ? op_store8 : op_pop8;
+				sdt = SDT_VOID;
+			}
+			else {
+				opcode = op_storerpop8;
+				sdt = SDT_A64; // For address
+			}
+			break;
 		case ASM_CMD_BRZ16:
 			opcode = op_rbrz16i32;
 			sdt = SDT_I32;
@@ -549,16 +588,188 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 	// Immediate type has already been computed. Get the immediate size.
 	int imm_bytes = sdt_size(sdt);
 
-	if (!token) {
-		assert(imm_bytes == 0);
+	if (!expr) {
+		if (imm_bytes != 0) {
+			stmsgtf(SMT_ERROR, eos->lineno, eos->charno, "expected an expression");
+			return 1;
+		}
+	}
+	else if (imm_bytes == 0) {
+		stmsgtf(SMT_ERROR, eos->lineno, eos->charno, "unexpected expression");
+		return 1;
 	}
 	else { // Immediate value
-		int imm_bytes_reqd;
-		int64_t imm_val = 0;
 		assert(sdt != SDT_VOID);
-		bchar *ts = token->str;
-		bool string_lit = ts[0] == '"';
+		int ret = 0;
+		int64_t imm_val = 0;
+		bchar *ts = expr->op_val->str;
+		if (ts[0] == '[') { // Bracket expression
+			assert(expr->lhs);
+
+			// Require pseudo-op
+			if (!pseudo_op) {
+				stmsgtf(SMT_ERROR, expr->op_val->lineno, expr->op_val->charno, "unexpected bracket notation");
+				return 1;
+			}
+
+			// Check that bracket notation is allowed
+			switch (code) {
+			case ASM_CMD_PUSH16:
+			case ASM_CMD_PUSH32:
+			case ASM_CMD_PUSH64:
+			case ASM_CMD_PUSH8:
+			case ASM_CMD_STORE16:
+			case ASM_CMD_POP16:
+			case ASM_CMD_STORE32:
+			case ASM_CMD_POP32:
+			case ASM_CMD_STORE64:
+			case ASM_CMD_POP64:
+			case ASM_CMD_STORE8:
+			case ASM_CMD_POP8:
+				// Bracket notation allowed
+				break;
+			default:
+				// Unexpected bracket notation
+				stmsgtf(SMT_ERROR, expr->op_val->lineno, expr->op_val->charno, "unexpected bracket notation");
+				return 1;
+			}
+
+			struct expr *addr_expr;
+			// Check for simple "SFP" or "SFP +" expressions
+			if (bstrcmpc(expr->lhs->op_val->str, "SFP") == 0 ||
+				(bstrcmpc(expr->lhs->op_val->str, "+") == 0 &&
+					bstrcmpc(expr->lhs->lhs->op_val->str, "SFP") == 0)) {
+				// This bracket uses SFP offset
+				switch (code) {
+				case ASM_CMD_PUSH16:
+					opcode = op_loadpopsfp16;
+					break;
+				case ASM_CMD_PUSH32:
+					opcode = op_loadpopsfp32;
+					break;
+				case ASM_CMD_PUSH64:
+					opcode = op_loadpopsfp64;
+					break;
+				case ASM_CMD_PUSH8:
+					opcode = op_loadpopsfp8;
+					break;
+				case ASM_CMD_STORE16:
+				case ASM_CMD_POP16:
+					opcode = op_storerpopsfp16;
+					break;
+				case ASM_CMD_STORE32:
+				case ASM_CMD_POP32:
+					opcode = op_storerpopsfp32;
+					break;
+				case ASM_CMD_STORE64:
+				case ASM_CMD_POP64:
+					opcode = op_storerpopsfp64;
+					break;
+				case ASM_CMD_STORE8:
+				case ASM_CMD_POP8:
+					opcode = op_storerpopsfp8;
+					break;
+				default:
+					assert(false);
+				}
+				// The address is the expression without SFP
+				if (bstrcmpc(expr->lhs->op_val->str, "SFP") == 0) {
+					// @todo: This is destructive. Find a better way.
+					bfree(expr->lhs->op_val->str);
+					expr->lhs->op_val->str = bstrdupc("0");
+					addr_expr = expr->lhs;
+				}
+				else {
+					addr_expr = expr->lhs->rhs;
+				}
+			}
+			else { // SFP notation is not used
+				switch (code) {
+				case ASM_CMD_PUSH16:
+					opcode = op_loadpop16;
+					break;
+				case ASM_CMD_PUSH32:
+					opcode = op_loadpop32;
+					break;
+				case ASM_CMD_PUSH64:
+					opcode = op_loadpop64;
+					break;
+				case ASM_CMD_PUSH8:
+					opcode = op_loadpop8;
+					break;
+				case ASM_CMD_STORE16:
+				case ASM_CMD_POP16:
+					opcode = op_storerpop16;
+					break;
+				case ASM_CMD_STORE32:
+				case ASM_CMD_POP32:
+					opcode = op_storerpop32;
+					break;
+				case ASM_CMD_STORE64:
+				case ASM_CMD_POP64:
+					opcode = op_storerpop64;
+					break;
+				case ASM_CMD_STORE8:
+				case ASM_CMD_POP8:
+					opcode = op_storerpop8;
+					break;
+				default:
+					assert(false);
+				}
+				// The address is the enclosed expression
+				addr_expr = expr->lhs;
+			}
+
+			// Emit the instruction to push the address
+			// @todo: handle negatives, or maybe change to SF[] notation
+			ret = assembler_handle_opcode(as, true, ASM_CMD_PUSH64, addr_expr, eos);
+			if (ret) return ret;
+
+			// Emit the instruction to load or store a value
+			ret = assembler_handle_opcode(as, false, opcode, NULL, eos);
+			if (ret) return ret;
+
+			opcode = -1;
+			switch (code) { // The pop operations require a pop instruction at the end
+			case ASM_CMD_POP16:
+				opcode = op_pop16;
+				break;
+			case ASM_CMD_POP32:
+				opcode = op_pop32;
+				break;
+			case ASM_CMD_POP64:
+				opcode = op_pop64;
+				break;
+			case ASM_CMD_POP8:
+				opcode = op_pop8;
+				break;
+			}
+			if (opcode >= 0) {
+				ret = assembler_handle_opcode(as, false, opcode, NULL, eos);
+			}
+			return ret;
+		}
+
+		// Not bracket notation
+		if (pseudo_op) switch (code) {
+		case ASM_CMD_STORE16:
+		case ASM_CMD_POP16:
+		case ASM_CMD_STORE32:
+		case ASM_CMD_POP32:
+		case ASM_CMD_STORE64:
+		case ASM_CMD_POP64:
+		case ASM_CMD_STORE8:
+		case ASM_CMD_POP8:
+			// These codes require bracket notation if they have an expression
+			stmsgtf(SMT_ERROR, expr->op_val->lineno, expr->op_val->charno, "expected a bracket expression");
+			return 1;
+		default:
+			// Continue
+		}
+
 		struct label_usage *lu = NULL;
+		int imm_bytes_reqd;
+		bool string_lit = ts[0] == '"';
 		if (string_lit || ts[0] == ':') { // String literal or label
 			// Get current file offset
 			long current_fo = ftell(as->outfile);
@@ -579,7 +790,7 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 				contents = balloc();
 				if (!parse_string_lit(ts, &contents)) {
 					bfree(contents);
-					stmsgtf(SMT_ERROR, token->lineno, token->charno, "invalid string literal");
+					stmsgtf(SMT_ERROR, expr->op_val->lineno, expr->op_val->charno, "invalid string literal");
 					return 1;
 				}
 			}
@@ -626,20 +837,13 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 				}
 			}
 		}
-		else { // Integer literal
-			// @todo: Pass in a token structure instead
-			if (token == as->word1) {
-				assert(as->pret1);
-				imm_val = as->pval1;
+		else { // Integer expression
+			// For now, we expect all expressions to be immediately evaluable
+			// @todo: Support expressions contaiing string literals and labels
+			ret = expr_eval(expr, &imm_val, as, assembler_lookup_func);
+			if (ret) {
+				return ret;
 			}
-			else if (token == as->word2) {
-				assert(as->pret2);
-				imm_val = as->pval2;
-			}
-			else {
-				assert(false);
-			}
-
 			imm_bytes_reqd = min_bytes_for_val(imm_val);
 		}
 
@@ -648,11 +852,11 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 			bool oob = false;
 			opcode = assembler_compact_op(code, pseudo_op, imm_val, &oob);
 			if (oob) {
-				stmsgtf(SMT_ERROR, token->lineno, token->charno, "immediate value out of range for opcode");
+				stmsgtf(SMT_ERROR, eos->lineno, eos->charno, "immediate value out of range for opcode");
 				return 1;
 			}
 			if (opcode < 0) {
-				stmsgtf(SMT_ERROR, token->lineno, token->charno, "unable to compact opcode");
+				stmsgtf(SMT_ERROR, eos->lineno, eos->charno, "unable to compact opcode");
 				return 1;
 			}
 			buff[0] = opcode;
@@ -666,8 +870,8 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 
 		// Check that value fits into buffer
 		if (imm_bytes_reqd > imm_bytes) {
-			stmsgtf(SMT_ERROR, token->lineno, token->charno,
-				"immediate value \"%s\" is out of bounds for type", token->str);
+			stmsgtf(SMT_ERROR, eos->lineno, eos->charno,
+				"immediate value \"%s\" is out of bounds for type", eos->str);
 			return 1;
 		}
 
@@ -706,10 +910,9 @@ int assembler_handle_token(struct assembler *as, struct token *token)
 			token_free(as->word2);
 			as->word2 = NULL;
 		}
-		if (as->include) {
-			token_free(as->include);
-			as->include = NULL;
-		}
+		expr_parser_destroy(&as->ep);
+		expr_parser_init(&as->ep, NULL);
+		assert(!as->include); // Caller should have checked
 
 		if (symbol[0] == '\n' || symbol[0] == ';') { // Allow empty lines and empty statements
 			break;
@@ -728,33 +931,21 @@ int assembler_handle_token(struct assembler *as, struct token *token)
 			break;
 		}
 
-		// Check for assembler command without substitution
+		// Check for assembler command
 		int code = get_asm_cmd(symbol);
 		switch (code) {
 		case ASM_CMD_BRZ16:
 		case ASM_CMD_BRZ32:
 		case ASM_CMD_BRZ64:
 		case ASM_CMD_BRZ8:
-			nextstate = APS_PSOP1;
-			break;
 		case ASM_CMD_DATA16:
 		case ASM_CMD_DATA32:
 		case ASM_CMD_DATA64:
 		case ASM_CMD_DATA8:
-			nextstate = APS_DATA1;
-			break;
-		case ASM_CMD_DEFINE:
-			nextstate = APS_DEFINE1;
-			break;
-		case ASM_CMD_INCLUDE:
-			nextstate = APS_INCLUDE1;
-			break;
 		case ASM_CMD_PUSH16:
 		case ASM_CMD_PUSH32:
 		case ASM_CMD_PUSH64:
 		case ASM_CMD_PUSH8:
-			nextstate = APS_PUSH1;
-			break;
 		case ASM_CMD_STORE16:
 		case ASM_CMD_STORE32:
 		case ASM_CMD_STORE64:
@@ -763,10 +954,15 @@ int assembler_handle_token(struct assembler *as, struct token *token)
 		case ASM_CMD_POP32:
 		case ASM_CMD_POP64:
 		case ASM_CMD_POP8:
-			nextstate = APS_STORE1;
-			break;
 		case ASM_CMD_RJMP:
+			// Pseudo-ops
 			nextstate = APS_PSOP1;
+			break;
+		case ASM_CMD_DEFINE:
+			nextstate = APS_DEFINE1;
+			break;
+		case ASM_CMD_INCLUDE:
+			nextstate = APS_INCLUDE1;
 			break;
 		case ASM_CMD_SECTION:
 			nextstate = APS_SECTION1;
@@ -786,39 +982,21 @@ int assembler_handle_token(struct assembler *as, struct token *token)
 				break;
 			}
 			// Valid Starch opcode
-			int sdt = imm_type_for_opcode(code);
-			nextstate = sdt == SDT_VOID ? APS_OPCODE2 : APS_OPCODE1;
-			break;
+			nextstate = APS_OPCODE1;
 		}
 		as->code = code;
 		break;
 
 	//
-	// Most intermediate tokens
+	// Expect words, not expressions
 	//
-	case APS_DATA1:
+	case APS_INCLUDE1:
 	case APS_DEFINE1:
 	case APS_DEFINE2:
-	case APS_INCLUDE1:
-	case APS_OPCODE1:
-	case APS_PSOP1:
-	case APS_PUSH1:
-	case APS_PUSH3_BRKT:
-	case APS_PUSH4_BRKT_END:
-	case APS_PUSH6_BRKT_SFP_OFF:
-	case APS_PUSH7_BRKT_SFP_OFF:
-	case APS_PUSH8_BRKT_SFP_END:
-	case APS_SECTION1:
-	case APS_STORE2_BRKT:
-	case APS_STORE3_BRKT_END:
-	case APS_STORE5_BRKT_SFP_OFF:
-	case APS_STORE6_BRKT_SFP_OFF:
-	case APS_STORE7_BRKT_SFP_END:
-		// Disallow newlines
 		if (symbol[0] == '\n' || symbol[0] == ';') {
-			stmsgtf(SMT_ERROR, token->lineno, token->charno, "unexpected end of statement", symbol);
-			nextstate = APS_DEFAULT;
+			stmsgtf(SMT_ERROR, token->lineno, token->charno, "unexpected end of statement");
 			ret = 1;
+			nextstate = APS_DEFAULT;
 			break;
 		}
 
@@ -843,7 +1021,6 @@ int assembler_handle_token(struct assembler *as, struct token *token)
 			}
 		}
 
-		// Check token type
 		switch (as->state) {
 		case APS_INCLUDE1:
 			// Require quoted token
@@ -855,6 +1032,7 @@ int assembler_handle_token(struct assembler *as, struct token *token)
 			}
 			nextstate++;
 			break;
+
 		case APS_DEFINE1: {
 			// Disallow quoted token, integer literal, or label
 			int64_t ival = 0;
@@ -866,135 +1044,64 @@ int assembler_handle_token(struct assembler *as, struct token *token)
 			}
 			nextstate++;
 		}	break;
-
-		case APS_PUSH1:
-		case APS_PUSH3_BRKT:
-		case APS_PUSH6_BRKT_SFP_OFF:
-		case APS_STORE2_BRKT:
-		case APS_STORE5_BRKT_SFP_OFF:
-			bool done = false;
-			switch (as->state) {
-			case APS_PUSH1:
-				if (symbol[0] == '[') { // Begin bracket notation
-					token_free(as->word1);
-					as->word1 = NULL;
-					done = true;
-					nextstate += 2;
-					break;
-				}
-				break;
-			case APS_PUSH3_BRKT:
-			case APS_STORE2_BRKT:
-				if (bstrcmpc(symbol, "SFP") == 0) { // Allow "SFP" to indicate SFP addressing mode
-					nextstate += 3; // Head to the "SFP" states
-					token_free(as->word1);
-					as->word1 = NULL;
-					done = true;
-					break;
-				}
-				break;
-			case APS_PUSH6_BRKT_SFP_OFF:
-			case APS_STORE5_BRKT_SFP_OFF:
-				if (symbol[0] == ']') { // "[SFP]" indicates zero offset
-					nextstate += 3; // Head to the "EOS" states
-					token_free(as->word1);
-					as->word1 = NULL;
-					done = true;
-				}
-				else {
-					nextstate++;
-					if (bstrcmpc(symbol, "+") == 0) { // Allow optional "+" after "SFP" before offset
-						token_free(as->word1);
-						as->word1 = NULL;
-						done = true;
-					}
-				}
-				break;
-			default:
-				assert(false);
-			}
-			if (done) break;
-			// Fall-through
-		case APS_PUSH7_BRKT_SFP_OFF:
-		case APS_OPCODE1:
-		case APS_PSOP1:
-		case APS_DATA1:
-		case APS_STORE6_BRKT_SFP_OFF:
-			// Allow quoted tokens and labels
-			if (symbol[0] == '"' || symbol[0] == ':') {
-				nextstate++;
-				break;
-			}
-			// Fall-through
-		case APS_SECTION1:
-			// Require integer literal
-			bool bret;
-			if (as->word2) {
-				bret = as->pret2 = parse_int(symbol, &as->pval2);
-			}
-			else {
-				bret = as->pret1 = parse_int(symbol, &as->pval1);
-			}
-			if (!bret) {
-				stmsgtf(SMT_ERROR, as->word1->lineno, as->word1->charno, "invalid integer literal \"%s\"", symbol);
-				nextstate = APS_WAIT_EOS;
-				ret = 1;
-				break;
-			}
-			// Fall-through
 		case APS_DEFINE2:
 			// Allow any token
 			nextstate++;
 			break;
 
-		case APS_PUSH4_BRKT_END:
-		case APS_PUSH8_BRKT_SFP_END:
-		case APS_STORE3_BRKT_END:
-		case APS_STORE7_BRKT_SFP_END:
-			if (symbol[0] != ']') {
-				stmsgtf(SMT_ERROR, as->word1->lineno, as->word1->charno, "expected \"]\"");
-				nextstate = APS_WAIT_EOS;
-				ret = 1;
-				break;
-			}
-			nextstate++;
-			break;
 		default:
 			assert(false);
 		}
 		break;
 
 	//
-	// Last token (end of statement)
+	// Expect expressions
 	//
-	case APS_DATA2:
-	case APS_DEFINE3:
+	case APS_OPCODE1:
+	case APS_PSOP1:
+	case APS_SECTION1:
+		// Attempt to parse expression
+		if (symbol[0] != '\n' && symbol[0] != ';') {
+			if (symbol != token->str) { // Substitution performed
+				bfree(token->str);
+				token->str = bstrdupb(symbol);
+			}
+			// Parse the token as part of the expression
+			ret = expr_parser_parse(&as->ep, token);
+			if (ret) {
+				nextstate = APS_WAIT_EOS;
+			}
+			token = NULL;
+			break;
+		}
+		// Expression finished
+		if (!expr_parser_complete(&as->ep)) { // Partial expression
+			stmsgtf(SMT_ERROR, token->lineno, token->charno, "incomplete expression");
+			ret = 1;
+			nextstate = APS_WAIT_EOS;
+			break;
+		}
+		// Fall-through
+
+	//
+	// Expect end of statement
+	//
 	case APS_INCLUDE2:
-	case APS_OPCODE2:
-	case APS_PSOP2:
-	case APS_PUSH2_EOS:
-	case APS_PUSH5_BRKT_EOS:
-	case APS_PUSH9_BRKT_SFP_EOS:
-	case APS_SECTION2:
-	case APS_STORE4_BRKT_EOS:
-	case APS_STORE8_BRKT_SFP_EOS:
+	case APS_DEFINE3:
 	case APS_STRINGS:
-		// Expect end of statement
 		if (symbol[0] != '\n' && symbol[0] != ';') {
 			stmsgtf(SMT_ERROR, token->lineno, token->charno, "expected end of statement");
 			ret = 1;
 			nextstate = APS_WAIT_EOS;
 			break;
 		}
+
 		nextstate = APS_DEFAULT;
 
 		switch (as->state) {
-		case APS_DEFINE3:
-			// Symbol name is in word1 while symbol value is in word2.
-			as->defs = bmap_insert(as->defs, as->word1->str, as->word2->str);
-			// The symbol map takes ownership of the strings
-			as->word1->str = NULL;
-			as->word2->str = NULL;
+		case APS_OPCODE1:
+		case APS_PSOP1:
+			ret = assembler_handle_opcode(as, as->state == APS_PSOP1, as->code, as->ep.expr, token);
 			break;
 
 		case APS_INCLUDE2:
@@ -1009,112 +1116,28 @@ int assembler_handle_token(struct assembler *as, struct token *token)
 			}
 			break;
 
-		case APS_DATA2:
-		case APS_OPCODE2:
-		case APS_PSOP2:
-		case APS_PUSH2_EOS:
-			// word1 will be NULL if the opcode expects no immediate value.
-			// Otherwise it will be a quoted string, label, or integer literal.
-			ret = assembler_handle_opcode(as, as->state != APS_OPCODE2, as->code, as->word1);
+		case APS_SECTION1:
+			// @todo: Support section flags after comma
+			// Require expression to be immediately evaluable
+			int64_t imm_val = 0;
+			ret = expr_eval(as->ep.expr, &imm_val, as, assembler_lookup_func);
+			if (ret) {
+				break;
+			}
+			if (imm_val < 0) {
+				stmsgtf(SMT_ERROR, token->lineno, token->charno, "section address cannot be negative");
+				ret = 1;
+				break;
+			}
+			ret = assembler_handle_section(as, (uint64_t)imm_val);
 			break;
 
-		case APS_PUSH5_BRKT_EOS:
-		case APS_PUSH9_BRKT_SFP_EOS:
-			if (!as->word1) { // Such as for "[SFP]" notation
-				// @todo: This could be improved with changes to assembler_handle_opcode()
-				as->word1 = token_alloc(balloc(), 0, 0);
-				as->pret1 = true;
-				as->pval1 = 0;
-			}
-			ret = assembler_handle_opcode(as, true, ASM_CMD_PUSH64, as->word1);
-			if (ret) break;
-
-			int opcode = -1;
-			if (as->state == APS_PUSH5_BRKT_EOS) switch (as->code) {
-			case ASM_CMD_PUSH16: opcode = op_loadpop16; break;
-			case ASM_CMD_PUSH32: opcode = op_loadpop32; break;
-			case ASM_CMD_PUSH64: opcode = op_loadpop64; break;
-			case ASM_CMD_PUSH8: opcode = op_loadpop8; break;
-			default: assert(false);
-			}
-			else switch (as->code) {
-			case ASM_CMD_PUSH16: opcode = op_loadpopsfp16; break;
-			case ASM_CMD_PUSH32: opcode = op_loadpopsfp32; break;
-			case ASM_CMD_PUSH64: opcode = op_loadpopsfp64; break;
-			case ASM_CMD_PUSH8: opcode = op_loadpopsfp8; break;
-			default: assert(false);
-			}
-			ret = assembler_handle_opcode(as, false, opcode, NULL);
-			break;
-
-		case APS_SECTION2:
-			// Section address is in word1
-			// @todo: Allow section flags
-			if (as->pret1) { // Address parsed successfully
-				if (as->pval1 < 0) {
-					stmsgtf(SMT_ERROR, token->lineno, token->charno, "section address cannot be negative");
-					ret = 1;
-					break;
-				}
-				ret = assembler_handle_section(as, (uint64_t)as->pval1);
-			}
-			break;
-
-		case APS_STORE4_BRKT_EOS:
-		case APS_STORE8_BRKT_SFP_EOS:
-			if (!as->word1) { // Such as for "[SFP]" notation
-				// @todo: This could be improved with changes to assembler_handle_opcode()
-				as->word1 = token_alloc(balloc(), 0, 0);
-				as->pret1 = true;
-				as->pval1 = 0;
-			}
-			// Emit the instruction to push a 64-bit offset
-			ret = assembler_handle_opcode(as, true, ASM_CMD_PUSH64, as->word1);
-			if (ret) break;
-
-			// Emit the instruction to store to that offset
-			switch (as->state) {
-			case APS_STORE4_BRKT_EOS:
-				switch (as->code) {
-				case ASM_CMD_STORE16: case ASM_CMD_POP16: opcode = op_storerpop16; break;
-				case ASM_CMD_STORE32: case ASM_CMD_POP32: opcode = op_storerpop32; break;
-				case ASM_CMD_STORE64: case ASM_CMD_POP64: opcode = op_storerpop64; break;
-				case ASM_CMD_STORE8: case ASM_CMD_POP8: opcode = op_storerpop8; break;
-				default: assert(false);
-				}
-				break;
-			case APS_STORE8_BRKT_SFP_EOS:
-				switch (as->code) {
-				case ASM_CMD_STORE16: case ASM_CMD_POP16: opcode = op_storerpopsfp16; break;
-				case ASM_CMD_STORE32: case ASM_CMD_POP32: opcode = op_storerpopsfp32; break;
-				case ASM_CMD_STORE64: case ASM_CMD_POP64: opcode = op_storerpopsfp64; break;
-				case ASM_CMD_STORE8: case ASM_CMD_POP8: opcode = op_storerpopsfp8; break;
-				default: assert(false);
-				}
-				break;
-			default:
-				assert(false);
-			}
-			ret = assembler_handle_opcode(as, false, opcode, NULL);
-			if (ret) break;
-
-			// For pop pseudo-ops, emit the instruction to pop the data stored
-			switch (as->code) {
-			case ASM_CMD_STORE16:
-			case ASM_CMD_STORE32:
-			case ASM_CMD_STORE64:
-			case ASM_CMD_STORE8:
-				opcode = -1;
-				break;
-			case ASM_CMD_POP16: opcode = op_pop16; break;
-			case ASM_CMD_POP32: opcode = op_pop32; break;
-			case ASM_CMD_POP64: opcode = op_pop64; break;
-			case ASM_CMD_POP8: opcode = op_pop8; break;
-			default: assert(false);
-			}
-			if (opcode > 0) {
-				ret = assembler_handle_opcode(as, false, opcode, NULL);
-			}
+		case APS_DEFINE3:
+			// Symbol name is in word1 while symbol value is in word2.
+			as->defs = bmap_insert(as->defs, as->word1->str, as->word2->str);
+			// The symbol map takes ownership of the strings
+			as->word1->str = NULL;
+			as->word2->str = NULL;
 			break;
 
 		case APS_STRINGS:
@@ -1124,38 +1147,6 @@ int assembler_handle_token(struct assembler *as, struct token *token)
 		default:
 			assert(false);
 		}
-		break;
-
-	case APS_STORE1:
-		// Optional newline
-		if (symbol[0] == '\n' || symbol[0] == ';') {
-			// With no operand, the store and pop pseudo-ops evaluate to a single instruction
-			int opcode;
-			switch (as->code) {
-			case ASM_CMD_STORE16: opcode = op_store16; break;
-			case ASM_CMD_STORE32: opcode = op_store32; break;
-			case ASM_CMD_STORE64: opcode = op_store64; break;
-			case ASM_CMD_STORE8: opcode = op_store8; break;
-			case ASM_CMD_POP16: opcode = op_pop16; break;
-			case ASM_CMD_POP32: opcode = op_pop32; break;
-			case ASM_CMD_POP64: opcode = op_pop64; break;
-			case ASM_CMD_POP8: opcode = op_pop8; break;
-			default:
-				assert(false);
-			}
-			ret = assembler_handle_opcode(as, false, opcode, NULL);
-			nextstate = APS_DEFAULT;
-			break;
-		}
-		// With an operand, the store and pop pseudo-ops accept bracket notation
-		if (symbol[0] != '[') {
-			stmsgtf(SMT_ERROR, token->lineno, token->charno, "expected '[' or end of statement");
-			ret = 1;
-			nextstate = APS_WAIT_EOS;
-			break;
-		}
-		// Begin bracket notation
-		nextstate = APS_STORE2_BRKT;
 		break;
 
 	case APS_WAIT_EOS: // A parse error has occurred. Ignore further tokens until end of statement.

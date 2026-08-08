@@ -32,6 +32,7 @@ static bool is_op(const bchar *token, bool *is_unary)
 	if (fb >= 0x7f || fb <= ' ' || fb == '"' || fb == '\'') return false;
 
 	// Check for unary operators
+	// @todo: Allow unary negation operator "-"
 	if ((fb == '!' && token[1] == '\0') || fb == '~' ||
 		begins_group(token) || ends_group(token)) {
 		*is_unary = true;
@@ -229,7 +230,7 @@ int expr_eval(struct expr *e, int64_t *val, void *userptr, expr_lookup_func f)
 				"unexpected rhs when evaluating expression");
 			ret = 1;
 		}
-		else if (!parse_int(e->op_val->str, val) && (!f || !f(userptr, e->op_val->str, val))) {
+		else if (!parse_int(e->op_val->str, val) && (!f || !f(userptr, e->op_val, val))) {
 			stmsgtf(SMT_ERROR, e->op_val->lineno, e->op_val->charno,
 				"failed to parse term \"%s\"", e->op_val->str);
 			ret = 1;

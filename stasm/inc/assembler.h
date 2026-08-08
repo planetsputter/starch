@@ -8,6 +8,7 @@
 
 #include "bstr.h"
 #include "bmap.h"
+#include "expr.h"
 #include "label.h"
 #include "stub.h"
 #include "token.h"
@@ -19,8 +20,8 @@ struct assembler {
 	struct bmap *defs; // Symbol definitions
 	int code; // Current opcode
 	struct token *word1, *word2, *include;
-	bool pret1, pret2; // Parse return values
-	int64_t pval1, pval2; // Parse values
+
+	struct expr_parser ep; // Expression parser
 
 	// Output stub file sections
 	int sec_count;
