@@ -13,8 +13,8 @@ struct token {
 // Takes ownership of the string.
 struct token *token_alloc(bchar *str, int lineno, int charno);
 
-// Destroys the given token.
+// Destroys and deallocates the given token
 void token_free(struct token*);
 
-// Returns a copy of the given
+// Returns a copy of the given token
 struct token *token_dup(struct token*);

@@ -20,11 +20,17 @@ static bool ends_group(const bchar *token)
 	return token[0] == ')' || token[0] == ']' || token[0] == '}';
 }
 
+enum { // Unary status values
+	NOT_UNARY,
+	MAY_BE_UNARY,
+	MUST_BE_UNARY,
+};
+
 // Returns whether the given token is an operator.
-// Sets *is_unary to whether the operator is a unary operator.
-static bool is_op(const bchar *token, bool *is_unary)
+// Sets *unary to one of the enumerated unary status values.
+static bool is_op(const bchar *token, int *unary)
 {
-	*is_unary = false;
+	*unary = NOT_UNARY;
 
 	// We rely on the input string being encoded with UTF-8 and check the first byte.
 	// Quoted strings are not operators.
@@ -32,16 +38,19 @@ static bool is_op(const bchar *token, bool *is_unary)
 	if (fb >= 0x7f || fb <= ' ' || fb == '"' || fb == '\'') return false;
 
 	// Check for unary operators
-	// @todo: Allow unary negation operator "-"
 	if ((fb == '!' && token[1] == '\0') || fb == '~' ||
 		begins_group(token) || ends_group(token)) {
-		*is_unary = true;
+		*unary = MUST_BE_UNARY;
 		return true;
 	}
 
 	// Check for sign at beginning of integer literal
 	if (fb == '+' || fb == '-') {
-		return !isdigit(token[1]);
+		if (token[1]) {
+			return false;
+		}
+		*unary = MAY_BE_UNARY;
+		return true;
 	}
 
 	// Any token beginning with a printable character that is non-alphanumeric
@@ -50,11 +59,26 @@ static bool is_op(const bchar *token, bool *is_unary)
 	return !isalnum(fb) && fb != '_' && fb != '$' && fb != ':';
 }
 
+struct expr *expr_new(struct token *op_val)
+{
+	struct expr *e = (struct expr*)malloc(sizeof(struct expr));
+	expr_init(e, op_val);
+	return e;
+}
+
 void expr_init(struct expr *e, struct token *op_val)
 {
 	e->lhs = NULL;
 	e->rhs = NULL;
 	e->op_val = op_val;
+}
+
+struct expr *expr_dup(struct expr *src)
+{
+	struct expr *dup = expr_new(token_dup(src->op_val));
+	dup->lhs = src->lhs ? expr_dup(src->lhs) : NULL;
+	dup->rhs = src->rhs ? expr_dup(src->rhs) : NULL;
+	return dup;
 }
 
 void expr_destroy(struct expr *e)
@@ -75,7 +99,13 @@ void expr_destroy(struct expr *e)
 	}
 }
 
-int expr_eval(struct expr *e, int64_t *val, void *userptr, expr_lookup_func f)
+void expr_delete(struct expr *e)
+{
+	expr_destroy(e);
+	free(e);
+}
+
+int expr_eval(const struct expr *e, int64_t *val, void *userptr, expr_lookup_func f)
 {
 	int ret;
 	if (!e->op_val) { // Null expression
@@ -84,25 +114,25 @@ int expr_eval(struct expr *e, int64_t *val, void *userptr, expr_lookup_func f)
 	}
 	else if (e->lhs) { // This must be an operator
 		const bchar *op = e->op_val->str;
-		bool is_unary;
-		if (!is_op(op, &is_unary)) {
+		int unary;
+		if (!is_op(op, &unary)) {
 			stmsgtf(SMT_ERROR, e->op_val->lineno, e->op_val->charno,
 				"expected operator, not \"%s\"", op);
 			ret = 1;
 		}
-		else if (!is_unary && !e->rhs) {
+		else if (unary == NOT_UNARY && !e->rhs) {
 			stmsgtf(SMT_ERROR, e->op_val->lineno, e->op_val->charno,
 				"expected rhs when evaluating operator \"%s\"", op);
 			ret = 1;
 		}
-		else if (is_unary && e->rhs) {
+		else if (unary == MUST_BE_UNARY && e->rhs) {
 			stmsgtf(SMT_ERROR, e->op_val->lineno, e->op_val->charno,
 				"unexpected rhs when evaluating unary operator \"%s\"", op);
 			ret = 1;
 		}
 		else {
 			// Evaluate lhs and rhs
-			int64_t lv, rv;
+			int64_t lv, rv = 0;
 			ret = expr_eval(e->lhs, &lv, userptr, f);
 			if (!ret && e->rhs) {
 				ret = expr_eval(e->rhs, &rv, userptr, f);
@@ -133,6 +163,9 @@ int expr_eval(struct expr *e, int64_t *val, void *userptr, expr_lookup_func f)
 					if (*op == '-') {
 						op++;
 						unrec = true; // Don't know how to handle "--"
+					}
+					else if (!e->rhs) { // Unary "-"
+						*val = -lv;
 					}
 					else {
 						*val = lv - rv;
@@ -268,7 +301,7 @@ void expr_parser_destroy(struct expr_parser *p)
 	}
 }
 
-// Return the precedence value of the given operator.
+// Return the precedence of the given operator if it occurs after a value.
 // Lower return values mean higher precedence.
 // A non-operator has higher precedence than any operator.
 static int prec_val(const bchar *op)
@@ -307,15 +340,18 @@ static int prec_val(const bchar *op)
 		if (op[1] == '|') ret = 9;
 		else ret = 7;
 		break;
-	case '!':
-		if (op[1] == '=') ret = 4;
-		else ret = -1; // Unary
-		break;
 	case ',':
 		ret = 11;
 		break;
+	case '!':
+		if (op[1] == '=') {
+			ret = 4;
+			break;
+		}
+		// Fall-through
+	case '~':
 	default:
-		ret = -1;
+		assert(false); // Unary should not occur after value
 	}
 	return ret;
 }
@@ -345,8 +381,8 @@ int expr_parser_parse(struct expr_parser *p, struct token *token)
 			else {
 				// Insert p->subp->expr into p->expr
 				// Create expression to store token
-				e = (struct expr*)malloc(sizeof(struct expr));
-				expr_init(e, NULL);
+				assert(e == NULL);
+				e = expr_new(NULL);
 				e->lhs = p->subp->expr;
 				p->subp->expr = NULL;
 				e->op_val = p->subp->group_char;
@@ -368,28 +404,26 @@ int expr_parser_parse(struct expr_parser *p, struct token *token)
 	// Note: Here we rely on the fact that all operator tokens begin with characters
 	// that have single-byte representation in UTF-8, and that no other tokens will
 	// begin with these bytes.
-	bool is_unary;
-	bool this_op = is_op(ts, &is_unary);
+	int unary;
+	bool this_op = is_op(ts, &unary);
 	if (p->afterval) { // Expect operator
-		if (!this_op || is_unary) {
+		if (!this_op || unary == MUST_BE_UNARY) {
 			stmsgtf(SMT_ERROR, token->lineno, token->charno, "expected operator, not \"%s\"", ts);
 			ret = 1;
 		}
 		else {
 			// Get operator precedence value
 			int pval = prec_val(ts);
-			assert(pval >= 0);
 
 			// Create expression to store token
-			e = (struct expr*)malloc(sizeof(struct expr));
-			expr_init(e, token);
+			assert(e == NULL);
+			e = expr_new(token);
 
 			// Insert operator into tree according to precedence
 			struct expr **root = &p->expr;
 			assert(*root);
-			while ((*root)->op_val && prec_val((*root)->op_val->str) > pval) {
+			while ((*root)->op_val && (*root)->rhs && prec_val((*root)->op_val->str) > pval) {
 				root = &(*root)->rhs;
-				assert(*root);
 			}
 			e->lhs = *root;
 			*root = e;
@@ -401,16 +435,14 @@ int expr_parser_parse(struct expr_parser *p, struct token *token)
 		expr_parser_init(p->subp, token);
 	}
 	// Expect value or unary operator
-	else if (this_op && !is_unary) {
-		// Don't fail for unary operators that modify a single value like '!'
+	else if (this_op && unary == NOT_UNARY) {
 		stmsgtf(SMT_ERROR, token->lineno, token->charno, "expected value, not \"%s\"", ts);
 		ret = 1;
 	}
 	else {
 		p->afterval = !this_op || ends_group(ts);
 		if (!e) { // Create expression to store token
-			e = (struct expr*)malloc(sizeof(struct expr));
-			expr_init(e, token);
+			e = expr_new(token);
 		}
 		else { // Expression already created, free token
 			token_free(token);
@@ -422,15 +454,22 @@ int expr_parser_parse(struct expr_parser *p, struct token *token)
 			struct expr *rmost; // Find rightmost operator
 			for (rmost = p->expr; rmost->rhs; rmost = rmost->rhs);
 			// See if rightmost is unary
-			bool isrmostu;
-			assert(is_op(rmost->op_val->str, &isrmostu));
-			if (isrmostu) { // If it is, append to leftmost from rightmost
-				struct expr *lmfr;
-				for (lmfr = rmost; lmfr->lhs; lmfr = lmfr->lhs);
-				lmfr->lhs = e;
+			int rmostu;
+			assert(is_op(rmost->op_val->str, &rmostu));
+			if (rmostu == NOT_UNARY) { // Rightmost is not unary
+				rmost->rhs = e; // Append value to rightmost
 			}
 			else {
-				rmost->rhs = e; // Append value to rightmost
+				// Rightmost might be unary. It depends on leftmost from rightmost.
+				struct expr *lmost;
+				for (lmost = rmost; lmost->lhs; lmost = lmost->lhs);
+				if (rmostu == MAY_BE_UNARY && !is_op(lmost->op_val->str, &rmostu)) {
+					// Rightmost is not really unary
+					rmost->rhs = e;
+				}
+				else { // Rightmost is unary, append to leftmost from rightmost
+					lmost->lhs = e;
+				}
 			}
 		}
 	}

@@ -21,6 +21,7 @@ static int parse_expr(const char *expr, struct expr **e)
 	// Initialize tokenizer
 	struct tokenizer tz;
 	tokenizer_init(&tz);
+	tz.iws = 1; // Skip opcode
 
 	// Parse tokens
 	int ret = 0;
@@ -100,8 +101,7 @@ void test_expr(const char *expr, int64_t val)
 	int64_t test_val;
 	ret = expr_eval(e, &test_val, NULL, nonlit_lookup);
 	assert(ret == 0 && test_val == val);
-	expr_destroy(e);
-	free(e);
+	expr_delete(e);
 }
 
 // Return a random 64-bit integer, weighted toward lower absolute values
@@ -122,8 +122,7 @@ int main()
 	// Test acceptance of a single value
 	ret = parse_expr("A", &e);
 	assert(ret == 0 && e && e->op_val && bstrcmpc(e->op_val->str, "A") == 0);
-	expr_destroy(e);
-	free(e);
+	expr_delete(e);
 
 	// Test rejection of single operator expression
 	ret = parse_expr("*", &e);
@@ -138,29 +137,45 @@ int main()
 	assert(ret != 0 && e && bstrcmpc(e->op_val->str, "*") == 0 && e->lhs &&
 		bstrcmpc(e->lhs->op_val->str, "A") == 0 && !e->lhs->lhs && !e->lhs->rhs &&
 		!e->rhs);
-	expr_destroy(e);
-	free(e);
+	expr_delete(e);
 
 	// Test rejection of paired values
 	ret = parse_expr("A B", &e);
 	assert(ret != 0 && e && bstrcmpc(e->op_val->str, "A") == 0 && !e->lhs && !e->rhs);
-	expr_destroy(e);
-	free(e);
+	expr_delete(e);
+
+	// Test rejection of unary operator where binary operator expected
+	ret = parse_expr("A !B", &e);
+	assert(ret != 0 && e && bstrcmpc(e->op_val->str, "A") == 0 && !e->lhs && !e->rhs);
+	expr_delete(e);
+	ret = parse_expr("A ~B", &e);
+	assert(ret != 0 && e && bstrcmpc(e->op_val->str, "A") == 0 && !e->lhs && !e->rhs);
+	expr_delete(e);
+
+	// Test acceptance of unary operators before values
+	ret = parse_expr("A + +B", &e);
+	assert(ret == 0 && e && bstrcmpc(e->op_val->str, "+") == 0 && bstrcmpc(e->lhs->op_val->str, "A") == 0 &&
+		bstrcmpc(e->rhs->op_val->str, "+") == 0 && bstrcmpc(e->rhs->lhs->op_val->str, "B") == 0 &&
+		!e->rhs->rhs);
+	expr_delete(e);
+	ret = parse_expr("A - -B", &e);
+	assert(ret == 0 && e && bstrcmpc(e->op_val->str, "-") == 0 && bstrcmpc(e->lhs->op_val->str, "A") == 0 &&
+		bstrcmpc(e->rhs->op_val->str, "-") == 0 && bstrcmpc(e->rhs->lhs->op_val->str, "B") == 0 &&
+		!e->rhs->rhs);
+	expr_delete(e);
 
 	// Test rejection of paired operators
 	ret = parse_expr("A*/", &e);
 	assert(ret != 0 && e && bstrcmpc(e->op_val->str, "*") == 0 && e->lhs &&
 		bstrcmpc(e->lhs->op_val->str, "A") == 0 && !e->lhs->lhs && !e->lhs->rhs && !e->rhs);
-	expr_destroy(e);
-	free(e);
+	expr_delete(e);
 
 	// Test acceptance of complete expression
 	ret = parse_expr("A*B", &e);
 	assert(ret == 0 && e && bstrcmpc(e->op_val->str, "*") == 0 && e->lhs &&
 		bstrcmpc(e->lhs->op_val->str, "A") == 0 && !e->lhs->lhs && !e->lhs->rhs &&
 		bstrcmpc(e->rhs->op_val->str, "B") == 0 && !e->rhs->lhs && !e->rhs->rhs);
-	expr_destroy(e);
-	free(e);
+	expr_delete(e);
 
 	// Test rejection of unmatched grouping characters
 	ret = parse_expr(")", &e);
@@ -185,37 +200,30 @@ int main()
 	// Test rejection of groups where operator expected
 	ret = parse_expr("A()", &e);
 	assert(ret != 0 && e && bstrcmpc(e->op_val->str, "A") == 0 && !e->lhs && !e->rhs);
-	expr_destroy(e);
-	free(e);
+	expr_delete(e);
 	ret = parse_expr("A[]", &e);
 	assert(ret != 0 && e && bstrcmpc(e->op_val->str, "A") == 0 && !e->lhs && !e->rhs);
-	expr_destroy(e);
-	free(e);
+	expr_delete(e);
 	ret = parse_expr("A{}", &e);
 	assert(ret != 0 && e && bstrcmpc(e->op_val->str, "A") == 0 && !e->lhs && !e->rhs);
-	expr_destroy(e);
-	free(e);
+	expr_delete(e);
 
 	// Test acceptance of expressions with empty groups
 	ret = parse_expr("()", &e);
 	assert(ret == 0 && e && bstrcmpc(e->op_val->str, "(") == 0 && !e->lhs && !e->rhs);
-	expr_destroy(e);
-	free(e);
+	expr_delete(e);
 	ret = parse_expr("[]", &e);
 	assert(ret == 0 && e && bstrcmpc(e->op_val->str, "[") == 0 && !e->lhs && !e->rhs);
-	expr_destroy(e);
-	free(e);
+	expr_delete(e);
 	ret = parse_expr("{}", &e);
 	assert(ret == 0 && e && bstrcmpc(e->op_val->str, "{") == 0 && !e->lhs && !e->rhs);
-	expr_destroy(e);
-	free(e);
+	expr_delete(e);
 
 	ret = parse_expr("A*()", &e);
 	assert(ret == 0 && e && bstrcmpc(e->op_val->str, "*") == 0 && e->lhs &&
 		bstrcmpc(e->lhs->op_val->str, "A") == 0 && !e->lhs->lhs && !e->lhs->rhs &&
 		e->rhs && bstrcmpc(e->rhs->op_val->str, "(") == 0 && !e->rhs->lhs && !e->rhs->rhs);
-	expr_destroy(e);
-	free(e);
+	expr_delete(e);
 
 	ret = parse_expr("A*()-B", &e);
 	assert(ret == 0 && e && bstrcmpc(e->op_val->str, "-") == 0 && e->lhs &&
@@ -223,39 +231,34 @@ int main()
 		bstrcmpc(e->lhs->lhs->op_val->str, "A") == 0 && !e->lhs->lhs->lhs && !e->lhs->lhs->rhs &&
 		e->lhs->rhs && bstrcmpc(e->lhs->rhs->op_val->str, "(") == 0 && !e->lhs->rhs->lhs && !e->lhs->rhs->rhs &&
 		e->rhs && bstrcmpc(e->rhs->op_val->str, "B") == 0 && !e->rhs->lhs && !e->rhs->rhs);
-	expr_destroy(e);
-	free(e);
+	expr_delete(e);
 
 	// Test treatment of quoted strings as values
-	ret = parse_expr("\"hello\"+ 1", &e);
+	ret = parse_expr("\"hello\"+1", &e);
 	assert(ret == 0 && e && bstrcmpc(e->op_val->str, "+") == 0 && e->lhs &&
 		bstrcmpc(e->lhs->op_val->str, "\"hello\"") == 0 && !e->lhs->lhs && !e->lhs->rhs &&
 		e->rhs && bstrcmpc(e->rhs->op_val->str, "1") == 0 && !e->rhs->lhs && !e->rhs->rhs);
-	expr_destroy(e);
-	free(e);
+	expr_delete(e);
 
-	ret = parse_expr("'h'+ 1", &e);
+	ret = parse_expr("'h'+1", &e);
 	assert(ret == 0 && e && bstrcmpc(e->op_val->str, "+") == 0 && e->lhs &&
 		bstrcmpc(e->lhs->op_val->str, "'h'") == 0 && !e->lhs->lhs && !e->lhs->rhs &&
 		e->rhs && bstrcmpc(e->rhs->op_val->str, "1") == 0 && !e->rhs->lhs && !e->rhs->rhs);
-	expr_destroy(e);
-	free(e);
+	expr_delete(e);
 
 	// Test treatment of symbols as values
 	ret = parse_expr("$sym*2", &e);
 	assert(ret == 0 && e && bstrcmpc(e->op_val->str, "*") == 0 && e->lhs &&
 		bstrcmpc(e->lhs->op_val->str, "$sym") == 0 && !e->lhs->lhs && !e->lhs->rhs &&
 		e->rhs && bstrcmpc(e->rhs->op_val->str, "2") == 0 && !e->rhs->lhs && !e->rhs->rhs);
-	expr_destroy(e);
-	free(e);
+	expr_delete(e);
 
 	// Test treatment of labels as values
 	ret = parse_expr(":lbl/3", &e);
 	assert(ret == 0 && e && bstrcmpc(e->op_val->str, "/") == 0 && e->lhs &&
 		bstrcmpc(e->lhs->op_val->str, ":lbl") == 0 && !e->lhs->lhs && !e->lhs->rhs &&
 		e->rhs && bstrcmpc(e->rhs->op_val->str, "3") == 0 && !e->rhs->lhs && !e->rhs->rhs);
-	expr_destroy(e);
-	free(e);
+	expr_delete(e);
 
 	// Get current time
 	struct timeval tv;
@@ -281,6 +284,15 @@ int main()
 		// Test ! to * precedence
 		test_expr("!A * B", !A * B);
 		test_expr("A * !B", A * !B);
+		// Test ~ to * precedence
+		test_expr("~A * B", ~A * B);
+		test_expr("A * ~B", A * ~B);
+		// Test unary + to * precedence
+		test_expr("+A * B", +A * B);
+		test_expr("A * +B", A * +B);
+		// Test unary - to * precedence
+		test_expr("-A * B", -A * B);
+		test_expr("A * -B", A * -B);
 		// Test * to / precedence
 		if (C != 0) { // Avoid division by zero
 			test_expr("A * B / C", A * B / C);

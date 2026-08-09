@@ -460,7 +460,7 @@ bool assembler_lookup_func(void *userptr, struct token *token, int64_t *intval)
 // Handles the statement consisting of the given opcode or pseudo-op followed by the given expression.
 // eos is the token which ended the statement.
 // expr may be NULL if there is no immediate value for this opcode.
-static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int code, struct expr *expr, struct token *eos)
+static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int code, const struct expr *expr, struct token *eos)
 {
 	if (as->sec_count == 0) {
 		stmsgtf(SMT_ERROR, eos->lineno, eos->charno,
@@ -635,10 +635,13 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 			}
 
 			struct expr *addr_expr;
+			bool free_addr_expr = false;
 			// Check for simple "SFP" or "SFP +" expressions
-			if (bstrcmpc(expr->lhs->op_val->str, "SFP") == 0 ||
-				(bstrcmpc(expr->lhs->op_val->str, "+") == 0 &&
-					bstrcmpc(expr->lhs->lhs->op_val->str, "SFP") == 0)) {
+			bool basesfp = bstrcmpc(expr->lhs->op_val->str, "SFP") == 0; // Base is "SFP"
+			bool baseplus = bstrcmpc(expr->lhs->op_val->str, "+") == 0 && expr->lhs->rhs; // Base is binary "+"
+			bool baseminus = bstrcmpc(expr->lhs->op_val->str, "-") == 0 && expr->lhs->rhs; // Base is binary "-"
+			bool leftsfp = (baseplus || baseminus) && bstrcmpc(expr->lhs->lhs->op_val->str, "SFP") == 0;
+			if (basesfp || leftsfp) {
 				// This bracket uses SFP offset
 				switch (code) {
 				case ASM_CMD_PUSH16:
@@ -673,13 +676,20 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 					assert(false);
 				}
 				// The address is the expression without SFP
-				if (bstrcmpc(expr->lhs->op_val->str, "SFP") == 0) {
-					// @todo: This is destructive. Find a better way.
-					bfree(expr->lhs->op_val->str);
-					expr->lhs->op_val->str = bstrdupc("0");
-					addr_expr = expr->lhs;
+				if (basesfp) { // Base is "SFP"
+					// Create a "0" token with the same line and character number
+					addr_expr = expr_new(token_alloc(bstrdupc("0"),
+						expr->lhs->op_val->lineno, expr->lhs->op_val->charno));
+					free_addr_expr = true;
 				}
-				else {
+				else if (baseminus) { // Base is binary "-"
+					// Duplicate the right hand side, then insert a unary "-" to negate
+					struct expr *tempe = expr_new(token_dup(expr->lhs->op_val));
+					tempe->lhs = expr_dup(expr->lhs->rhs);
+					addr_expr = tempe;
+					free_addr_expr = true;
+				}
+				else { // Base is "+"
 					addr_expr = expr->lhs->rhs;
 				}
 			}
@@ -723,6 +733,10 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 			// Emit the instruction to push the address
 			// @todo: handle negatives, or maybe change to SF[] notation
 			ret = assembler_handle_opcode(as, true, ASM_CMD_PUSH64, addr_expr, eos);
+			if (free_addr_expr) {
+				expr_destroy(addr_expr);
+				free(addr_expr);
+			}
 			if (ret) return ret;
 
 			// Emit the instruction to load or store a value

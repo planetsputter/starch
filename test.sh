@@ -156,6 +156,28 @@ push64
 EOF
 then false; fi
 
+echo testing rejection of improper SFP notation
+if $STASM <<EOF 2>/dev/null
+section 0x3000
+push64 [0+SFP]
+EOF
+then false; fi
+if $STASM <<EOF 2>/dev/null
+section 0x3000
+push64 [+SFP]
+EOF
+then false; fi
+if $STASM <<EOF 2>/dev/null
+section 0x3000
+push64 [0-SFP]
+EOF
+then false; fi
+if $STASM <<EOF 2>/dev/null
+section 0x3000
+push64 [-SFP]
+EOF
+then false; fi
+
 # Run individual tests
 echo testing add, sub
 $STASM test-add-sub.sta

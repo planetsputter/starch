@@ -20,11 +20,20 @@ struct expr {
 	struct token *op_val;
 };
 
+// Allocates and initializes a new expression, taking ownership of the given op/val token
+struct expr *expr_new(struct token *op_val);
+
 // Initializes the given expression, taking ownership of the given op/val token
 void expr_init(struct expr*, struct token *op_val);
 
-// Destroys the given expression and all sub-expressions
+// Creates and returns a duplicate of the given expression and all sub-expressions
+struct expr *expr_dup(struct expr*);
+
+// Destroys the given expression and all sub-expressions. Does not deallocate.
 void expr_destroy(struct expr*);
+
+// Destroys and deallocates the given expression and all sub-expressions
+void expr_delete(struct expr*);
 
 // Type of function that returns whether the given non-literal token
 // could be converted to an integer value, and if so sets *intval.
@@ -33,7 +42,7 @@ typedef bool expr_lookup_func(void *userptr, struct token *token, int64_t *intva
 // Evaluates the given expression. Calls the given function if not NULL for
 // terms that are not integer literals.
 // Returns zero on success.
-int expr_eval(struct expr*, int64_t *val, void *userptr, expr_lookup_func f);
+int expr_eval(const struct expr*, int64_t *val, void *userptr, expr_lookup_func f);
 
 //
 // Expression parser
