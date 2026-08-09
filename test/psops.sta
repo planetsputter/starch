@@ -5,6 +5,8 @@ section 0x1000
 push8 -128
 push8 0
 push8 0xff
+push8 [0]
+push8 [SFP]
 
 push16 -0x8000
 push16 -0x81
@@ -13,6 +15,8 @@ push16 0
 push16 0xff
 push16 0x100
 push16 0xffff
+push16 [0]
+push16 [SFP]
 
 push32 -0x80000000
 push32 -0x8001
@@ -25,6 +29,8 @@ push32 0x100
 push32 0xffff
 push32 0x10000
 push32 0xffffffff
+push32 [0]
+push32 [SFP]
 
 push64 -0x80000001
 push64 -0x80000000
@@ -39,6 +45,40 @@ push64 0xffff
 push64 0x10000
 push64 0xffffffff
 push64 0x100000000
+push64 [0]
+push64 [SFP]
+
+store8
+store8 [0]
+store8 [SFP]
+
+store16
+store16 [0]
+store16 [SFP]
+
+store32
+store32 [0]
+store32 [SFP]
+
+store64
+store64 [0]
+store64 [SFP]
+
+pop8
+pop8 [0]
+pop8 [SFP]
+
+pop16
+pop16 [0]
+pop16 [SFP]
+
+pop32
+pop32 [0]
+pop32 [SFP]
+
+pop64
+pop64 [0]
+pop64 [SFP]
 
 rjmp -0x80000000
 rjmp -0x8001
