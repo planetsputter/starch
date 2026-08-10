@@ -4,7 +4,47 @@
 # Expansion of undefined variables is an error.
 set -Eeu
 
-trap 'echo test.sh failed on line $LINENO' ERR
+# Current test name
+TEST_NAME=
+HAS_FAIL=0
+if [ -t 1 ]; then
+	# Use color escape sequences when writing to terminal
+	PASS_PREFIX='[\x1b[32m✔\x1b[39m] \x1b[1;32mpass\x1b[22;39m:'
+	FAIL_PREFIX='[\x1b[31m✘\x1b[39m] \x1b[1;31mfail\x1b[22;39m:'
+else
+	PASS_PREFIX='[✔] pass:'
+	FAIL_PREFIX='[✘] fail:'
+fi
+
+test_pass() {
+	if [ -n "$TEST_NAME" ]; then
+		# Print checkbox with a green checkmark
+		printf "$PASS_PREFIX %s\n" "$TEST_NAME"
+	fi
+	TEST_NAME=
+}
+test_fail() {
+	if [ -n "$TEST_NAME" ]; then
+		# Print checkbox with a red X mark
+		printf "$FAIL_PREFIX %s\n" "$TEST_NAME"
+	fi
+	HAS_FAIL=1
+	TEST_NAME=
+}
+test_begin() {
+	test_pass # Beginning a new test automatically passes the previous one
+	TEST_NAME="$*"
+}
+test_end() {
+	test_begin # Show previous test status, if any
+	if [ $HAS_FAIL -eq 0 ]; then
+		printf "$PASS_PREFIX all tests passed\n"
+	else
+		printf "$FAIL_PREFIX some tests failed%s\n" "$*"
+	fi
+}
+
+trap 'test_fail; test_end ", exiting in test.sh line $LINENO"' ERR
 
 # Change to test directory
 cd test
@@ -17,62 +57,62 @@ STASM="$MEMPROF ../stasm/bin/stasm"
 STEM="$MEMPROF ../stem/bin/stem"
 
 # Run unit test executables
-echo testing smap
+test_begin testing smap
 ../util/test/smaptest
-echo testing emulated memory
+test_begin testing emulated memory
 ../stem/test/memtest
-echo testing utf8 library
+test_begin testing utf8 library
 ../util/test/utf8test
-echo testing literal parsing
+test_begin testing literal parsing
 ../util/test/littest
-echo testing expression parsing
+test_begin testing expression parsing
 ../stasm/test/exprtest 2>/dev/null
 
 # Assemble a file which contains every opcode
-echo assembling all opcodes
+test_begin assembling all opcodes
 $STASM allops.sta
-echo disassembling all opcodes
+test_begin disassembling all opcodes
 $DISTASM a.stb -o dis.sta
-echo checking for symmetric dis/assembly
+test_begin checking for symmetric dis/assembly
 $STASM dis.sta -o b.stb
 cmp a.stb b.stb
 
 # Check assembly of pseudo-ops
-echo assembling pseudo-ops
+test_begin assembling pseudo-ops
 $STASM psops.sta
-echo disassembling pseudo-ops
+test_begin disassembling pseudo-ops
 $DISTASM a.stb -o dis.sta
-echo checking for proper disassembly
+test_begin checking for proper disassembly
 cmp psops-dis.sta dis.sta
-echo checking compaction of pseudo-ops
+test_begin checking compaction of pseudo-ops
 $STASM compact.sta
 $DISTASM a.stb --addr -o dis.sta
 cmp compact-dis.sta dis.sta
 
 # Check various errors are detected by the assembler
-echo testing rejection of opcode outside of section
+test_begin testing rejection of opcode outside of section
 if $STASM <<EOF 2>/dev/null
 push64 0
 EOF
 then false; fi
 
-echo testing rejection of label outside of section
+test_begin testing rejection of label outside of section
 if $STASM <<EOF 2>/dev/null
 :test_label
 EOF
 then false; fi
 
-echo testing rejection of strings outside of section
+test_begin testing rejection of strings outside of section
 if $STASM <<EOF 2>/dev/null
 strings
 EOF
 then false; fi
 
-echo testing rejection of invalid maximum number of sections
+test_begin testing rejection of invalid maximum number of sections
 if $STASM --maxnsec 0 </dev/null 2>/dev/null; then false; fi
 $STASM --maxnsec 1 </dev/null
 
-echo testing rejection of invalid section address
+test_begin testing rejection of invalid section address
 if $STASM <<EOF 2>/dev/null
 section -1
 EOF
@@ -82,20 +122,20 @@ section a
 EOF
 then false; fi
 
-echo testing rejection of empty symbol name
+test_begin testing rejection of empty symbol name
 if $STASM <<EOF 2>/dev/null
 section 0x3000
 push64 \$
 EOF
 then false; fi
 
-echo testing rejection of integer literal symbol name
+test_begin testing rejection of integer literal symbol name
 if $STASM <<EOF 2>/dev/null
 define 1 0
 EOF
 then false; fi
 
-echo testing rejection of string literal symbol name
+test_begin testing rejection of string literal symbol name
 if $STASM <<EOF 2>/dev/null
 define "a" 1
 EOF
@@ -104,7 +144,7 @@ $STASM <<EOF
 define a "1"
 EOF
 
-echo testing rejection of label symbol name
+test_begin testing rejection of label symbol name
 if $STASM <<EOF 2>/dev/null
 define :test1 :test2
 EOF
@@ -113,7 +153,7 @@ $STASM <<EOF
 define test1 :test1
 EOF
 
-echo testing rejection of undefined symbol
+test_begin testing rejection of undefined symbol
 if $STASM <<EOF 2>/dev/null
 define a 1
 section 0x3000
@@ -121,14 +161,14 @@ push64 \$b
 EOF
 then false; fi
 
-echo testing rejection of empty label name
+test_begin testing rejection of empty label name
 if $STASM <<EOF 2>/dev/null
 section 0x3000
 :
 EOF
 then false; fi
 
-echo testing rejection of duplicate labels
+test_begin testing rejection of duplicate labels
 if $STASM <<EOF 2>/dev/null
 section 0x3000
 :test
@@ -136,27 +176,27 @@ section 0x3000
 EOF
 then false; fi
 
-echo testing rejection of unquoted include
+test_begin testing rejection of unquoted include
 if $STASM <<EOF 2>/dev/null
 include psops.sta
 EOF
 then false; fi
 
-echo testing rejection of invalid opcode
+test_begin testing rejection of invalid opcode
 if $STASM <<EOF 2>/dev/null
 section 0x3000
 test
 EOF
 then false; fi
 
-echo testing rejection of incomplete statement
+test_begin testing rejection of incomplete statement
 if $STASM <<EOF 2>/dev/null
 section 0x3000
 push64
 EOF
 then false; fi
 
-echo testing rejection of improper SFP notation
+test_begin testing rejection of improper SFP notation
 if $STASM <<EOF 2>/dev/null
 section 0x3000
 push64 [0+SFP]
@@ -179,17 +219,17 @@ EOF
 then false; fi
 
 # Run individual tests
-echo testing add, sub
+test_begin testing add, sub
 $STASM test-add-sub.sta
 $STEM a.stb
-echo testing mul, div, mod
+test_begin testing mul, div, mod
 $STASM test-mul-div-mod.sta
 $STEM a.stb
-echo testing bitwise logical operations
+test_begin testing bitwise logical operations
 $STASM test-bit-ops.sta
 $STEM a.stb
-echo testing interrupts
+test_begin testing interrupts
 $STASM test-int.sta
 $STEM a.stb
 
-echo all tests passed
+test_end
