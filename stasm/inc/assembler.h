@@ -28,6 +28,7 @@ struct assembler {
 	struct stub_sec curr_sec; // The current section
 
 	struct label_rec *label_recs; // Label records
+	struct label_usage *label_usages; // Label usages
 };
 
 // Initializes the assembler, writing to the given stub output file

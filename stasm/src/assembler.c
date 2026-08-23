@@ -238,6 +238,7 @@ void assembler_init(struct assembler *as, FILE *outfile)
 	as->sec_count = 0;
 	stub_sec_init(&as->curr_sec, 0, 0, 0);
 	as->label_recs = NULL;
+	as->label_usages = NULL;
 }
 
 void assembler_destroy(struct assembler *as)
@@ -264,32 +265,92 @@ void assembler_destroy(struct assembler *as)
 		rec = temp;
 	}
 	as->label_recs = NULL;
+	for (struct label_usage *usage = as->label_usages; usage;) {
+		struct label_usage *temp = usage->prev;
+		label_usage_destroy(usage);
+		free(usage);
+		usage = temp;
+	}
+	as->label_usages = NULL;
 }
 
-// Handles definition of the given label at the current position
-static int assembler_handle_label_def(struct assembler *as, struct token *token)
+// Callback used to determine whether an expression contains a certain term
+static void *find_expr(void *user_ptr, struct token *token)
+{
+	const bchar *s = (const bchar*)user_ptr;
+	return bstrcmpb(s, token->str) == 0 ? token->str : NULL;
+}
+
+// Callback used to determine whether an expression contains a certain string literal
+static void *find_expr_strlit(void *user_ptr, struct token *token)
+{
+	if (token->str[0] != '"') return NULL;
+	bchar *contents = balloc();
+	// String literal should already have been validated
+	assert(parse_string_lit(token->str, &contents));
+	bchar *s = (bchar*)user_ptr;
+	bchar *ret = bstrcmpb(s, contents) == 0 ? s : NULL;
+	bfree(contents);
+	return ret;
+}
+
+// Looks up the value of a term that is not an integer literal, such as a label or string literal.
+// Returns whether the value is defined.
+bool assembler_lookup_func(void *userptr, struct token *token, int64_t *intval)
+{
+	struct assembler *as = (struct assembler*)userptr;
+	bool ret = false;
+	if (token->str[0] == '"' || token->str[0] == ':') { // Label or string literal
+		// Look up label value
+		for (struct label_rec *rec = as->label_recs; rec; rec = rec->prev) {
+			if (!rec->defined) { }
+			else if (rec->string_lit) { // String literal record
+				if (token->str[0] == '"') {
+					bchar *contents = balloc();
+					// String literal should already have been validated
+					assert(parse_string_lit(token->str, &contents));
+					ret = bstrcmpb(rec->label, contents) == 0;
+					bfree(contents);
+				}
+			}
+			else { // Label record
+				ret = bstrcmpb(rec->label, token->str) == 0;
+			}
+			if (ret) {
+				*intval = rec->addr;
+				break;
+			}
+		}
+	}
+	return ret;
+}
+
+// Handles definition of the given label at the current position.
+// token is used to look up the correct label record if rec is NULL.
+static int assembler_handle_label_def(struct assembler *as, struct token *token, struct label_rec *rec)
 {
 	if (as->sec_count == 0) {
 		stmsgtf(SMT_ERROR, token->lineno, token->charno, "expected section definition before label");
 		return 1;
 	}
 
-	// Compute current position within section
+	// Compute label address
 	long fpos = ftell(as->outfile);
 	if (fpos < 0) {
 		stmsgf(SMT_ERROR, "failed to get offset in output file, errno %d", errno);
 		return 1;
 	}
-	// Compute label address
+	assert(fpos >= as->curr_sec.fpos);
 	uint64_t addr = fpos - as->curr_sec.fpos + as->curr_sec.addr;
 
 	int ret = 0;
-	// Look up any existing label record
-	struct label_rec *rec = label_rec_lookup(as->label_recs, false, token->str);
+	if (!rec) { // Look up any existing label record
+		rec = label_rec_lookup(as->label_recs, false, token->str);
+	}
 	if (!rec) {
 		// Label has not been used before. Add new label record to list.
 		struct label_rec *next = (struct label_rec*)malloc(sizeof(struct label_rec));
-		label_rec_init(next, false, true, bstrdupb(token->str), addr, fpos, as->sec_count - 1, NULL);
+		label_rec_init(next, false, true, bstrdupb(token->str), addr, fpos, as->sec_count - 1);
 		next->prev = as->label_recs;
 		as->label_recs = next;
 	}
@@ -301,16 +362,23 @@ static int assembler_handle_label_def(struct assembler *as, struct token *token)
 	else {
 		// Label has been used but not defined. This is the definition.
 		// Apply each of the usages.
-		assert(rec->usages);
+		assert(as->label_usages);
 		rec->defined = true;
 		rec->addr = addr; // Address is now known
 		rec->fpos = fpos; // File position is now known
 		rec->si = as->sec_count - 1; // Section index is now known
-		for (struct label_usage *lu = rec->usages; lu; lu = lu->prev) {
+		bool string_lit = rec->label[0] == '"';
+		for (struct label_usage *lu = as->label_usages; lu; lu = lu->prev) {
 			// This may adjust the file position due to compaction of pseudo-ops.
 			// It may adjust other things such as label addresses.
-			ret = label_usage_apply(lu, as->outfile, rec->addr, as->label_recs);
-			if (ret) break;
+			if (expr_iter(lu->expr, rec->label, string_lit ? find_expr_strlit : find_expr)) { // The expression contains this label
+				int64_t expr_val = 0;
+				int evalret = expr_eval(lu->expr, &expr_val, false, as, assembler_lookup_func);
+				if (evalret == 0) { // This label definition causes the expression to become evaluable
+					ret = label_usage_apply(lu, as->outfile, expr_val, as->label_recs, as->label_usages);
+					if (ret) break;
+				}
+			}
 		}
 
 		if (ret == 0) {
@@ -373,94 +441,96 @@ static int assembler_handle_section(struct assembler *as, uint64_t addr)
 }
 
 // Handles the "strings" assembler command at the current position
-static int assembler_handle_strings(struct assembler *as, int lineno)
+static int assembler_handle_strings(struct assembler *as, struct token *token)
 {
 	if (as->sec_count == 0) {
-		stmsgtf(SMT_ERROR, lineno, 0, "expected section definition before strings");
+		stmsgtf(SMT_ERROR, token->lineno, token->charno, "expected section definition before strings");
 		return 1;
 	}
 
 	// Emit all string literal data at the current position
 	int ret = 0;
 	for (struct label_rec *rec = as->label_recs; rec; rec = rec->prev) {
-		if (!rec->string_lit) { // This is not a string literal, skip it
-			continue;
-		}
-
-		// Note current file offset
-		long fpos = ftell(as->outfile);
-		if (fpos < 0) {
-			stmsgf(SMT_ERROR, "failed to seek in output file, errno %d", errno);
-			ret = 1;
-			break;
-		}
-		// Compute string content address
-		uint64_t addr = fpos - as->curr_sec.fpos + as->curr_sec.addr;
-
-		// Write the string literal contents to the file
-		size_t write_len = bstrlen(rec->label) + 1;
-		size_t bc = fwrite(rec->label, 1, write_len, as->outfile);
-		if (bc != write_len) {
-			stmsgf(SMT_ERROR, "failed to write to output file, errno %d", errno);
-			ret = 1;
-			break;
-		}
-
-		// Apply all usages of the string literal
-		assert(rec->usages);
-		rec->defined = true;
-		rec->addr = addr; // Address is now known
-		rec->fpos = fpos; // File position is now known
-		rec->si = as->sec_count - 1; // Section index is now known
-		for (struct label_usage *lu = rec->usages; lu; lu = lu->prev) {
-			// This may adjust the file position due to compaction of pseudo-ops
-			// It may adjust other things such as label addresses.
-			ret = label_usage_apply(lu, as->outfile, rec->addr, as->label_recs);
+		if (rec->string_lit && rec->defined) {
+			ret = assembler_handle_label_def(as, token, rec);
 			if (ret) break;
-		}
 
-		if (ret == 0) {
-			// Get current file position
-			fpos = ftell(as->outfile);
-			if (fpos < 0) {
-				stmsgf(SMT_ERROR, "failed to get offset in output file, errno %d", errno);
-				return 1;
-			}
-
-			// Reload section data in case section start file position changed due to compaction of previous section.
-			// This will also seek to section start.
-			ret = stub_load_section(as->outfile, as->sec_count - 1, &as->curr_sec);
-			if (ret) {
-				stmsgf(SMT_ERROR, "failed to load section %d in output file, stub error %d", as->sec_count - 1, ret);
-				return 1;
-			}
-
-			// Return to the original position
-			ret = fseek(as->outfile, fpos, SEEK_SET);
-			if (ret) {
-				stmsgf(SMT_ERROR, "failed to seek in output file, errno %d", errno);
-				return 1;
+			// Write the string literal contents to the file
+			size_t write_len = bstrlen(rec->label) + 1;
+			size_t bc = fwrite(rec->label, 1, write_len, as->outfile);
+			if (bc != write_len) {
+				stmsgf(SMT_ERROR, "failed to write to output file, errno %d", errno);
+				ret = 1;
+				break;
 			}
 		}
 	}
 	return ret;
 }
 
-// Looks up the value of a label or other named constant
-bool assembler_lookup_func(void *userptr, struct token *token, int64_t *intval)
+// Find any expression element that is not a label, string literal, integer literal,
+// or evaluable operator
+static void *find_expr_uneval(void *user_ptr, struct token *token)
 {
-	struct assembler *as = (struct assembler*)userptr;
-	(void)as;
-	(void)token;
-	(void)intval;
-	// @todo: Allow label value lookup
-	return false;
+	(void)user_ptr;
+	bchar fc = token->str[0]; // First character
+	assert(fc != '\0');
+	if (fc == '"' || fc == ':' || fc == '\'' || isdigit(fc)) {
+		// String literal, label, or integer literal
+		return NULL;
+	}
+	// Check for unevaluable operators
+	return can_eval_op(token->str) ? NULL : token;
+}
+
+// Callback to return the first label or string literal token in an expression
+static void *find_expr_label(void *user_ptr, struct token *token)
+{
+	(void)user_ptr;
+	bchar fc = token->str[0]; // First character
+	assert(fc != '\0');
+	return fc == ':' || fc == '"' ? token : NULL;
+}
+
+// Create label records for all labels and string literals in an expression
+static void *create_label_recs(void *user_ptr, struct token *token)
+{
+	struct assembler *as = (struct assembler*)user_ptr;
+	bchar fc = token->str[0]; // First character
+	assert(fc != '\0');
+	bool string_lit = fc == '"';
+	if (fc == ':' || string_lit) {
+		// Label name or contents of string literal
+		bchar *contents;
+		if (string_lit) { // String literal
+			contents = balloc();
+			assert(parse_string_lit(token->str, &contents));
+		}
+		else { // Label
+			contents = token->str;
+		}
+
+		// Find existing label record
+		struct label_rec *rec = label_rec_lookup(as->label_recs, string_lit, contents);
+		if (!rec) {
+			// Label has not been used before. Add new label record to list with usage.
+			rec = (struct label_rec*)malloc(sizeof(struct label_rec));
+			label_rec_init(rec, string_lit, false, string_lit ? contents : bstrdupb(contents), 0, 0, 0);
+			rec->prev = as->label_recs;
+			as->label_recs = rec;
+		}
+		else if (string_lit) {
+			bfree(contents);
+		}
+	}
+	return NULL;
 }
 
 // Handles the statement consisting of the given opcode or pseudo-op followed by the given expression.
+// Takes ownership of the given expression.
 // eos is the token which ended the statement.
 // expr may be NULL if there is no immediate value for this opcode.
-static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int code, const struct expr *expr, struct token *eos)
+static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int code, struct expr *expr, struct token *eos)
 {
 	if (as->sec_count == 0) {
 		stmsgtf(SMT_ERROR, eos->lineno, eos->charno,
@@ -588,19 +658,19 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 	// Immediate type has already been computed. Get the immediate size.
 	int imm_bytes = sdt_size(sdt);
 
+	int ret = 0;
 	if (!expr) {
 		if (imm_bytes != 0) {
 			stmsgtf(SMT_ERROR, eos->lineno, eos->charno, "expected an expression");
-			return 1;
+			ret = 1;
 		}
 	}
 	else if (imm_bytes == 0) {
 		stmsgtf(SMT_ERROR, eos->lineno, eos->charno, "unexpected expression");
-		return 1;
+		ret = 1;
 	}
-	else { // Immediate value
+	else do { // Immediate value
 		assert(sdt != SDT_VOID);
-		int ret = 0;
 		int64_t imm_val = 0;
 		bchar *ts = expr->op_val->str;
 		if (ts[0] == '[') { // Bracket expression
@@ -609,7 +679,8 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 			// Require pseudo-op
 			if (!pseudo_op) {
 				stmsgtf(SMT_ERROR, expr->op_val->lineno, expr->op_val->charno, "unexpected bracket notation");
-				return 1;
+				ret = 1;
+				break;
 			}
 
 			// Check that bracket notation is allowed
@@ -631,11 +702,11 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 			default:
 				// Unexpected bracket notation
 				stmsgtf(SMT_ERROR, expr->op_val->lineno, expr->op_val->charno, "unexpected bracket notation");
-				return 1;
+				ret = 1;
 			}
+			if (ret) break;
 
 			struct expr *addr_expr;
-			bool free_addr_expr = false;
 			// Check for simple "SFP" or "SFP +" expressions
 			bool basesfp = bstrcmpc(expr->lhs->op_val->str, "SFP") == 0; // Base is "SFP"
 			bool baseplus = bstrcmpc(expr->lhs->op_val->str, "+") == 0 && expr->lhs->rhs; // Base is binary "+"
@@ -680,17 +751,15 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 					// Create a "0" token with the same line and character number
 					addr_expr = expr_new(token_alloc(bstrdupc("0"),
 						expr->lhs->op_val->lineno, expr->lhs->op_val->charno));
-					free_addr_expr = true;
 				}
 				else if (baseminus) { // Base is binary "-"
 					// Duplicate the right hand side, then insert a unary "-" to negate
 					struct expr *tempe = expr_new(token_dup(expr->lhs->op_val));
 					tempe->lhs = expr_dup(expr->lhs->rhs);
 					addr_expr = tempe;
-					free_addr_expr = true;
 				}
 				else { // Base is "+"
-					addr_expr = expr->lhs->rhs;
+					addr_expr = expr_dup(expr->lhs->rhs);
 				}
 			}
 			else { // SFP notation is not used
@@ -727,21 +796,16 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 					assert(false);
 				}
 				// The address is the enclosed expression
-				addr_expr = expr->lhs;
+				addr_expr = expr_dup(expr->lhs);
 			}
 
 			// Emit the instruction to push the address
-			// @todo: handle negatives, or maybe change to SF[] notation
 			ret = assembler_handle_opcode(as, true, ASM_CMD_PUSH64, addr_expr, eos);
-			if (free_addr_expr) {
-				expr_destroy(addr_expr);
-				free(addr_expr);
-			}
-			if (ret) return ret;
+			if (ret) break;
 
 			// Emit the instruction to load or store a value
 			ret = assembler_handle_opcode(as, false, opcode, NULL, eos);
-			if (ret) return ret;
+			if (ret) break;
 
 			opcode = -1;
 			switch (code) { // The pop operations require a pop instruction at the end
@@ -761,7 +825,10 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 			if (opcode >= 0) {
 				ret = assembler_handle_opcode(as, false, opcode, NULL, eos);
 			}
-			return ret;
+			// Nothing else needs to be written
+			opcode_size = 0;
+			imm_bytes = 0;
+			break;
 		}
 
 		// Not bracket notation
@@ -776,102 +843,80 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 		case ASM_CMD_POP8:
 			// These codes require bracket notation if they have an expression
 			stmsgtf(SMT_ERROR, expr->op_val->lineno, expr->op_val->charno, "expected a bracket expression");
-			return 1;
+			ret = 1;
+			break;
 		default:
 			// Continue
 		}
+		if (ret) break;
 
+		// Ensure expression contains only labels, string literals, integer literals, and
+		// evaluable operators
+		struct token *uneval = expr_iter(expr, NULL, find_expr_uneval);
+		if (uneval) {
+			stmsgtf(SMT_ERROR, uneval->lineno, uneval->charno, "unevaluable token \"%s\"", uneval->str);
+			ret = 1;
+			break;
+		}
+
+		// See if the expression contains any labels
+		// @todo: Combine with expr_iter above
 		struct label_usage *lu = NULL;
 		int imm_bytes_reqd;
-		bool string_lit = ts[0] == '"';
-		if (string_lit || ts[0] == ':') { // String literal or label
+		struct token *label = expr_iter(expr, NULL, find_expr_label);
+		if (label) {
 			// Get current file offset
 			long current_fo = ftell(as->outfile);
 			if (current_fo < 0) {
 				stmsgf(SMT_ERROR, "failed to get offset with error %d", errno);
-				return 1;
+				ret = 1;
+				break;
 			}
 			// Compute current address
 			uint64_t curr_addr = as->curr_sec.addr + current_fo - as->curr_sec.fpos;
 
-			// Note usage of label, including whether it is a raw usage
+			// Note usage of label
 			lu = (struct label_usage*)malloc(sizeof(struct label_usage));
-			label_usage_init(lu, current_fo, curr_addr, as->sec_count - 1, opcode_size == 0 ? imm_bytes : 0, pseudo_op, opcode);
+			label_usage_init(lu, current_fo, curr_addr, as->sec_count - 1, opcode_size == 0 ? imm_bytes : 0, pseudo_op, opcode, expr);
+			lu->prev = as->label_usages;
+			as->label_usages = lu;
 
-			// Label name or contents of string literal
-			bchar *contents;
-			if (string_lit) { // String literal
-				contents = balloc();
-				if (!parse_string_lit(ts, &contents)) {
-					bfree(contents);
-					stmsgtf(SMT_ERROR, expr->op_val->lineno, expr->op_val->charno, "invalid string literal");
-					return 1;
-				}
-			}
-			else { // Label
-				contents = ts;
-			}
+			// Create label records for all labels used in expression
+			expr_iter(expr, as, create_label_recs);
 
-			// Find existing label record
-			struct label_rec *rec = label_rec_lookup(as->label_recs, string_lit, contents);
-			if (!rec) {
-				// Label has not been used before. Add new label record to list with usage.
-				rec = (struct label_rec*)malloc(sizeof(struct label_rec));
-				label_rec_init(rec, string_lit, false, string_lit ? contents : bstrdupb(contents), 0, 0, 0, lu);
-				rec->prev = as->label_recs;
-				as->label_recs = rec;
+			// Don't write the expression value now
+			// @todo: Maybe write values of evaluable expressions now to save time later
+			imm_bytes_reqd = 0;
 
-				// We don't know the label address, so we can't write the immediate value now
-				imm_bytes_reqd = 0;
-			}
-			else {
-				if (string_lit) {
-					bfree(contents);
-				}
-				// Add usage to existing label record
-				lu->prev = rec->usages;
-				rec->usages = lu;
-
-				// If label address is known, then apply it after writing instruction to file
-				if (rec->defined) {
-					// Because the label address is known, we can determine the immediate value and bytes required
-					if (opcode_size) {
-						// Check for jump/branch opcodes that explicitly accept and interpret a label immediate.
-						int jmp_br = 0, use_delta = 0;
-						opcode_is_jmp_br(buff[0], &jmp_br, &use_delta);
-						imm_val = use_delta ? rec->addr - lu->addr : rec->addr;
-					}
-					else { // Label value is data
-						imm_val = rec->addr;
-					}
-					imm_bytes_reqd = min_bytes_for_val(imm_val);
-				}
-				else { // Label address is not currently known, so we can't write the immediate value now
-					imm_bytes_reqd = 0;
-				}
-			}
+			expr = NULL; // Label usage takes ownership of expression
 		}
-		else { // Integer expression
-			// For now, we expect all expressions to be immediately evaluable
-			// @todo: Support expressions contaiing string literals and labels
-			ret = expr_eval(expr, &imm_val, as, assembler_lookup_func);
-			if (ret) {
-				return ret;
-			}
+		else {
+			// The expression does not contain any labels.
+			// The expression should be evaluable.
+			int evalret = expr_eval(expr, &imm_val, true, as, assembler_lookup_func);
+			assert(evalret == 0);
 			imm_bytes_reqd = min_bytes_for_val(imm_val);
 		}
 
-		if (pseudo_op && imm_bytes_reqd && opcode_size > 0) {
+		if (imm_bytes_reqd && opcode_size > 0) {
 			// Compact pseudo-ops when immediate value is known
 			bool oob = false;
-			opcode = assembler_compact_op(code, pseudo_op, imm_val, &oob);
+			if (pseudo_op) {
+				opcode = assembler_compact_op(code, pseudo_op, imm_val, &oob);
+				if (opcode < 0) {
+					stmsgtf(SMT_ERROR, eos->lineno, eos->charno, "unable to compact opcode");
+					ret = 1;
+					break;
+				}
+			}
+			else {
+				// @todo: Correctly handle 64-bit data types
+				oob = sdt >= SDT_A64 ? false : !sdt_contains(sdt, imm_val);
+			}
 			if (oob) {
 				stmsgtf(SMT_ERROR, eos->lineno, eos->charno, "immediate value out of range for opcode");
-				return 1;
-			}
-			if (opcode < 0) {
-				stmsgtf(SMT_ERROR, eos->lineno, eos->charno, "unable to compact opcode");
-				return 1;
+				ret = 1;
+				break;
 			}
 			buff[0] = opcode;
 			sdt = imm_type_for_opcode(opcode);
@@ -886,21 +931,27 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 		if (imm_bytes_reqd > imm_bytes) {
 			stmsgtf(SMT_ERROR, eos->lineno, eos->charno,
 				"immediate value \"%s\" is out of bounds for type", eos->str);
-			return 1;
+			ret = 1;
+			break;
 		}
 
 		// Write immediate value to buffer
 		put_little64(imm_val, buff + opcode_size);
+	} while (false);
+
+	if (ret == 0 && opcode_size + imm_bytes > 0) {
+		// Write instruction buffer to output file
+		size_t written = fwrite(buff, 1, opcode_size + imm_bytes, as->outfile);
+		if (written != (size_t)(opcode_size + imm_bytes)) {
+			stmsgf(SMT_ERROR, "failed to write to output file, errno %d", errno);
+			ret = 1;
+		}
+	}
+	if (expr) {
+		expr_delete(expr);
 	}
 
-	// Write instruction buffer to output file
-	size_t written = fwrite(buff, 1, opcode_size + imm_bytes, as->outfile);
-	if (written != (size_t)(opcode_size + imm_bytes)) {
-		stmsgf(SMT_ERROR, "failed to write to output file, errno %d", errno);
-		return 1;
-	}
-
-	return 0;
+	return ret;
 }
 
 int assembler_handle_token(struct assembler *as, struct token *token)
@@ -908,9 +959,27 @@ int assembler_handle_token(struct assembler *as, struct token *token)
 	// Perform symbolic substitution
 	bchar *symbol = NULL;
 	int ret = symbol_sub(as, token, &symbol);
-
 	int nextstate = as->state;
-	if (ret == 0) switch (as->state) {
+	if (ret == 0) {
+		// First character determines token type. Check for validity.
+		bchar fc = symbol[0];
+		if (fc == '"') {
+			if (!parse_string_lit(symbol, NULL)) {
+				stmsgtf(SMT_ERROR, token->lineno, token->charno, "invalid string literal %s", symbol);
+				ret = 1;
+			}
+		}
+		else if (isdigit(fc) || fc == '\'') {
+			if (!parse_int(symbol, NULL)) {
+				stmsgtf(SMT_ERROR, token->lineno, token->charno, "invalid integer literal \"%s\"", symbol);
+				ret = 1;
+			}
+		}
+	}
+	if (ret) {
+		nextstate = APS_WAIT_EOS;
+	}
+	else switch (as->state) {
 	//
 	// Default state (first token)
 	//
@@ -926,7 +995,7 @@ int assembler_handle_token(struct assembler *as, struct token *token)
 		}
 		expr_parser_destroy(&as->ep);
 		expr_parser_init(&as->ep, NULL);
-		assert(!as->include); // Caller should have checked
+		assert(!as->include); // Caller should have consumed
 
 		if (symbol[0] == '\n' || symbol[0] == ';') { // Allow empty lines and empty statements
 			break;
@@ -939,7 +1008,7 @@ int assembler_handle_token(struct assembler *as, struct token *token)
 				break;
 			}
 			struct token *symtok = token_alloc(symbol, token->lineno, token->charno);
-			ret = assembler_handle_label_def(as, symtok);
+			ret = assembler_handle_label_def(as, symtok, NULL);
 			symtok->str = NULL;
 			token_free(symtok);
 			break;
@@ -1048,9 +1117,8 @@ int assembler_handle_token(struct assembler *as, struct token *token)
 			break;
 
 		case APS_DEFINE1: {
-			// Disallow quoted token, integer literal, or label
-			int64_t ival = 0;
-			if (symbol[0] == '"' || symbol[0] == ':' || parse_int(symbol, &ival)) {
+			// Disallow quoted token, label, or integer literal
+			if (symbol[0] == '"' || symbol[0] == ':' || isdigit(symbol[0]) || symbol[0] == '\'') {
 				stmsgtf(SMT_ERROR, as->word1->lineno, as->word1->charno, "invalid symbol name \"%s\"", symbol);
 				ret = 1;
 				nextstate = APS_WAIT_EOS;
@@ -1116,6 +1184,7 @@ int assembler_handle_token(struct assembler *as, struct token *token)
 		case APS_OPCODE1:
 		case APS_PSOP1:
 			ret = assembler_handle_opcode(as, as->state == APS_PSOP1, as->code, as->ep.expr, token);
+			as->ep.expr = NULL;
 			break;
 
 		case APS_INCLUDE2:
@@ -1124,17 +1193,14 @@ int assembler_handle_token(struct assembler *as, struct token *token)
 
 			// Parse string literal
 			as->include = token_alloc(balloc(), as->word1->lineno, as->word1->charno);
-			if (!parse_string_lit(as->word1->str, &as->include->str)) {
-				stmsgtf(SMT_ERROR, as->word1->lineno, as->word1->charno, "invalid string literal");
-				ret = 1;
-			}
+			assert(parse_string_lit(as->word1->str, &as->include->str));
 			break;
 
 		case APS_SECTION1:
 			// @todo: Support section flags after comma
 			// Require expression to be immediately evaluable
 			int64_t imm_val = 0;
-			ret = expr_eval(as->ep.expr, &imm_val, as, assembler_lookup_func);
+			ret = expr_eval(as->ep.expr, &imm_val, true, as, assembler_lookup_func);
 			if (ret) {
 				break;
 			}
@@ -1155,7 +1221,7 @@ int assembler_handle_token(struct assembler *as, struct token *token)
 			break;
 
 		case APS_STRINGS:
-			ret = assembler_handle_strings(as, token->lineno);
+			ret = assembler_handle_strings(as, token);
 			break;
 
 		default:
@@ -1199,26 +1265,37 @@ int assembler_finish(struct assembler *as, int lineno, int charno)
 		return 1;
 	}
 
-	// Reapply any labels usages that may need to be reapplied
+	// Check for undefined labels
 	int ret = 0;
+	for (struct label_rec *rec = as->label_recs; rec; rec = rec->prev) {
+		if (!rec->defined) {
+			// Undefined labels are an error at this point
+			if (rec->string_lit) {
+				// @todo: Properly escape string literal
+				stmsgf(SMT_ERROR, "undefined string literal \"%s\"", rec->label);
+			}
+			else {
+				stmsgf(SMT_ERROR, "undefined label \"%s\"", rec->label);
+			}
+			ret = 1;
+		}
+	}
+
+	// Reapply any labels usages that may need to be reapplied.
+	// Applying a label may cause compaction that requires other labels to be re-applied.
+	// Iterate until no labels were re-applied.
 	bool applied_any = true;
 	while (ret == 0 && applied_any) {
 		applied_any = false;
-		for (struct label_rec *rec = as->label_recs; rec; rec = rec->prev) {
-			if (!rec->defined) {
-				// Undefined labels are an error at this point
-				stmsgf(SMT_ERROR, "undefined label \"%s\"", rec->label);
-				ret = 1;
-			}
-			else for (struct label_usage *lu = rec->usages; lu; lu = lu->prev) {
-				if (lu->needs_apply) {
-					// Applying a label may cause compaction that requires other labels to be re-applied
-					int applyret = label_usage_apply(lu, as->outfile, rec->addr, as->label_recs);
-					if (ret == 0) {
-						ret = applyret;
-					}
-					applied_any = true;
-				}
+		for (struct label_usage *lu = as->label_usages; lu; lu = lu->prev) {
+			if (lu->needs_apply) {
+				int64_t expr_val = 0;
+				// All labels are defined, so all expressions should be evaluable at this point
+				int evalret = expr_eval(lu->expr, &expr_val, true, as, assembler_lookup_func);
+				assert(evalret == 0);
+				ret = label_usage_apply(lu, as->outfile, expr_val, as->label_recs, as->label_usages);
+				if (ret) break;
+				applied_any = true;
 			}
 		}
 	}

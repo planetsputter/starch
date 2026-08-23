@@ -7,6 +7,7 @@
 #include <stdio.h>
 
 #include "bstr.h"
+#include "expr.h"
 
 //
 // Records the use of an undefined label
@@ -15,21 +16,25 @@ struct label_usage {
 	long foffset; // Offset of instruction in file
 	uint64_t addr; // Address of usage
 	int si; // Section index in which usage occurs
-	int data_len; // If non-zero, the length of the raw data label
+	int data_len; // If non-zero, the length of the raw data
 	bool pseudo_op; // Whether a pseudo-op was used in the original source
 	int opcode; // The opcode (not pseudo-op) written to the file
-	bool needs_apply; // Whether the label needs to be applied
+	bool needs_apply; // Whether the usage needs to be applied
+	struct expr *expr; // The expression containing the label(s)
 	struct label_usage *prev;
 };
 
-// Initializes the given label usage with the given file offset, address, section index, raw data length, pseudo-op status, and opcode.
-// Sets needs_apply to true.
-void label_usage_init(struct label_usage *lu, long foffset, uint64_t addr, int si, int data_len, bool pseudo_op, int opcode);
+// Initializes the given label usage with the given file offset, address, section index, raw data length, pseudo-op status, opcode, and expression.
+// Takes ownership of the given expression. Sets needs_apply to true.
+void label_usage_init(struct label_usage *lu, long foffset, uint64_t addr, int si, int data_len, bool pseudo_op, int opcode, struct expr *e);
 
-// Applies the given label usage to the given output stub file at the given address, updating the given records
+// Destroys the given label usage
+void label_usage_destroy(struct label_usage*);
+
+// Applies the given label usage to the given output stub file at the given address, updating the given records and other usages
 // if necessary due to compaction of a pseudo-op.
 struct label_rec;
-int label_usage_apply(struct label_usage *lu, FILE *outfile, uint64_t label_addr, struct label_rec *recs);
+int label_usage_apply(struct label_usage *lu, FILE *outfile, uint64_t label_addr, struct label_rec *recs, struct label_usage *usages);
 
 //
 // Label record
@@ -41,13 +46,12 @@ struct label_rec {
 	uint64_t addr; // Only relevant if label has been defined
 	long fpos; // File position of label
 	int si; // Section index in which label is defined
-	struct label_usage *usages; // Label usages list
 	struct label_rec *prev;
 };
 
 // Initializes the given label record with the given parameters.
 // Takes ownership of the given B-string label and usages.
-void label_rec_init(struct label_rec *rec, bool string_lit, bool defined, bchar *label, uint64_t addr, long fpos, int si, struct label_usage *usages);
+void label_rec_init(struct label_rec *rec, bool string_lit, bool defined, bchar *label, uint64_t addr, long fpos, int si);
 
 // Destroys the given label record, releasing its label and usages.
 void label_rec_destroy(struct label_rec *rec);

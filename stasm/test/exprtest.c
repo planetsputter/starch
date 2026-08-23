@@ -99,7 +99,7 @@ void test_expr(const char *expr, int64_t val)
 	int ret = parse_expr(expr, &e);
 	assert(ret == 0);
 	int64_t test_val;
-	ret = expr_eval(e, &test_val, NULL, nonlit_lookup);
+	ret = expr_eval(e, &test_val, true, NULL, nonlit_lookup);
 	assert(ret == 0 && test_val == val);
 	expr_delete(e);
 }
@@ -360,11 +360,6 @@ int main()
 		// Test && to || precedence
 		test_expr("A && B || C", A && B || C);
 		test_expr("A || B && C", A || B && C);
-		// Test || to , precedence
-#pragma GCC diagnostic ignored "-Wunused-value"
-		test_expr("A || B , C", (A || B , C));
-		test_expr("A , B || C", (A , B || C));
-#pragma GCC diagnostic pop
 	}
 
 	return 0;

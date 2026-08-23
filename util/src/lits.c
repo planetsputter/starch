@@ -126,11 +126,11 @@ bool parse_string_lit(const bchar *str, bchar **dest)
 					str = NULL;
 					break;
 				}
-				*dest = bstr_append(*dest, cval);
+				if (dest) *dest = bstr_append(*dest, cval);
 			}
 			else {
-				int error;
-				*dest = bstrcatu(*dest, &cval, 1, &error);
+				int error = 0;
+				if (dest) *dest = bstrcatu(*dest, &cval, 1, &error);
 				if (error) {
 					// Escaped Unicode character too large for UTF-8 representation
 					str = NULL;
@@ -155,7 +155,7 @@ bool parse_int(const bchar *s, int64_t *val)
 	ucp c;
 	bool ret = parse_char_lit(s, &c);
 	if (ret) {
-		*val = c;
+		if (val) *val = c;
 		return ret;
 	}
 
@@ -183,9 +183,9 @@ bool parse_int(const bchar *s, int64_t *val)
 			if (*p == '\0') return false; // "0x"
 			for (; isxdigit(*p); p++) {
 				// Compute value of hexadecimal digit
-				int val = *p >= 'a' ? *p - 'a' + 10 : *p >= 'A' ? *p - 'A' + 10 : *p - '0';
+				int nval = *p >= 'a' ? *p - 'a' + 10 : *p >= 'A' ? *p - 'A' + 10 : *p - '0';
 				if (temp_val >> 60) return false; // *0x10 would overflow
-				temp_val = temp_val * 0x10 + val;
+				temp_val = temp_val * 0x10 + nval;
 			}
 		}
 		else { // Octal literal
@@ -212,6 +212,6 @@ bool parse_int(const bchar *s, int64_t *val)
 	// Expect end of string
 	if ((size_t)(p - s) != slen) return false;
 
-	*val = neg ? -temp_val : temp_val;
+	if (val) *val = neg ? -temp_val : temp_val;
 	return true;
 }

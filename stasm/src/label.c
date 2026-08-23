@@ -11,8 +11,15 @@
 #include "stmsg.h"
 #include "util.h"
 
+// Callback used to determine whether an expression contains a certain term
+static void *find_expr(void *user_ptr, struct token *token)
+{
+	const bchar *s = (const bchar*)user_ptr;
+	return bstrcmpb(s, token->str) == 0 ? token->str : NULL;
+}
+
 // Initializes the given label usage
-void label_usage_init(struct label_usage *lu, long foffset, uint64_t addr, int si, int data_len, bool pseudo_op, int opcode)
+void label_usage_init(struct label_usage *lu, long foffset, uint64_t addr, int si, int data_len, bool pseudo_op, int opcode, struct expr *expr)
 {
 	lu->foffset = foffset;
 	lu->addr = addr;
@@ -21,11 +28,21 @@ void label_usage_init(struct label_usage *lu, long foffset, uint64_t addr, int s
 	lu->pseudo_op = pseudo_op;
 	lu->opcode = opcode;
 	lu->needs_apply = true;
+	lu->expr = expr;
 	lu->prev = NULL;
 }
 
+// Destroys the given label usage
+void label_usage_destroy(struct label_usage *lu)
+{
+	if (lu->expr) {
+		expr_delete(lu->expr);
+		lu->expr = NULL;
+	}
+}
+
 // Applies the given label usage in the given file once the label address is known
-int label_usage_apply(struct label_usage *lu, FILE *outfile, uint64_t label_addr, struct label_rec *recs)
+int label_usage_apply(struct label_usage *lu, FILE *outfile, uint64_t label_addr, struct label_rec *recs, struct label_usage *usages)
 {
 	// Record original file position
 	long original_fpos = ftell(outfile);
@@ -265,9 +282,8 @@ int label_usage_apply(struct label_usage *lu, FILE *outfile, uint64_t label_addr
 			}
 		}
 
-		// Adjust all label record and usage file positions and addresses
+		// Adjust all label record file positions and addresses
 		for (struct label_rec *rec = recs; rec; rec = rec->prev) {
-			bool reapply_rec = false;
 			if (rec->defined && rec->fpos > begin_compact_fpos) {
 				// Adjust file positions of labels defined later in the file
 				rec->fpos -= compact_count;
@@ -275,27 +291,33 @@ int label_usage_apply(struct label_usage *lu, FILE *outfile, uint64_t label_addr
 					// Adjust addresses of labels defined later in the same section as the compacted usage.
 					// Because the address is changing, all usages of this label will need to be reapplied.
 					rec->addr -= compact_count;
-					reapply_rec = true;
-				}
-			}
-			for (struct label_usage *l = rec->usages; l; l = l->prev) {
-				if (l->foffset > begin_compact_fpos) {
-					// Adjust file positions of label usages later in the file
-					l->foffset -= compact_count;
-					if (l->si == compact_si) {
-						// Adjust addresses of label usages later in the same section as the compacted usage
-						l->addr -= compact_count;
-
-						// If this was a relative operation, the usage will need to be reapplied
-						int jmp_br = 0, use_delta = 0;
-						opcode_is_jmp_br(l->opcode, &jmp_br, &use_delta);
-						if (use_delta) {
+					// Usages whose expressions contain this label record will need to be reapplied.
+					// @todo: Would be more efficient to maintain association in assembler struct.
+					for (struct label_usage *l = usages; l; l = l->prev) {
+						if (expr_iter(l->expr, rec->label, find_expr)) {
 							l->needs_apply = true;
 						}
 					}
 				}
-				if (reapply_rec) {
-					l->needs_apply = true;
+			}
+		}
+
+		// Adjust all label usage file positions and addresses
+		for (struct label_usage *l = usages; l; l = l->prev) {
+			if (l->foffset > begin_compact_fpos) {
+				assert(l->foffset >= begin_compact_fpos + compact_count);
+				// Adjust file positions of label usages later in the file
+				l->foffset -= compact_count;
+				if (l->si == compact_si) {
+					// Adjust addresses of label usages later in the same section as the compacted usage
+					l->addr -= compact_count;
+
+					// If this was a relative operation, the usage will need to be reapplied
+					int jmp_br = 0, use_delta = 0;
+					opcode_is_jmp_br(l->opcode, &jmp_br, &use_delta);
+					if (use_delta) {
+						l->needs_apply = true;
+					}
 				}
 			}
 		}
@@ -312,7 +334,7 @@ int label_usage_apply(struct label_usage *lu, FILE *outfile, uint64_t label_addr
 }
 
 // Initializes the given label record, taking ownership of the given label B-string
-void label_rec_init(struct label_rec *rec, bool string_lit, bool defined, bchar *label, uint64_t addr, long fpos, int si, struct label_usage *usages)
+void label_rec_init(struct label_rec *rec, bool string_lit, bool defined, bchar *label, uint64_t addr, long fpos, int si)
 {
 	rec->string_lit = string_lit;
 	rec->label = label;
@@ -320,7 +342,6 @@ void label_rec_init(struct label_rec *rec, bool string_lit, bool defined, bchar 
 	rec->addr = addr;
 	rec->fpos = fpos;
 	rec->si = si;
-	rec->usages = usages;
 	rec->prev = NULL;
 }
 
@@ -329,12 +350,6 @@ void label_rec_destroy(struct label_rec *rec)
 {
 	bfree(rec->label);
 	rec->label = NULL;
-	for (struct label_usage *usage = rec->usages; usage; ) {
-		struct label_usage *prev = usage->prev;
-		free(usage);
-		usage = prev;
-	}
-	rec->usages = NULL;
 }
 
 // Look up the label record for the given B-string label name or string literal

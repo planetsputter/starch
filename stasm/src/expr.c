@@ -46,10 +46,15 @@ static bool is_op(const bchar *token, int *unary)
 
 	// Check for sign at beginning of integer literal
 	if (fb == '+' || fb == '-') {
-		if (token[1]) {
+		if (isdigit(token[1])) { // Integer literal
 			return false;
 		}
-		*unary = MAY_BE_UNARY;
+		if (token[1] == fb) { // "++" or "--"
+			*unary = MUST_BE_UNARY;
+		}
+		else {
+			*unary = MAY_BE_UNARY;
+		}
 		return true;
 	}
 
@@ -62,15 +67,10 @@ static bool is_op(const bchar *token, int *unary)
 struct expr *expr_new(struct token *op_val)
 {
 	struct expr *e = (struct expr*)malloc(sizeof(struct expr));
-	expr_init(e, op_val);
-	return e;
-}
-
-void expr_init(struct expr *e, struct token *op_val)
-{
 	e->lhs = NULL;
 	e->rhs = NULL;
 	e->op_val = op_val;
+	return e;
 }
 
 struct expr *expr_dup(struct expr *src)
@@ -88,13 +88,11 @@ void expr_destroy(struct expr *e)
 		e->op_val = NULL;
 	}
 	if (e->lhs) {
-		expr_destroy(e->lhs);
-		free(e->lhs);
+		expr_delete(e->lhs);
 		e->lhs = NULL;
 	}
 	if (e->rhs) {
-		expr_destroy(e->rhs);
-		free(e->rhs);
+		expr_delete(e->rhs);
 		e->rhs = NULL;
 	}
 }
@@ -105,41 +103,41 @@ void expr_delete(struct expr *e)
 	free(e);
 }
 
-int expr_eval(const struct expr *e, int64_t *val, void *userptr, expr_lookup_func f)
+int expr_eval(const struct expr *e, int64_t *val, bool print_err, void *userptr, expr_lookup_func f)
 {
 	int ret;
 	if (!e->op_val) { // Null expression
-		stmsgf(SMT_ERROR, "cannot evaluate null expression");
+		if (print_err) stmsgf(SMT_ERROR, "cannot evaluate null expression");
 		ret = 1;
 	}
 	else if (e->lhs) { // This must be an operator
 		const bchar *op = e->op_val->str;
 		int unary;
 		if (!is_op(op, &unary)) {
-			stmsgtf(SMT_ERROR, e->op_val->lineno, e->op_val->charno,
+			if (print_err) stmsgtf(SMT_ERROR, e->op_val->lineno, e->op_val->charno,
 				"expected operator, not \"%s\"", op);
 			ret = 1;
 		}
 		else if (unary == NOT_UNARY && !e->rhs) {
-			stmsgtf(SMT_ERROR, e->op_val->lineno, e->op_val->charno,
+			if (print_err) stmsgtf(SMT_ERROR, e->op_val->lineno, e->op_val->charno,
 				"expected rhs when evaluating operator \"%s\"", op);
 			ret = 1;
 		}
 		else if (unary == MUST_BE_UNARY && e->rhs) {
-			stmsgtf(SMT_ERROR, e->op_val->lineno, e->op_val->charno,
+			if (print_err) stmsgtf(SMT_ERROR, e->op_val->lineno, e->op_val->charno,
 				"unexpected rhs when evaluating unary operator \"%s\"", op);
 			ret = 1;
 		}
 		else {
 			// Evaluate lhs and rhs
 			int64_t lv, rv = 0;
-			ret = expr_eval(e->lhs, &lv, userptr, f);
+			ret = expr_eval(e->lhs, &lv, print_err, userptr, f);
 			if (!ret && e->rhs) {
-				ret = expr_eval(e->rhs, &rv, userptr, f);
+				ret = expr_eval(e->rhs, &rv, print_err, userptr, f);
 			}
 			// Combine lhs and rhs using operator
 			if (!ret) {
-				bool unrec = false;
+				bool eval = can_eval_op(op);
 				switch (*(op++)) {
 				case '*':
 					*val = lv * rv;
@@ -153,7 +151,6 @@ int expr_eval(const struct expr *e, int64_t *val, void *userptr, expr_lookup_fun
 				case '+':
 					if (*op == '+') {
 						op++;
-						unrec = true; // Don't know how to handle "++"
 					}
 					else {
 						*val = lv + rv;
@@ -162,7 +159,6 @@ int expr_eval(const struct expr *e, int64_t *val, void *userptr, expr_lookup_fun
 				case '-':
 					if (*op == '-') {
 						op++;
-						unrec = true; // Don't know how to handle "--"
 					}
 					else if (!e->rhs) { // Unary "-"
 						*val = -lv;
@@ -202,9 +198,6 @@ int expr_eval(const struct expr *e, int64_t *val, void *userptr, expr_lookup_fun
 						op++;
 						*val = lv == rv;
 					}
-					else {
-						unrec = true; // Don't know how to handle assignment operator
-					}
 					break;
 				case '&':
 					if (*op == '&') {
@@ -239,18 +232,18 @@ int expr_eval(const struct expr *e, int64_t *val, void *userptr, expr_lookup_fun
 				case '~':
 					*val = ~lv;
 					break;
-				case ',':
-					*val = rv;
-					break;
 				case '(': // Parenthetical group
 					*val = lv;
 					break;
+					// We deliberately don't evaluate "," because it is likely intended
+					// to separate arguments rather than to act as an operator.
+					// Fall-through.
 				default:
-					unrec = true;
+					assert(!eval);
 				}
 				assert(*op == '\0');
-				if (unrec) {
-					stmsgtf(SMT_ERROR, e->op_val->lineno, e->op_val->charno,
+				if (!eval) {
+					if (print_err) stmsgtf(SMT_ERROR, e->op_val->lineno, e->op_val->charno,
 						"unrecognized operator \"%s\"", e->op_val->str);
 					ret = 1;
 				}
@@ -259,12 +252,12 @@ int expr_eval(const struct expr *e, int64_t *val, void *userptr, expr_lookup_fun
 	}
 	else { // This must be a value
 		if (e->rhs) {
-			stmsgtf(SMT_ERROR, e->op_val->lineno, e->op_val->charno,
+			if (print_err) stmsgtf(SMT_ERROR, e->op_val->lineno, e->op_val->charno,
 				"unexpected rhs when evaluating expression");
 			ret = 1;
 		}
 		else if (!parse_int(e->op_val->str, val) && (!f || !f(userptr, e->op_val, val))) {
-			stmsgtf(SMT_ERROR, e->op_val->lineno, e->op_val->charno,
+			if (print_err) stmsgtf(SMT_ERROR, e->op_val->lineno, e->op_val->charno,
 				"failed to parse term \"%s\"", e->op_val->str);
 			ret = 1;
 		}
@@ -273,6 +266,72 @@ int expr_eval(const struct expr *e, int64_t *val, void *userptr, expr_lookup_fun
 		}
 	}
 	return ret;
+}
+
+void *expr_iter(struct expr *e, void *user_ptr, expr_iter_func f)
+{
+	void *ret;
+	if (!e) {
+		ret = NULL;
+	}
+	else if ((ret = f(user_ptr, e->op_val))) { }
+	else if ((ret = expr_iter(e->lhs, user_ptr, f))) { }
+	else if ((ret = expr_iter(e->rhs, user_ptr, f))) { }
+	else {
+		ret = NULL;
+	}
+	return ret;
+}
+
+bool can_eval_op(const bchar *op)
+{
+	bool eval;
+	switch (*(op++)) {
+	case '*':
+	case '/':
+	case '%':
+		eval = true;
+		break;
+	case '+':
+		if (*op == '+') {
+			eval = false; // Don't know how to handle "++"
+		}
+		else {
+			eval = true;
+		}
+		break;
+	case '-':
+		if (*op == '-') {
+			eval = false; // Don't know how to handle "--"
+		}
+		else {
+			eval = true;
+		}
+		break;
+	case '<':
+	case '>':
+		eval = true;
+		break;
+	case '=':
+		if (*op == '=') {
+			eval = true;
+		}
+		else {
+			eval = false; // Don't know how to handle assignment operator
+		}
+		break;
+	case '&':
+	case '^':
+	case '|':
+	case '!':
+	case '~':
+	case '(':
+		eval = true;
+		break;
+	default:
+		eval = false;
+	}
+	return eval;
 }
 
 void expr_parser_init(struct expr_parser *p, struct token *group_char)
@@ -286,8 +345,7 @@ void expr_parser_init(struct expr_parser *p, struct token *group_char)
 void expr_parser_destroy(struct expr_parser *p)
 {
 	if (p->expr) {
-		expr_destroy(p->expr);
-		free(p->expr);
+		expr_delete(p->expr);
 		p->expr = NULL;
 	}
 	if (p->subp) {
@@ -408,7 +466,8 @@ int expr_parser_parse(struct expr_parser *p, struct token *token)
 	bool this_op = is_op(ts, &unary);
 	if (p->afterval) { // Expect operator
 		if (!this_op || unary == MUST_BE_UNARY) {
-			stmsgtf(SMT_ERROR, token->lineno, token->charno, "expected operator, not \"%s\"", ts);
+			stmsgtf(SMT_ERROR, token->lineno, token->charno, "expected %soperator, not \"%s\"",
+				!this_op ? "" : "binary ", ts);
 			ret = 1;
 		}
 		else {

@@ -365,6 +365,7 @@ int sdt_icontain(int64_t val);
 int sdt_ucontain(uint64_t val);
 
 // Returns whether (1) or not (0) the given data type contains the given value
+// @todo: Correctly handle SDT_U64
 int sdt_contains(int sdt, int64_t val);
 
 // Returns the data type of the immediate argument for the given opcode.

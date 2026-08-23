@@ -23,14 +23,8 @@ struct expr {
 // Allocates and initializes a new expression, taking ownership of the given op/val token
 struct expr *expr_new(struct token *op_val);
 
-// Initializes the given expression, taking ownership of the given op/val token
-void expr_init(struct expr*, struct token *op_val);
-
 // Creates and returns a duplicate of the given expression and all sub-expressions
 struct expr *expr_dup(struct expr*);
-
-// Destroys the given expression and all sub-expressions. Does not deallocate.
-void expr_destroy(struct expr*);
 
 // Destroys and deallocates the given expression and all sub-expressions
 void expr_delete(struct expr*);
@@ -39,10 +33,24 @@ void expr_delete(struct expr*);
 // could be converted to an integer value, and if so sets *intval.
 typedef bool expr_lookup_func(void *userptr, struct token *token, int64_t *intval);
 
-// Evaluates the given expression. Calls the given function if not NULL for
-// terms that are not integer literals.
+// Evaluates the given expression, setting *val.
+// Calls the given function if not NULL for terms that are not integer literals.
+// Optionally prints error messages.
 // Returns zero on success.
-int expr_eval(const struct expr*, int64_t *val, void *userptr, expr_lookup_func f);
+int expr_eval(const struct expr*, int64_t *val, bool print_err, void *userptr, expr_lookup_func f);
+
+// Type of function used for term iteration.
+// Returns non-NULL if the iteration should stop.
+// Used to find a token with a specific attribute.
+typedef void *expr_iter_func(void *userptr, struct token *token);
+
+// Calls the given function for each term of the expression in a depth-first left to right order.
+// Stops iteration and returns the function return value if the function returns non-NULL.
+// Returns NULL if the function returned NULL for every term.
+void *expr_iter(struct expr*, void *user_ptr, expr_iter_func f);
+
+// Returns whether the given token is an evaluable operator
+bool can_eval_op(const bchar*);
 
 //
 // Expression parser

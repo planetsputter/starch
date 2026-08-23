@@ -114,6 +114,7 @@ then false; fi
 
 test_begin testing rejection of invalid maximum number of sections
 if $STASM --maxnsec 0 </dev/null 2>/dev/null; then false; fi
+if $STASM --maxnsec -1 </dev/null 2>/dev/null; then false; fi
 $STASM --maxnsec 1 </dev/null
 
 test_begin testing rejection of invalid section address
@@ -197,6 +198,34 @@ test_begin testing rejection of incomplete statement
 if $STASM <<EOF 2>/dev/null
 section 0x3000
 push64
+EOF
+then false; fi
+
+test_begin testing rejection of unexpected expression
+if $STASM <<EOF 2>/dev/null
+section 0x3000
+add8 0
+EOF
+then false; fi
+
+test_begin testing rejection of out-of-range arguments
+if $STASM <<EOF 2>/dev/null
+section 0x3000
+push8asu16 -1
+EOF
+then false; fi
+
+test_begin testing rejection of disallowed bracket notation
+if $STASM <<EOF 2>/dev/null
+section 0x3000
+push8as8 [0]
+EOF
+then false; fi
+
+test_begin testing detection of missing bracket notation
+if $STASM <<EOF 2>/dev/null
+section 0x3000
+pop8 0
 EOF
 then false; fi
 
