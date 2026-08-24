@@ -188,7 +188,7 @@ test_begin "testing rejection of disallowed bracket notation"
 stasm_reject 'push8as8 [0]'
 stasm_accept 'push8 [0]'
 
-test_begin "testing detection of missing bracket notation"
+test_begin "testing rejection of missing bracket notation"
 stasm_reject 'pop8 0'
 stasm_accept 'pop8 [0]'
 
