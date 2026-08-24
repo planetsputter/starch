@@ -205,7 +205,7 @@ int main(int argc, const char *argv[])
 
 			// Print address if requested
 			if (arg_addr) {
-				ret = fprintf(outfile, "%08"PRIx64" ", op_addr);
+				ret = fprintf(outfile, "/*%08"PRIx64"*/ ", op_addr);
 				if (ret < 0) {
 					stmsgf(SMT_ERROR, "failed to write to \"%s\"", outfilename ? outfilename : "stdout");
 					ret = 1;
