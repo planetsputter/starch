@@ -10,8 +10,8 @@ endif
 syntax keyword staKeyword define include section strings SFP
 syntax match staNumber "\v<\d+>|\v<0x\x+>|'.'"
 syntax match staComment "//.*$"
-syntax match staLabel "\v:\S+>"
-syntax match staMacro "\v\$\S+>"
+syntax match staLabel "\v:\w+>"
+syntax match staMacro "\v\$\w+>"
 syntax region staString start=/"/ skip=/\v[^\\]\\(\\\\)*"/ end=/"/
 syntax region staMultiComment start="/\*" end="\*/"
 
