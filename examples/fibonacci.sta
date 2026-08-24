@@ -29,21 +29,21 @@ section $INIT_PC_VAL
 // Write buffer to constant IO address
 //
 :write_io // void write_io(ioa64, bufa64, lenu64)
-	push64 [SFP + -16] // bufa64
-	push64 [SFP + -24] // bufa64, lenu64
-	add64              // enda64
-	push64 [SFP + -16] // enda64, bufa64
+	push64 [SFP-16] // bufa64
+	push64 [SFP-24] // bufa64, lenu64
+	add64           // enda64
+	push64 [SFP-16] // enda64, bufa64
 :write_io:loop
-	dup64              // enda64, bufa64, bufa64
-	push64 [SFP]       // enda64, bufa64, bufa64, enda64
-	cltu64             // enda64, bufa64, bufa64 < enda64
+	dup64           // enda64, bufa64, bufa64
+	push64 [SFP]    // enda64, bufa64, bufa64, enda64
+	cltu64          // enda64, bufa64, bufa64 < enda64
 	brz64 :write_io:end
-	load8              // enda64, bufa64, data8
-	push64 [SFP + -8]  // enda64, bufa64, data8, ioa64
-	storerpop8         // *ioa64 = data8
-	pop8               // enda64, bufa64
+	load8           // enda64, bufa64, data8
+	push64 [SFP-8]  // enda64, bufa64, data8, ioa64
+	storerpop8      // *ioa64 = data8
+	pop8            // enda64, bufa64
 	push64 1
-	add64              // enda64, bufa64 + 1
+	add64           // enda64, bufa64 + 1
 	rjmp :write_io:loop
 :write_io:end
 	ret
@@ -52,10 +52,11 @@ section $INIT_PC_VAL
 // Print 64-bit unsigned integer followed by newline
 //
 :printu64n // void printu64n(u64 v)
-	push64 -20
+	define BUFSIZE 20
+	push64 -$BUFSIZE
 	popn              // buf
-	push64 19         // buf, i
-	push64 [SFP + -8] // buf, i, v
+	push64 $BUFSIZE-1 // buf, i
+	push64 [SFP-8]    // buf, i, v
 :printu64n:loop
 	// Write each digit to buffer
 	dup64             // buf, i, v, v
@@ -64,11 +65,11 @@ section $INIT_PC_VAL
 	dem64to8
 	push8 '0'         // buf, i, v, v % 10, '0'
 	add8              // buf, i, v, v % 10 + '0'
-	push64 [SFP + 20] // buf, i, v, v % 10 + '0', i
+	push64 [SFP+20]   // buf, i, v, v % 10 + '0', i
 	storersfp8        // buf[i] = v % 10 + '0'
 	push64 -1
 	add64             // buf, i, v, v % 10 + '0', i - 1
-	pop64 [SFP + 20]  // i = i - 1
+	pop64 [SFP+20]    // i = i - 1
 	pop8              // buf, i - 1, v
 	push64 10         // buf, i - 1, v, 10
 	divu64            // buf, i - 1, v / 10
@@ -82,7 +83,7 @@ section $INIT_PC_VAL
 	push64 20         // buf, i, i, 20
 	subr64            // buf, i, 20 - i
 	pushsfp           // buf, i, 20 - i, SFP
-	push64 [SFP + 20] // buf, i, 20 - i, SFP, i
+	push64 [SFP+20]   // buf, i, 20 - i, SFP, i
 	add64             // buf, i, 20 - i, SFP + i
 	push64 $IO_STDOUT_ADDR // buf, i, 20 - i, SFP + i, $IO_STDOUT_ADDR
 	call :write_io
@@ -95,19 +96,19 @@ section $INIT_PC_VAL
 // Print all Fibonacci numbers less than or equal to the given value
 //
 :printfib // void printfib(u64 lim)
-	push64 0          // a
-	push64 1          // a, b
+	push64 0        // a
+	push64 1        // a, b
 :printfib:loop
-	dup64             // a, b, b
-	push64 [SFP + -8]  // a, b, b, lim
-	cleu64            // a, b, b <= lim
+	dup64           // a, b, b
+	push64 [SFP-8]  // a, b, b, lim
+	cleu64          // a, b, b <= lim
 	brz64 :printfib:end
-	call :printu64n   // printu64n(b)
-	push64 [SFP + 0]  // a, b, a
-	push64 [SFP + 8]  // a, b, a, b
-	store64 [SFP + 0] // b, b, a, b
-	add64             // b, b, a + b
-	set64             // b, a + b
+	call :printu64n // printu64n(b)
+	push64 [SFP]    // a, b, a
+	push64 [SFP+8]  // a, b, a, b
+	store64 [SFP]   // b, b, a, b
+	add64           // b, b, a + b
+	set64           // b, a + b
 	rjmp :printfib:loop
 :printfib:end
 	ret
