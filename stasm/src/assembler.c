@@ -451,7 +451,7 @@ static int assembler_handle_strings(struct assembler *as, struct token *token)
 	// Emit all string literal data at the current position
 	int ret = 0;
 	for (struct label_rec *rec = as->label_recs; rec; rec = rec->prev) {
-		if (rec->string_lit && rec->defined) {
+		if (rec->string_lit && !rec->defined) {
 			ret = assembler_handle_label_def(as, token, rec);
 			if (ret) break;
 
