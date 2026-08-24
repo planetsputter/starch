@@ -15,16 +15,18 @@ def add_dict(d1, d2):
 def print_counts(counts, ext):
 	print(f'{counts['files']} {ext} files')
 	total = 0
+	for key in counts: # Sum line counts
+		if key == 'files': continue
+		total += counts[key]
 	for key in counts:
 		if key == 'files': continue
-		print(f'  {key + ':':8} {counts[key]:6d}')
-		total = total + int(counts[key])
+		print(f'  {key + ':':8} {counts[key]:6d} ({counts[key]/total*100:5.1f}%)')
 	print(f'  total:   {total:6d}')
 
 # Prints a human-readable list of all line counts by file extension with a total
 def print_all_counts():
 	totals = {}
-	for ext in all_counts:
+	for ext in sorted(all_counts):
 		print_counts(all_counts[ext], f'.{ext}')
 		add_dict(all_counts[ext], totals)
 	print('-----------------')
