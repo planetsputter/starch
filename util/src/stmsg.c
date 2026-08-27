@@ -1,5 +1,8 @@
 // stmsg.c
 
+#include <assert.h>
+#include <unistd.h>
+
 #include "stmsg.h"
 
 // The include chain
@@ -8,14 +11,20 @@ struct inc_link *inc_chain = NULL;
 // The message counts array
 size_t stmsg_counts[SMT_NUM];
 
-// Message type names including ANSI color codes
+// Message type names
+static const char *stmsg_names[] = {
+	"info",
+	"warning",
+	"error",
+};
+// Message color codes
 #define ANSI_YELLOW "\033[33m"
 #define ANSI_RED "\033[31m"
-#define ANSI_NORMAL "\033[0m"
-static const char *stmsg_types[] = {
-	"info",
-	ANSI_YELLOW "warning" ANSI_NORMAL,
-	ANSI_RED "error" ANSI_NORMAL,
+#define ANSI_RESET "\033[0m"
+static const char *stmsg_colors[] = {
+	"", // Normal
+	ANSI_YELLOW,
+	ANSI_RED,
 };
 
 int stmsgf(int msg_type, const char *format, ...)
@@ -38,9 +47,14 @@ int stmsgtf(int msg_type, int lineno, int charno, const char *format, ...)
 
 int vstmsgtf(int msg_type, int lineno, int charno, const char *format, va_list args)
 {
-	// Prepend message type name
+	// Determine output file and whether it is a terminal
+	assert((size_t)msg_type < sizeof(stmsg_names) / sizeof(*stmsg_names));
 	FILE *out_file = msg_type <= SMT_INFO ? stdout : stderr;
-	fprintf(out_file, "%s: ", stmsg_types[msg_type]);
+	int isterm = isatty(fileno(out_file));
+
+	// Prepend message type name
+	fprintf(out_file, "%s%s%s: ", isterm ? stmsg_colors[msg_type] : "",
+		stmsg_names[msg_type], isterm ? ANSI_RESET : "");
 
 	// Prepend the current file and line if it is known
 	struct inc_link *link = inc_chain;
