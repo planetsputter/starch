@@ -1,0 +1,5 @@
+// stub.sta
+
+// As in stub/inc/stub.h
+define STUB_FLAG_TEXT 0
+define STUB_FLAG_DATA 1

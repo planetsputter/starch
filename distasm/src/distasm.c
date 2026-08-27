@@ -145,7 +145,12 @@ int main(int argc, const char *argv[])
 		}
 
 		// Print section description
-		ret = fprintf(outfile, "section %#"PRIx64"\n", sec.addr);
+		if (sec.flags) {
+			ret = fprintf(outfile, "section %#"PRIx64", %#x\n", sec.addr, sec.flags);
+		}
+		else {
+			ret = fprintf(outfile, "section %#"PRIx64"\n", sec.addr);
+		}
 		if (ret < 0) {
 			stmsgf(SMT_ERROR, "failed to write to \"%s\"", outfilename ? outfilename : "stdout");
 			ret = 1;
@@ -167,9 +172,10 @@ int main(int argc, const char *argv[])
 			int64_t val;
 
 			// Look up opcode name
-			const char *name = name_for_opcode(opcode);
-			if (name == NULL) {
-				// Emit unknown opcodes as data
+			const char *name = NULL;
+			if ((sec.flags & STUB_FLAG_DATA) || (name = name_for_opcode(opcode)) == NULL) {
+				// Emit unknown opcodes as data, and emit data as data
+				// @todo: Combine consecutive ASCII bytes into strings
 				name = "data8";
 				sdt = SDT_U8;
 				val = opcode;

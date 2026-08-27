@@ -409,7 +409,7 @@ static int assembler_handle_label_def(struct assembler *as, struct token *token,
 }
 
 // Handles the beginning of a section with the given address at the current position
-static int assembler_handle_section(struct assembler *as, uint64_t addr)
+static int assembler_handle_section(struct assembler *as, uint64_t addr, uint8_t flags)
 {
 	int ret = 0;
 	if (as->sec_count) { // Save the current section before starting a new one
@@ -417,7 +417,7 @@ static int assembler_handle_section(struct assembler *as, uint64_t addr)
 	}
 	if (ret == 0) {
 		// Start a new section. Section address and flags are known but size is unknown at this point.
-		stub_sec_init(&as->curr_sec, addr, 0, 0);
+		stub_sec_init(&as->curr_sec, addr, flags, 0);
 		ret = stub_save_section(as->outfile, as->sec_count, &as->curr_sec);
 	}
 	if (ret) {
@@ -1197,19 +1197,38 @@ int assembler_handle_token(struct assembler *as, struct token *token)
 			break;
 
 		case APS_SECTION1:
-			// @todo: Support section flags after comma
-			// Require expression to be immediately evaluable
-			int64_t imm_val = 0;
-			ret = expr_eval(as->ep.expr, &imm_val, true, as, assembler_lookup_func);
+			uint8_t flags;
+			const struct expr *addr_expr;
+			if (bstrcmpc(as->ep.expr->op_val->str, ",") == 0) { // Section flags after comma
+				assert(as->ep.expr->rhs && as->ep.expr->rhs);
+				addr_expr = as->ep.expr->lhs;
+				int64_t flags_val;
+				ret = expr_eval(as->ep.expr->rhs, &flags_val, true, as, assembler_lookup_func);
+				if (ret) break;
+				if (flags_val < 0 || flags_val > 255) {
+					stmsgtf(SMT_ERROR, token->lineno, token->charno, "invalid section flags value");
+					ret = 1;
+					break;
+				}
+				flags = (uint8_t)flags_val;
+			}
+			else {
+				addr_expr = as->ep.expr;
+				flags = STUB_FLAG_TEXT;
+			}
+			// Require address expression to be immediately evaluable
+			// @todo: Ensure it doesn't contain labels, because the value of labels can change
+			int64_t addr_val = 0;
+			ret = expr_eval(addr_expr, &addr_val, true, as, assembler_lookup_func);
 			if (ret) {
 				break;
 			}
-			if (imm_val < 0) {
+			if (addr_val < 0) {
 				stmsgtf(SMT_ERROR, token->lineno, token->charno, "section address cannot be negative");
 				ret = 1;
 				break;
 			}
-			ret = assembler_handle_section(as, (uint64_t)imm_val);
+			ret = assembler_handle_section(as, (uint64_t)addr_val, flags);
 			break;
 
 		case APS_DEFINE3:

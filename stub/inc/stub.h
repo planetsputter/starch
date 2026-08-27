@@ -7,8 +7,9 @@
 #include <stdint.h>
 #include <stdio.h>
 
-enum {
-	STUB_FLAG_TEXT,
+enum { // Bitwise stub section flags as in sta/inc/stub.sta
+	STUB_FLAG_TEXT = 0, // Program text (instructions)
+	STUB_FLAG_DATA = 1, // Program data
 };
 
 // Section of a stub file

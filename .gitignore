@@ -1,6 +1,7 @@
 /.build
 *.swp
 /__pycache__
+/examples/*.stb
 /test/a.stb
 /test/b.stb
 /test/dis.sta

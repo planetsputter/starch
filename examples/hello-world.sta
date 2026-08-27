@@ -1,5 +1,7 @@
 // hello-world.sta
 
+include "stub.sta"
+
 // Memory map
 // 0x0000 - 0x1000: reserved
 // 0x1000 - 0x2000: IO
@@ -64,5 +66,5 @@ section $INIT_PC_VAL
 //
 // Static data section
 //
-section $STATIC_ADDR
+section $STATIC_ADDR, $STUB_FLAG_DATA
 strings

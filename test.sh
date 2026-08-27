@@ -141,6 +141,22 @@ section a
 EOF
 then false; fi
 
+test_begin "testing rejection of invalid section flags"
+if $STASM <<EOF 2>/dev/null
+section 0, -1
+EOF
+then false; fi
+$STASM <<EOF 2>/dev/null
+section 0, 0
+EOF
+$STASM <<EOF 2>/dev/null
+section 0, 255
+EOF
+if $STASM <<EOF 2>/dev/null
+section 0, 256
+EOF
+then false; fi
+
 test_begin "testing rejection of empty symbol name"
 stasm_reject 'push64 $'
 stasm_accept 'define a 0; push64 $a'
