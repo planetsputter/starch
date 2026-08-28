@@ -182,6 +182,14 @@ test_begin "testing rejection of duplicate labels"
 stasm_reject ':test1; :test1'
 stasm_accept ':test1; :test2'
 
+test_begin "testing rejection of undefined label"
+stasm_reject 'push64 :test'
+stasm_accept 'push64 :test; :test'
+
+test_begin "testing rejection of undefined string literal"
+stasm_reject 'push64 "test"'
+stasm_accept 'push64 "test"; strings'
+
 test_begin "testing rejection of unquoted include"
 stasm_reject 'include psops.sta'
 

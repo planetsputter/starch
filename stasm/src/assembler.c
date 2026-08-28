@@ -1290,8 +1290,11 @@ int assembler_finish(struct assembler *as, int lineno, int charno)
 		if (!rec->defined) {
 			// Undefined labels are an error at this point
 			if (rec->string_lit) {
-				// @todo: Properly escape string literal
-				stmsgf(SMT_ERROR, "undefined string literal \"%s\"", rec->label);
+				// Escape string literal for message
+				bchar *esc = balloc();
+				escape_string_lit(rec->label, &esc);
+				stmsgf(SMT_ERROR, "undefined string literal %s", esc);
+				bfree(esc);
 			}
 			else {
 				stmsgf(SMT_ERROR, "undefined label \"%s\"", rec->label);
