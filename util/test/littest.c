@@ -24,6 +24,20 @@ static ucp randcp()
 	return c & ((1 << bits) - 1);
 };
 
+// Allocates and returns a B-string containing 0-63 characters from randcp()
+static bchar *randbstr()
+{
+	bchar *bstr = balloc();
+	int len = random() & 63;
+	for (int i = 0; i < len; i++) {
+		ucp c = randcp();
+		int error;
+		bstr = bstrcatu(bstr, &c, 1, &error);
+		assert(error == 0);
+	}
+	return bstr;
+}
+
 // Single-character escape codes
 struct esc_pair {
 	char c;
@@ -586,6 +600,23 @@ int main()
 		assert(parse_string_lit(ts, &ds) == (tc < 256));
 		bfree(ds);
 		bfree(ts);
+
+		// Test that parse/escape are symmetrical for a random character
+		c = randcp();
+		ts = balloc();
+		escape_char_lit(c, &ts);
+		assert(parse_char_lit(ts, &tc) && c == tc);
+		bfree(ts);
+
+		// Test that parse/escape are symmetrical for a random string
+		bchar *rs = randbstr(); // Random string
+		bchar *ers = balloc(); // Escaped random string
+		bchar *pers = balloc(); // Parsed escaped random string
+		escape_string_lit(rs, &ers);
+		assert(parse_string_lit(ers, &pers) && bstrcmpb(rs, pers) == 0);
+		bfree(pers);
+		bfree(ers);
+		bfree(rs);
 	}
 
 	return 0;

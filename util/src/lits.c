@@ -2,8 +2,10 @@
 //
 // String and integer literal parsing utility functions
 
+#include <assert.h>
 #include <ctype.h>
 #include <stddef.h>
+#include <stdio.h>
 
 #include "lits.h"
 
@@ -104,12 +106,59 @@ bool parse_char_lit(const bchar *s, ucp *val)
 	return true;
 }
 
+// Appends the given character or an escape sequence for the given character to the destination B-string.
+// If alldigits is true, use three octal digits if octal notation is used. This will prevent the escape
+// sequence from running into a following literal octal digit.
+static void escape_char_lit_impl(ucp val, bchar **dest, bool alldigits)
+{
+	if (val < 128) {
+		ucp ec = 0;
+		switch (val) {
+		case '\a': ec = 'a'; break;
+		case '\b': ec = 'b'; break;
+		case '\f': ec = 'f'; break;
+		case '\n': ec = 'n'; break;
+		case '\r': ec = 'r'; break;
+		case '\t': ec = 't'; break;
+		case '\v': ec = 'v'; break;
+		case '\\': ec = '\\'; break;
+		case '\'': ec = '\''; break;
+		case '\"': ec = '\"'; break;
+		case '\?': ec = '?'; break;
+		default: break;
+		}
+		char buf[5];
+		if (ec) { // There is an escape character for this value
+			sprintf(buf, "\\%c", ec);
+		}
+		else if (val < ' ' || val == 127) { // There is no escape character. Represent in octal.
+			sprintf(buf, alldigits ? "\\%03o" : "\\%o", val);
+		}
+		else { // Represent verbatim
+			sprintf(buf, "%c", val);
+		}
+		*dest = bstrcatc(*dest, buf);
+	}
+	else { // Append the character verbatim
+		int error;
+		*dest = bstrcatu(*dest, &val, 1, &error);
+		assert(error == 0);
+	}
+}
+
+void escape_char_lit(ucp val, bchar **dest)
+{
+	*dest = bstrcatc(*dest, "'");
+	escape_char_lit_impl(val, dest, false);
+	*dest = bstrcatc(*dest, "'");
+}
+
 bool parse_string_lit(const bchar *str, bchar **dest)
 {
 	// Literal must start with '"'
 	size_t len = bstrlen(str);
 	if (len < 2 || *str != '"') return false;
-	const char *end = str + len;
+	const bchar *end = str + len;
 
 	ucp cval;
 	int esctype;
@@ -145,6 +194,29 @@ bool parse_string_lit(const bchar *str, bchar **dest)
 
 	// Ensure escapes were valid and literal ends at the first unescaped '"'
 	return str != NULL && str == end - 1 && *str == '"';
+}
+
+void escape_string_lit(const bchar *str, bchar **dest)
+{
+	size_t len = bstrlen(str);
+	const bchar *end = str + len;
+
+	*dest = bstrcatc(*dest, "\""); // Beginning quotation
+
+	for (; str < end; str++) {
+		// We rely on the fact that in UTF-8 encoded strings only bytes with values
+		// less than 128 will need to be escaped
+		ucp val = (ucp)*str;
+		if (val < 128) {
+			bchar next = *(str + 1);
+			escape_char_lit_impl(val, dest, next >= '0' && next <= '7');
+		}
+		else {
+			*dest = bstr_append(*dest, val);
+		}
+	}
+
+	*dest = bstrcatc(*dest, "\""); // Ending quotation
 }
 
 bool parse_int(const bchar *s, int64_t *val)
