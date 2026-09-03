@@ -9,8 +9,9 @@ void utf8_decoder_init(struct utf8_decoder *decoder) {
 
 ucp *utf8_decoder_decode(struct utf8_decoder *decoder, byte b, ucp *c, int *error) {
 	*error = 0;
-	switch (decoder->state & 0xf) { // Lower nibble is remaining bytes, upper is total sequence length
-	case 0: // First byte of character
+	// Lower nibble of state is remaining bytes, upper is total sequence length
+	if ((decoder->state & 0xf) == 0) {
+		// First byte of character
 		if (b < 0x80) { // US-ASCII character
 			*(c++) = b;
 		}
@@ -30,8 +31,8 @@ ucp *utf8_decoder_decode(struct utf8_decoder *decoder, byte b, ucp *c, int *erro
 		else {
 			*error = UTF8_ERROR_INVALID_START_BYTE;
 		}
-		break;
-	default: // Next byte of multi-byte character
+	}
+	else { // Next byte of multi-byte character
 		if ((b & 0xc0) != 0x80) {
 			*error = UTF8_ERROR_INVALID_CONTINUATION_BYTE;
 		}
@@ -41,12 +42,11 @@ ucp *utf8_decoder_decode(struct utf8_decoder *decoder, byte b, ucp *c, int *erro
 			if ((decoder->state & 0xf) == 0) { // Multi-byte character complete
 				// Compare number of bytes needed with sequence length
 				size_t bfc = utf8_bytes_for_char(decoder->c, error);
-				if (bfc != 0) {
-					if (bfc == decoder->state >> 4) {
-						*(c++) = decoder->c;
-					} else {
-						*error = UTF8_ERROR_OVERLONG_SEQUENCE;
-					}
+				if (bfc == decoder->state >> 4) {
+					*(c++) = decoder->c;
+				}
+				else {
+					*error = UTF8_ERROR_OVERLONG_SEQUENCE;
 				}
 				decoder->state = 0;
 			}
@@ -74,10 +74,12 @@ ucp *utf8_decode_array(const byte *ba, size_t bc, ucp *ca, size_t cc, int *error
 	if (ba < bend && ca >= cend) {
 		// We ran out of room to store characters
 		*error = UTF8_ERROR_CHARACTER_OVERFLOW;
-	} else if (!utf8_decoder_can_terminate(&decoder)) {
+	}
+	else if (!utf8_decoder_can_terminate(&decoder)) {
 		// Input bytes did not end on a character boundary
 		*error = UTF8_ERROR_UNEXPECTED_TERMINATION;
-	} else {
+	}
+	else {
 		*error = 0;
 	}
 	return ca;
@@ -96,9 +98,11 @@ ucp *utf8_decode_string(const char *str, ucp *ca, size_t cc, int *error) {
 	// Handle array-based errors
 	if (*str) {
 		*error = UTF8_ERROR_CHARACTER_OVERFLOW;
-	} else if (!utf8_decoder_can_terminate(&decoder)) {
+	}
+	else if (!utf8_decoder_can_terminate(&decoder)) {
 		*error = UTF8_ERROR_UNEXPECTED_TERMINATION;
-	} else {
+	}
+	else {
 		*error = 0;
 	}
 	return ca;
@@ -181,14 +185,12 @@ byte *utf8_encode_array(const ucp *ca, size_t cc, byte *ba, size_t bc, int *erro
 	for (; ca < cend; ca++) {
 		ba = utf8_encode_char(*ca, ba, bend - ba, error);
 		if (*error) {
-			return ba;
+			break;
 		}
 	}
-	if (ca < cend) {
+	if (ca < cend && !error) {
 		// We did not encode all characters
 		*error = UTF8_ERROR_BYTE_OVERFLOW;
-	} else {
-		*error = 0;
 	}
 	return ba;
 }

@@ -3,9 +3,11 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/time.h>
 
 #include "utf8.h"
+#include "util.h"
 
 int main()
 {
@@ -126,6 +128,25 @@ int main()
 		assert(cp == ca2 + 128);
 		for (int i = 0; i < 128; i++) {
 			assert(ca[i] == ca2[i]);
+		}
+	}
+
+	// Test the decoding/encoding of random short byte arrays either fails or is symmetric
+	for (int i = 0; i < 10000; i++) {
+		// Generate six random bytes. This will be a valid UTF-8 sequence about 4.4% of the time.
+		put_little32(random(), ba);
+		put_little16(random(), ba + 4);
+		// Decode
+		error = 0;
+		cp = utf8_decode_array(ba, 6, ca, 128, &error);
+		if (error) {
+			assert(error != UTF8_ERROR_CHARACTER_OVERFLOW);
+		}
+		else {
+			error = 1;
+			ba[6] = ~ba[0];
+			bp = utf8_encode_array(ca, cp - ca, ba + 6, 6, &error);
+			assert(error == 0 && bp == ba + 12 && memcmp(ba, ba + 6, 6) == 0);
 		}
 	}
 
