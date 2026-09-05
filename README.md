@@ -22,14 +22,14 @@ Projects
 How to Build
 ------------
 
-Run `./build.py` to perform a parallel build of the release configuration. To build the debug configuration run `./build.py BUILDCFG=debug` or change the environment variable "BUILDCFG" to "debug" as in `BUILDCFG=debug ./build.py`.
+Set the environment variable "BUILDCFG" to "release" or "debug" then run `./build.py` to perform a parallel build. BUILDCFG can also be passed as a command line argument as in `./build.py BUILDCFG=debug`.
 
-A build target may be specified on the command line. Typical build targets would be "all" (builds all Starch binaries, the default) or "clean" (removes intermediate files).
+A build target may be specified on the command line. Typical build targets would be "all" (builds Starch binaries, the default), "clean" (removes intermediate files), or "test" (builds test binaries).
 
 How to Test
 -----------
 
-Run `./test.sh`.
+First make the binaries required for test with `./build.py test`. Then run `./test.sh`.
 
 Name
 ----
