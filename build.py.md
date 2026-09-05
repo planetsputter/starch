@@ -15,7 +15,7 @@ All command-line arguments to build.py are passed to make, except an optional in
 
 If no '-f' argument is provided, the default 'build.cfg' configuration file is used.
 
-Each time build.py is run it builds a particular configuration of the product which is stored in the 'BUILDCFG' build variable. The default configuration is 'release'. The BUILDCFG variable can be set either by environment variable or by command line argument. For instance, the following two commands both have the effect of building the 'debug' configuration of the product rather than the 'release' configuration:
+Each time build.py is run it builds the configuration of the product specified in the 'BUILDCFG' build variable. The BUILDCFG variable can be set either by environment variable or by command line argument. For instance, the following two commands both have the effect of building the 'debug' configuration of the product:
 ```
 BUILDCFG=debug ./build.py
 ./build.py BUILDCFG=debug
@@ -50,6 +50,15 @@ Key value pairs without a specified configuration apply to any configuration.
 
 Keys
 ----
+### config
+Each configuration definition begins with the 'config' key, defining the name of the configuration. For example, the following line begins the 'debug' configuration definition:
+```
+config:debug
+```
+The 'config' key must precede all other keys associated with the specified configuration.
+
+One of the configuration names specified in the build file must match the configuration name in the BUILDCFG variable. All targets will inherit the values specified by this configuration unless they are also specified by the target.
+
 ### target
 Each target definition begins with the 'target' key, defining the name of the file to be built.
 ```
@@ -102,15 +111,22 @@ Any additional flags to be used during linking may be specified with the 'lflags
 
 Example
 -------
-The following section of build.cfg specifies how to build the stasm binary:
+The following section of build.cfg specifies how to build the stasm binary in release or debug configurations:
 ```
+# release configuration
+config:release
+  compiler: gcc
+  cflags: -Wall -Wextra -O2
+
+# debug configuration
+config:debug
+  compiler: gcc
+  cflags: -Wall -Wextra -g
+
 # stasm
 target: stasm/bin/stasm
   type: bin
-  compiler: gcc
   src: stasm/src/*.c
   inc: starch/inc stasm/inc util/inc stub/inc
-  cflags[release]: -Wall -Wextra -O2
-  cflags[debug]: -Wall -Wextra -g
   libs: util/lib/libutil.a stub/lib/libstub.a starch/lib/libstarch.a
 ```

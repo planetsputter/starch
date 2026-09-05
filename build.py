@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import glob, hashlib, multiprocessing, os, pathlib, re, shlex, subprocess, sys
+import copy, glob, hashlib, multiprocessing, os, pathlib, re, shlex, subprocess, sys
 
 # Returns a shell line representing the given list of arguments, or single string argument
 def sh_esc(args):
@@ -47,6 +47,11 @@ def mf_write_rule(mf, target, deps):
 	if isinstance(deps, str): deps = [deps]
 	mf.write('%s:%s\n' % (mk_esc_rule(target), ' '.join([mk_esc_rule(d) for d in deps])))
 
+# Inserts values from the parent dictionary into the child dictionary
+def inherit(child, parent):
+	for e in parent:
+		if child[e] == None: child[e] = copy.copy(parent[e])
+
 # Process a build configuration file
 def process_cfg(filename, buildcfg):
 	# Open the build configuration file
@@ -70,9 +75,10 @@ def process_cfg(filename, buildcfg):
 		'    $(shell rm -f .build/obj/*.o)\n' +
 		'endif\n')
 
-	# Parameters from file
+	# Parameters from section
 	ctx = {
-		'target': None,
+		'config': None, # Configuration name
+		'target': None, # Target name
 		'compiler': None,
 		'src': None,
 		'inc': None,
@@ -81,15 +87,29 @@ def process_cfg(filename, buildcfg):
 		'cflags': None,
 		'lflags': None
 	}
-	# Keep a list of targets
+	# All configurations by name
+	configs = {}
+
+	# The list of targets
 	targets = []
 
 	# List of objects for all targets
 	allobjs = []
 
-	def process_target():
+	def process_section():
 		# Check context
+		config = ctx['config']
+		if config != None: # This is a configuration section
+			if config in configs: raise Exception('redefinition of config %s' % config)
+			configs[config] = copy.copy(ctx)
+			return
+		# Convenience variable
 		target = ctx['target']
+		# Check that current build configuration has been defined
+		if buildcfg not in configs:
+			raise Exception('config %s was not specified before target %s' % (buildcfg, target))
+		# Inherit values from the current build configuration
+		inherit(ctx, configs[buildcfg])
 		compiler = ctx['compiler']
 		src = ctx['src']
 		inc = ctx['inc']
@@ -205,24 +225,23 @@ def process_cfg(filename, buildcfg):
 				config = key[lbpos + 1:rbpos].strip()
 				key = key[:lbpos].strip()
 
-			if key == 'target':
-				if config != None:
-					raise Exception('configuration cannot be specified for \'target\' key')
-				# Each new 'target' key initiates processing of the previous target
-				if ctx['target']:
-					process_target()
+			if key == 'target' or key == 'config':
+				# 'target' or 'config' keys initiate a new section.
+				# We must process the old section, if any.
+				if ctx['target'] or ctx['config']:
+					process_section()
 					for e in ctx: ctx[e] = None # Clear context
 			elif not key in ctx:
 				raise Exception('invalid key \'%s\'' % key)
-			elif not ctx['target']:
-				raise Exception('key before target')
+			elif not ctx['target'] and not ctx['config']:
+				raise Exception('key before target or config')
 
 			if config != None and config != buildcfg:
 				# This line is for a different configuration
 				continue
 
 			# Certain keys expect a single non-empty value
-			if key in ('target', 'type', 'compiler'):
+			if key in ('target', 'type', 'compiler', 'config'):
 				if len(values) > 1: raise Exception('multiple %s values' % key)
 				elif len(values) == 0 or not values[0]: raise Exception('empty %s' % key)
 				ctx[key] = values[0]
@@ -232,7 +251,7 @@ def process_cfg(filename, buildcfg):
 		except Exception as e: # Add detail to exception and re-throw
 			raise Exception('line %d: %s' % (lineno, str(e)))
 
-	if ctx['target']: process_target() # Process final target
+	if ctx['target'] or ctx['config']: process_section() # Process final section
 
 	# Update phony 'all' target
 	mf_write_rule(mf, 'all', targets)
@@ -251,7 +270,7 @@ if __name__ == '__main__':
 				args = args[2:]
 
 		# Determine the current build configuration
-		buildcfg = os.getenv('BUILDCFG', default='release')
+		buildcfg = os.getenv('BUILDCFG')
 
 		# Scan for a command line argument that assigns the BUILDCFG variable
 		# such as "BUILDCFG=debug". Make parses these and they will override
@@ -265,6 +284,10 @@ if __name__ == '__main__':
 			else: # A target
 				targets += [arg]
 
+		# A build configuration must be specified
+		if not buildcfg:
+			raise Exception('a build configuration must be specified with the BUILDCFG environment variable ' +
+				'or command line argument')
 		# Set our environment variable BUILDCFG so the make process will inherit it
 		os.putenv('BUILDCFG', buildcfg)
 
