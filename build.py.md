@@ -13,6 +13,8 @@ All command-line arguments to build.py are passed to make, except an optional in
 ./build.py -f build2.cfg clean all
 ```
 
+There are three phony targets provided by the build system: 'clean', 'all', and 'everything'. The 'clean' target will remove all intermediate (object) files. The 'all' target will build all targets which have a 'required-by' list that includes 'all'. The 'everything' target will build all targets specified in the build configuration file.
+
 If no '-f' argument is provided, the default 'build.cfg' configuration file is used.
 
 Each time build.py is run it builds the configuration of the product specified in the 'BUILDCFG' build variable. The BUILDCFG variable can be set either by environment variable or by command line argument. For instance, the following two commands both have the effect of building the 'debug' configuration of the product:
@@ -65,6 +67,13 @@ Each target definition begins with the 'target' key, defining the name of the fi
 target:stasm/bin/stasm
 ```
 The 'target' key must precede all other keys associated with the specified target. The list of targets is the same between all configurations, and a specific configuration cannot be specified in brackets for the 'target' key.
+
+### required-by
+This line specifies that the target is required by a list of other targets. Most dependencies are implicitly determined and do not need to be specified with this key. This key is only necessary when the dependency would not otherwise be inferred. A common use of this key is to specify which targets are required by the default target 'all'.
+```
+  required-by: all
+```
+In general 'lib' type targets do not need this key even if they are required by 'all' because their dependents will be automatically inferred.
 
 ### type
 Each target must have a type specified with the 'type' key. Valid types are 'bin' for binary files and 'lib' for static library files.

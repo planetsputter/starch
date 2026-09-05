@@ -63,22 +63,24 @@ def process_cfg(filename, buildcfg):
 	# Open the makefile
 	mf = open('.build/makefile', 'w')
 
-	# Generate phony targets, specify 'all' as first target.
+	# Generate phony targets, specify 'all' as first target, and disable builtin rules.
 	# Automatically running the 'clean' target when the makefile is parsed allows us
 	# to avoid a race between 'clean' and other targets during a parallel build.
 	mf.write(
-		'.PHONY:clean all\n' +
+		'.PHONY:clean all everything\n' +
 		'all:\n' +
 		'clean:\n' +
 		'\t@echo rm -f .build/obj/*.o\n' +
 		'ifneq ($(filter clean,$(MAKECMDGOALS)),)\n' +
 		'    $(shell rm -f .build/obj/*.o)\n' +
-		'endif\n')
+		'endif\n' +
+		'MAKEFLAGS+=-rR\n')
 
 	# Parameters from section
 	ctx = {
 		'config': None, # Configuration name
 		'target': None, # Target name
+		'required-by': None,
 		'compiler': None,
 		'src': None,
 		'inc': None,
@@ -110,6 +112,7 @@ def process_cfg(filename, buildcfg):
 			raise Exception('config %s was not specified before target %s' % (buildcfg, target))
 		# Inherit values from the current build configuration
 		inherit(ctx, configs[buildcfg])
+		required_by = ctx['required-by']
 		compiler = ctx['compiler']
 		src = ctx['src']
 		inc = ctx['inc']
@@ -124,6 +127,11 @@ def process_cfg(filename, buildcfg):
 			raise Exception('invalid target type %s for target %s' % (target_type, target))
 		if cflags == None: cflags = []
 		if lflags == None: lflags = []
+
+		# Document any explicit dependencies
+		if required_by != None:
+			for req in required_by:
+				mf_write_rule(mf, req, target)
 
 		# Add inc directories to cflags list
 		if inc:
@@ -253,8 +261,8 @@ def process_cfg(filename, buildcfg):
 
 	if ctx['target'] or ctx['config']: process_section() # Process final section
 
-	# Update phony 'all' target
-	mf_write_rule(mf, 'all', targets)
+	# Update phony 'everything' target
+	mf_write_rule(mf, 'everything', targets)
 
 if __name__ == '__main__':
 	try:
