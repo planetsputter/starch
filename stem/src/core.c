@@ -684,18 +684,24 @@ int core_step(struct core *core, struct mem *mem)
 	//
 	// Promotion operations
 	//
-	case op_prom8u32:
-		ret = core_frame_read8(core, mem, core->sp - 1, &temp_u8);
+	case op_prom8u16:
+		ret = core_frame_write8(core, mem, core->sp, 0);
 		if (ret) break;
-		ret = core_frame_write32(core, mem, core->sp - 1, temp_u8);
+		core->sp += 1;
+		core->pc += 1;
+		break;
+	case op_prom8u32:
+		ret = core_frame_write8(core, mem, core->sp, 0);
+		if (ret) break;
+		ret = core_frame_write16(core, mem, core->sp + 1, 0);
 		if (ret) break;
 		core->sp += 3;
 		core->pc += 1;
 		break;
 	case op_prom8u64:
-		ret = core_frame_read8(core, mem, core->sp - 1, &temp_u8);
+		ret = core_frame_write32(core, mem, core->sp, 0);
 		if (ret) break;
-		ret = core_frame_write64(core, mem, core->sp - 1, temp_u8);
+		ret = core_frame_write32(core, mem, core->sp + 3, 0);
 		if (ret) break;
 		core->sp += 7;
 		core->pc += 1;
@@ -724,10 +730,16 @@ int core_step(struct core *core, struct mem *mem)
 		core->sp += 7;
 		core->pc += 1;
 		break;
-	case op_prom16u64:
-		ret = core_frame_read16(core, mem, core->sp - 2, &temp_u16);
+	case op_prom16u32:
+		ret = core_frame_write16(core, mem, core->sp, 0);
 		if (ret) break;
-		ret = core_frame_write64(core, mem, core->sp - 2, temp_u16);
+		core->sp += 2;
+		core->pc += 1;
+		break;
+	case op_prom16u64:
+		ret = core_frame_write16(core, mem, core->sp, 0);
+		if (ret) break;
+		ret = core_frame_write32(core, mem, core->sp + 2, 0);
 		if (ret) break;
 		core->sp += 6;
 		core->pc += 1;
@@ -746,6 +758,12 @@ int core_step(struct core *core, struct mem *mem)
 		ret = core_frame_write64(core, mem, core->sp - 2, (int16_t)temp_u16);
 		if (ret) break;
 		core->sp += 6;
+		core->pc += 1;
+		break;
+	case op_prom32u64:
+		ret = core_frame_write32(core, mem, core->sp, 0);
+		if (ret) break;
+		core->sp += 4;
 		core->pc += 1;
 		break;
 	case op_prom32i64:

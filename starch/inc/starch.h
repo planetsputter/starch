@@ -57,15 +57,17 @@ enum {
 	//
 	// Promotion operations
 	//
-	// Note: Some promotions can be accomplished by pushing bytes with value zero and are not included here
+	op_prom8u16,  // Promote top 8 bit to 16 bit unsigned
 	op_prom8u32,  // Promote top 8 bit to 32 bit unsigned
 	op_prom8u64,  // Promote top 8 bit to 64 bit unsigned
 	op_prom8i16,  // Promote top 8 bit to 16 bit signed
 	op_prom8i32,  // Promote top 8 bit to 32 bit signed
 	op_prom8i64,  // Promote top 8 bit to 64 bit signed
+	op_prom16u32, // Promote top 16 bit to 32 bit unsigned
 	op_prom16u64, // Promote top 16 bit to 64 bit unsigned
 	op_prom16i32, // Promote top 16 bit to 32 bit signed
 	op_prom16i64, // Promote top 16 bit to 64 bit signed
+	op_prom32u64, // Promote top 32 bit to 64 bit unsigned
 	op_prom32i64, // Promote top 32 bit to 64 bit signed
 
 	//
@@ -324,7 +326,7 @@ enum {
 // Returns the name of the given opcode, or NULL for an invalid opcode
 const char *name_for_opcode(int opcode);
 
-// Returns the opcode for the given name, or -1 on error
+// Returns the opcode for the given name or alias, or -1 on error
 int opcode_for_name(const char*);
 
 // Sets *jmp_br to whether the given opcode is a jump or branch opcode, that is,

@@ -163,22 +163,28 @@ These operations copy the value at the top of the stack down to the position bel
 
 ### Promotion and Demotion Operations
 
-These operations promote or demote the integer value at the top of the stack to a larger or smaller size respectively. Promotion can be done in a signed or unsigned manner. Demotion is done by truncation. Some unsigned promotions can be accomplished by pushing bytes with value zero and are not included here. Some demotions can be accomplished with a pop and are not included here.
+These operations promote or demote the integer value at the top of the stack to a larger or smaller size respectively. Promotion can be done in a signed or unsigned manner. Demotion is done by truncation. Unsigned promotions are accomplished by pushing bytes with value zero onto the stack. The value to be promoted is not read. This makes the unsigned promotion operations an efficient way to push a zero value onto the stack. Some demotions can be accomplished with a single pop instruction and are aliases for the pop operations in parenthesis.
 
-| Op Code   | PC After | Stack Before | Stack After |
-|:--------- |:-------- |:------------ |:----------- |
-| prom8u32  | PC+1     | a8           | a8  as u32  |
-| prom8u64  | PC+1     | a8           | a8  as u64  |
-| prom8i16  | PC+1     | a8           | a8  as i16  |
-| prom8i32  | PC+1     | a8           | a8  as i32  |
-| prom8i64  | PC+1     | a8           | a8  as i64  |
-| prom16u64 | PC+1     | a16          | a16 as u64  |
-| prom16i32 | PC+1     | a16          | a16 as i32  |
-| prom16i64 | PC+1     | a16          | a16 as i64  |
-| prom32i64 | PC+1     | a32          | a32 as i64  |
-| dem64to16 | PC+1     | a64          | a64 as  16  |
-| dem64to8  | PC+1     | a64          | a64 as   8  |
-| dem32to8  | PC+1     | a32          | a32 as   8  |
+| Op Code           | PC After | Stack Before | Stack After |
+|:----------------- |:-------- |:------------ |:----------- |
+| prom8u16          | PC+1     | a8           | a8  as u16  |
+| prom8u32          | PC+1     | a8           | a8  as u32  |
+| prom8u64          | PC+1     | a8           | a8  as u64  |
+| prom8i16          | PC+1     | a8           | a8  as i16  |
+| prom8i32          | PC+1     | a8           | a8  as i32  |
+| prom8i64          | PC+1     | a8           | a8  as i64  |
+| prom16u32         | PC+1     | a16          | a16 as u32  |
+| prom16u64         | PC+1     | a16          | a16 as u64  |
+| prom16i32         | PC+1     | a16          | a16 as i32  |
+| prom16i64         | PC+1     | a16          | a16 as i64  |
+| prom32u64         | PC+1     | a32          | a32 as u64  |
+| prom32i64         | PC+1     | a32          | a32 as i64  |
+| dem64to32 (pop32) | PC+1     | a64          | a64 as  32  |
+| dem64to16         | PC+1     | a64          | a64 as  16  |
+| dem64to8          | PC+1     | a64          | a64 as   8  |
+| dem32to16 (pop16) | PC+1     | a32          | a32 as  16  |
+| dem32to8          | PC+1     | a32          | a32 as   8  |
+| dem16to8 (pop8)   | PC+1     | a16          | a16 as   8  |
 
 ### Integer Arithmetic Operations
 

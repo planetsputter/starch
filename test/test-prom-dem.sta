@@ -1,0 +1,257 @@
+// test-prom-dem.sta
+//
+// Test promotion/demotion operations
+
+// Memory map
+// 0x0000 - 0x1000: reserved
+// 0x1000 - 0x2000: IO
+// 0x2000 - 0x3000: interrupt
+// 0x3000 - 0x4000: program
+// 0x4000 - 0x5000: stack
+// 0x5000 - 0x6000: static
+
+//
+// Definitions
+//
+define STACK_BOTTOM 0x4000
+define STACK_LIMIT  0x5000
+define STATIC_ADDR  0x5000
+define MAX_REPS     64
+
+//
+// Static data section
+//
+section $STATIC_ADDR
+
+:rep64
+data64 0
+
+//
+// Instruction section
+//
+section $INIT_PC_VAL
+
+setsbp $STACK_BOTTOM
+setsfp $STACK_BOTTOM
+setsp  $STACK_BOTTOM
+setslp $STACK_LIMIT
+
+//
+// Main program loop
+//
+:begin
+	push64 [:rep64]  // rep64
+	dup64            // rep64, rep64
+	push64 $MAX_REPS // rep64, rep64, $MAX_REPS
+	cltu64           // rep64, rep64 < $MAX_REPS
+	brz64 :end       // rep64
+	call :test_prom_dem
+	push64 1         // rep64, 1_64
+	add64            // rep64 + 1_64
+	pop64 [:rep64]   // rep64 = rep64 + 1
+	rjmp :begin
+:end
+	halt 0
+
+//
+// Test promotions and demotions
+//
+:test_prom_dem
+	// Test unsigned promotions/demotions
+	push8 [$IO_URAND_ADDR]  // a8
+	dup8                    // a8, a8
+	dup8                    // a8, a8, a8
+	prom8u64                // a8, a8, a64
+	dup64                   // a8, a8, a64, a64
+	push8 [SFP]             // a8, a8, a64, a64, a8
+	push32 0
+	push16 0
+	push8 0                 // a8, a8, a64, a64, a64
+	ceq64                   // a8, a8, a64, a64 == a64
+	pop64 [$IO_ASSERT_ADDR]
+	dem64to8                // a8, a8, a8
+	ceq8                    // a8, a8 == a8
+	pop8 [$IO_ASSERT_ADDR]
+	dup8                    // a8, a8
+	dup8                    // a8, a8, a8
+	prom8u32                // a8, a8, a32
+	dup32                   // a8, a8, a32, a32
+	push8 [SFP]             // a8, a8, a32, a32, a8
+	push16 0
+	push8 0                 // a8, a8, a32, a32, a32
+	ceq32                   // a8, a8, a32, a32 == a32
+	pop32 [$IO_ASSERT_ADDR]
+	dem32to8                // a8, a8, a8
+	ceq8                    // a8, a8 == a8
+	pop8 [$IO_ASSERT_ADDR]
+	dup8                    // a8, a8
+	dup8                    // a8, a8, a8
+	prom8u16                // a8, a8, a16
+	dup16                   // a8, a8, a16, a16
+	push8 [SFP]             // a8, a8, a16, a16, a8
+	push8 0                 // a8, a8, a16, a16, a16
+	ceq16                   // a8, a8, a16, a16 == a16
+	pop16 [$IO_ASSERT_ADDR]
+	dem16to8                // a8, a8, a8
+	ceq8                    // a8, a8 == a8
+	pop8 [$IO_ASSERT_ADDR]
+	pop8
+	push16 [$IO_URAND_ADDR] // a16
+	dup16                   // a16, a16
+	dup16                   // a16, a16, a16
+	prom16u64               // a16, a16, a64
+	dup64                   // a16, a16, a64, a64
+	push16 [SFP]            // a16, a16, a64, a64, a16
+	push32 0
+	push16 0                // a16, a16, a64, a64, a64
+	ceq64                   // a16, a16, a64, a64 == a64
+	pop64 [$IO_ASSERT_ADDR]
+	dem64to16               // a16, a16, a16
+	ceq16                   // a16, a16 == a16
+	pop16 [$IO_ASSERT_ADDR]
+	dup16                   // a16, a16
+	dup16                   // a16, a16, a16
+	prom16u32               // a16, a16, a32
+	dup32                   // a16, a16, a32, a32
+	push16 [SFP]            // a16, a16, a32, a32, a16
+	push16 0                // a16, a16, a32, a32, a32
+	ceq32                   // a16, a16, a32, a32 == a32
+	pop32 [$IO_ASSERT_ADDR]
+	dem32to16               // a16, a16, a16
+	ceq16                   // a16, a16 == a16
+	pop16 [$IO_ASSERT_ADDR]
+	pop16
+	push32 [$IO_URAND_ADDR] // a32
+	dup32                   // a32, a32
+	dup32                   // a32, a32, a32
+	prom32u64               // a32, a32, a64
+	dup64                   // a32, a32, a64, a64
+	push32 [SFP]            // a32, a32, a64, a64, a32
+	push32 0                // a32, a32, a64, a64, a64
+	ceq64                   // a32, a32, a64, a64 == a64
+	pop64 [$IO_ASSERT_ADDR]
+	dem64to32               // a32, a32, a32
+	ceq32                   // a32, a32 == a32
+	pop32 [$IO_ASSERT_ADDR]
+	pop32
+
+	// Test that unsigned promotions can be done at stack frame bottom without error
+	prom8u64  // 0_56
+	prom8u16  // 0_56 0_8
+	push64 0  // 0_56 0_8, 0_64
+	ceq64     // 0_56 0_8 == 0_64
+	pop64 [$IO_ASSERT_ADDR]
+	prom8u32  // 0_24
+	prom8u16  // 0_24 0_8
+	push32 0  // 0_24 0_8, 0_32
+	ceq32     // 0_24 0_8 == 0_32
+	pop32 [$IO_ASSERT_ADDR]
+	prom8u16  // 0_8
+	prom8u16  // 0_8 0_8
+	push16 0  // 0_8 0_8, 0_16
+	ceq16     // 0_8 0_8 == 0_16
+	pop16 [$IO_ASSERT_ADDR]
+	prom16u64 // 0_48
+	prom16u32 // 0_48 0_16
+	push64 0  // 0_48 0_16, 0_64
+	ceq64     // 0_48 0_16 == 0_64
+	pop64 [$IO_ASSERT_ADDR]
+	prom16u32 // 0_16
+	prom16u32 // 0_16 0_16
+	push32 0  // 0_16 0_16, 0_32
+	ceq32     // 0_16 0_16 == 0_32
+	pop32 [$IO_ASSERT_ADDR]
+	prom32u64 // 0_32
+	prom32u64 // 0_32 0_32
+	push64 0  // 0_32 0_32, 0_64
+	ceq64     // 0_32 0_32 == 0_64
+	pop64 [$IO_ASSERT_ADDR]
+
+	// Test signed promotions
+	push8 [$IO_URAND_ADDR]   // a8
+	dup8                     // a8, a8
+	dup8                     // a8, a8, a8
+	prom8i64                 // a8, a8, a64
+	dup64                    // a8, a8, a64, a64
+	push8 [SFP]              // a8, a8, a64, a64, a8
+	dup8                     // a8, a8, a64, a64, a8, a8
+	push8 7                  // a8, a8, a64, a64, a8, a8, 7
+	rshifti8                 // a8, a8, a64, a64, a8, a8 >> 7
+	dup8; dup16; dup16; dup8 // a8, a8, a64, a64, a64
+	ceq64                    // a8, a8, a64, a64 == a64
+	pop64 [$IO_ASSERT_ADDR]
+	dem64to8                 // a8, a8, a8
+	ceq8                     // a8, a8 == a8
+	pop8 [$IO_ASSERT_ADDR]
+	dup8                     // a8, a8
+	dup8                     // a8, a8, a8
+	prom8i32                 // a8, a8, a32
+	dup32                    // a8, a8, a32, a32
+	push8 [SFP]              // a8, a8, a32, a32, a8
+	dup8                     // a8, a8, a32, a32, a8, a8
+	push8 7                  // a8, a8, a32, a32, a8, a8, 7
+	rshifti8                 // a8, a8, a32, a32, a8, a8 >> 7
+	dup8; dup8               // a8, a8, a32, a32, a32
+	ceq32                    // a8, a8, a32, a32 == a32
+	pop32 [$IO_ASSERT_ADDR]
+	dem32to8                 // a8, a8, a8
+	ceq8                     // a8, a8 == a8
+	pop8 [$IO_ASSERT_ADDR]
+	dup8                     // a8, a8
+	dup8                     // a8, a8, a8
+	prom8i16                 // a8, a8, a16
+	dup16                    // a8, a8, a16, a16
+	push8 [SFP]              // a8, a8, a16, a16, a8
+	dup8                     // a8, a8, a16, a16, a8, a8
+	push8 7                  // a8, a8, a16, a16, a8, a8, 7
+	rshifti8                 // a8, a8, a16, a16, a16
+	ceq16                    // a8, a8, a16, a16 == a16
+	pop16 [$IO_ASSERT_ADDR]
+	dem16to8                 // a8, a8, a8
+	ceq8                     // a8, a8 == a8
+	pop8 [$IO_ASSERT_ADDR]
+	pop8
+	push16 [$IO_URAND_ADDR]  // a16
+	dup16                    // a16, a16
+	dup16                    // a16, a16, a16
+	prom16i64                // a16, a16, a64
+	dup64                    // a16, a16, a64, a64
+	push16 [SFP]             // a16, a16, a64, a64, a16
+	dup16                    // a16, a16, a64, a64, a16, a16
+	push8 15                 // a16, a16, a64, a64, a16, a16, 15_8
+	rshifti16                // a16, a16, a64, a64, a16, a16 >> 15
+	dup16; dup16             // a16, a16, a64, a64, a64
+	ceq64                    // a16, a16, a64, a64 == a64
+	pop64 [$IO_ASSERT_ADDR]
+	dem64to16                // a16, a16, a16
+	ceq16                    // a16, a16 == a16
+	pop16 [$IO_ASSERT_ADDR]
+	dup16                    // a16, a16
+	dup16                    // a16, a16, a16
+	prom16i32                // a16, a16, a32
+	dup32                    // a16, a16, a32, a32
+	push16 [SFP]             // a16, a16, a32, a32, a16
+	dup16                    // a16, a16, a32, a32, a16, a16
+	push8 15                 // a16, a16, a32, a32, a16, a16, 15_8
+	rshifti16                // a16, a16, a32, a32, a32
+	ceq32                    // a16, a16, a32, a32 == a32
+	pop32 [$IO_ASSERT_ADDR]
+	dem32to16                // a16, a16, a16
+	ceq16                    // a16, a16 == a16
+	pop16 [$IO_ASSERT_ADDR]
+	pop16
+	push32 [$IO_URAND_ADDR]  // a32
+	dup32                    // a32, a32
+	dup32                    // a32, a32, a32
+	prom32i64                // a32, a32, a64
+	dup64                    // a32, a32, a64, a64
+	push32 [SFP]             // a32, a32, a64, a64, a32
+	dup32                    // a32, a32, a64, a64, a32, a32
+	push8 31                 // a32, a32, a64, a64, a32, a32, 31
+	rshifti32                // a32, a32, a64, a64, a64
+	ceq64                    // a32, a32, a64, a64 == a64
+	pop64 [$IO_ASSERT_ADDR]
+	dem64to32                // a32, a32, a32
+	ceq32                    // a32, a32 == a32
+	pop32 [$IO_ASSERT_ADDR]
+	ret

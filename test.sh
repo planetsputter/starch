@@ -235,5 +235,8 @@ $STEM a.stb
 test_begin "testing interrupts"
 $STASM test-int.sta
 $STEM a.stb
+test_begin "testing promotion/demotion"
+$STASM test-prom-dem.sta
+$STEM a.stb
 
 test_end

@@ -55,14 +55,17 @@ static const char *op_names[] = {
 	//
 	// Promotion operations
 	//
+	[op_prom8u16] = "prom8u16",
 	[op_prom8u32] = "prom8u32",
 	[op_prom8u64] = "prom8u64",
 	[op_prom8i16] = "prom8i16",
 	[op_prom8i32] = "prom8i32",
 	[op_prom8i64] = "prom8i64",
+	[op_prom16u32] = "prom16u32",
 	[op_prom16u64] = "prom16u64",
 	[op_prom16i32] = "prom16i32",
 	[op_prom16i64] = "prom16i64",
+	[op_prom32u64] = "prom32u64",
 	[op_prom32i64] = "prom32i64",
 
 	//
@@ -331,6 +334,10 @@ int opcode_for_name(const char *name)
 	for (size_t i = 0; i < sizeof(op_names) / sizeof(*op_names); i++) {
 		if (op_names[i] && strcmp(name, op_names[i]) == 0) return i;
 	}
+	// Check for aliases
+	if (strcmp(name, "dem64to32") == 0) return op_pop32;
+	if (strcmp(name, "dem32to16") == 0) return op_pop16;
+	if (strcmp(name, "dem16to8") == 0) return op_pop8;
 	return -1;
 }
 
@@ -566,14 +573,17 @@ int imm_type_for_opcode(int opcode)
 	//
 	// Promotion Operations
 	//
+	case op_prom8u16:
 	case op_prom8u32:
 	case op_prom8u64:
 	case op_prom8i16:
 	case op_prom8i32:
 	case op_prom8i64:
+	case op_prom16u32:
 	case op_prom16u64:
 	case op_prom16i32:
 	case op_prom16i64:
+	case op_prom32u64:
 	case op_prom32i64:
 
 	//
