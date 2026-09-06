@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+"""Generic build script which invokes a compiler to accurately generate dependencies, then functions as a front-end for make."""
+
 import copy, glob, hashlib, multiprocessing, os, pathlib, re, shlex, subprocess, sys
 
 # Returns a shell line representing the given list of arguments, or single string argument
