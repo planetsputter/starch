@@ -343,17 +343,15 @@ if __name__ == '__main__':
 		# Check what the last build configuration was
 		lastcfg = None
 		try:
-			file = open('.build/lastcfg')
-			lastcfg = file.readline().strip()
-			file.close()
+			with open('.build/lastcfg') as file:
+				lastcfg = file.readline().strip()
 		except FileNotFoundError as e:
 			pass
 
 		if lastcfg != buildcfg:
 			# Record current build configuration if different from last
-			file = open('.build/lastcfg', 'w')
-			file.write(buildcfg)
-			file.close()
+			with open('.build/lastcfg', 'w') as file:
+				file.write(buildcfg)
 
 		result = subprocess.run(('make', '-f', '.build/makefile', *args))
 		result.check_returncode();
