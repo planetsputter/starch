@@ -18,6 +18,20 @@ def sh_unesc(line):
 def msg_quote(s):
 	return f'"{s.replace('"', '\\"')}"'
 
+# Returns the string representing a single argument for a makefile rule
+def mk_esc_rule(rule):
+	return rule.replace('$', '$$').replace(' ', '\\ ')
+
+# Returns the string representing a single argument escaped for the shell and then for a makefile recipe
+def mk_esc_recipe(rec):
+	return sh_esc(rec).replace('$', '$$')
+
+# Writes a dependency rule to the given makefile, escaping the target and each dependency.
+# deps may be a string representing a single dependency or a list of dependencies.
+def mf_write_rule(mf, target, deps):
+	if isinstance(deps, str): deps = [deps]
+	mf.write(f'{mk_esc_rule(target)}:{' '.join([mk_esc_rule(d) for d in deps])}\n')
+
 # Returns the basename of the given path, optionally including the extension
 def basename(path, withext=True):
 	dotpos = path.rfind('.')
@@ -39,20 +53,6 @@ def get_lib_name(path):
 	if slashpos >= dotpos: dotpos = len(path)
 	if path[slashpos + 1:].startswith('lib'): slashpos += 3
 	return path[slashpos + 1:dotpos]
-
-# Returns the string representing a single argument for a makefile rule
-def mk_esc_rule(rule):
-	return rule.replace('$', '$$').replace(' ', '\\ ')
-
-# Returns the string representing a single argument escaped for the shell and then for a makefile recipe
-def mk_esc_recipe(rec):
-	return sh_esc(rec).replace('$', '$$')
-
-# Writes a dependency rule to the given makefile, escaping the target and each dependency.
-# deps may be a string representing a single dependency or a list of dependencies.
-def mf_write_rule(mf, target, deps):
-	if isinstance(deps, str): deps = [deps]
-	mf.write(f'{mk_esc_rule(target)}:{' '.join([mk_esc_rule(d) for d in deps])}\n')
 
 # Inserts values from the parent dictionary into the child dictionary
 def inherit(child, parent):
@@ -154,7 +154,7 @@ def process_cfg(filename, buildcfg):
 				mf_write_rule(mf, target, req)
 		if target_type == 'phony':
 			mf_write_rule(mf, '.PHONY', target)
-			return
+			return # Phony targets only have explicit dependencies
 
 		# Check other keys
 		inc = ctx['inc']
