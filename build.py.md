@@ -13,7 +13,7 @@ All command-line arguments to build.py are passed to make, except an optional in
 ./build.py -f build2.cfg clean all
 ```
 
-There are three phony targets provided by the build system: 'clean', 'all', and 'everything'. The 'clean' target will remove all intermediate (object) files. The 'all' target will build all targets which have a 'required-by' list that includes 'all'. The 'everything' target will build all targets specified in the build configuration file.
+There are three phony targets provided by the build system: 'clean', 'all', and 'every'. The 'clean' target will remove all intermediate (object) files. The 'all' target will build all targets which have a 'required-by' list that includes 'all'. The 'every' target will build all targets specified in the build configuration file.
 
 If no '-f' argument is provided, the default 'build.cfg' configuration file is used.
 
@@ -68,18 +68,24 @@ target:stasm/bin/stasm
 ```
 The 'target' key must precede all other keys associated with the specified target. The list of targets is the same between all configurations, and a specific configuration cannot be specified in brackets for the 'target' key.
 
+### type
+Each target must have a type specified with the 'type' key. Valid types are 'bin' for binary files, 'lib' for static library files, and 'phony' for targets which do not represent a file. Phony targets can only have the 'requires' and 'required-by' keys.
+```
+  type: bin
+```
+
+### requires
+This key specifies that the target requires a list of other targets. Most dependencies are implicitly determined and do not need to be specified with this key. This key is only necessary when the dependency would not otherwise be inferred. A common use of this key is to specify requirements for phony targets.
+```
+  requires: all
+```
+
 ### required-by
-This line specifies that the target is required by a list of other targets. Most dependencies are implicitly determined and do not need to be specified with this key. This key is only necessary when the dependency would not otherwise be inferred. A common use of this key is to specify which targets are required by the default target 'all'.
+This key specifies that the target is required by a list of other targets. Most dependencies are implicitly determined and do not need to be specified with this key. This key is only necessary when the dependency would not otherwise be inferred. A common use of this key is to specify which targets are required by phony targets such as the default target 'all'.
 ```
   required-by: all
 ```
 In general 'lib' type targets do not need this key even if they are required by 'all' because their dependents will be automatically inferred.
-
-### type
-Each target must have a type specified with the 'type' key. Valid types are 'bin' for binary files and 'lib' for static library files.
-```
-  type: bin
-```
 
 ### compiler
 Each target must have a compiler specified with the 'compiler' key. This application will be used to generate dependencies as well as compile source files.

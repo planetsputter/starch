@@ -52,6 +52,12 @@ def inherit(child, parent):
 	for e in parent:
 		if child[e] == None: child[e] = copy.copy(parent[e])
 
+# Returns whether the given dictionary only contains the given keys as non-None values
+def only_contains(d, keys):
+	for key in d:
+		if d[key] != None and not key in keys: return False
+	return True
+
 # Process a build configuration file
 def process_cfg(filename, buildcfg):
 	# Open the build configuration file
@@ -67,7 +73,7 @@ def process_cfg(filename, buildcfg):
 	# Automatically running the 'clean' target when the makefile is parsed allows us
 	# to avoid a race between 'clean' and other targets during a parallel build.
 	mf.write(
-		'.PHONY:clean all everything\n' +
+		'.PHONY:clean all every\n' +
 		'all:\n' +
 		'clean:\n' +
 		'\t@echo rm -f .build/obj/*.o\n' +
@@ -80,6 +86,7 @@ def process_cfg(filename, buildcfg):
 	ctx = {
 		'config': None, # Configuration name
 		'target': None, # Target name
+		'requires': None,
 		'required-by': None,
 		'compiler': None,
 		'src': None,
@@ -110,28 +117,42 @@ def process_cfg(filename, buildcfg):
 		# Check that current build configuration has been defined
 		if buildcfg not in configs:
 			raise Exception('config %s was not specified before target %s' % (buildcfg, target))
-		# Inherit values from the current build configuration
-		inherit(ctx, configs[buildcfg])
-		required_by = ctx['required-by']
-		compiler = ctx['compiler']
-		src = ctx['src']
-		inc = ctx['inc']
-		libs = ctx['libs']
+		# Check target type
 		target_type = ctx['type']
-		cflags = ctx['cflags']
-		lflags = ctx['lflags']
-		if not compiler: raise Exception('no compiler specified for target %s' % target)
-		if not src: raise Exception('no src specified for target %s' % target)
 		if not target_type: raise Exception('no target type specified for target %s' % target)
-		if not target_type in ('bin', 'lib', 'so'):
+		if not target_type in ('bin', 'lib', 'so', 'phony'):
 			raise Exception('invalid target type %s for target %s' % (target_type, target))
-		if cflags == None: cflags = []
-		if lflags == None: lflags = []
+		if target_type == 'phony':
+			# Phony targets don't inherit from the current build configuration
+			if not only_contains(ctx, ('target', 'type', 'requires', 'required-by')):
+				raise Exception('only "requires" and "required-by" may be specified for phony target %s' % target)
+		else:
+			# Non-phony targets inherit values from the current build configuration
+			inherit(ctx, configs[buildcfg])
+		# Check explicit dependencies
+		requires = ctx['requires']
+		required_by = ctx['required-by']
 
 		# Document any explicit dependencies
 		if required_by != None:
 			for req in required_by:
 				mf_write_rule(mf, req, target)
+		if requires != None:
+			for req in requires:
+				mf_write_rule(mf, target, req)
+		if target_type == 'phony': return
+
+		# Check other keys
+		inc = ctx['inc']
+		libs = ctx['libs']
+		cflags = ctx['cflags']
+		lflags = ctx['lflags']
+		compiler = ctx['compiler']
+		src = ctx['src']
+		if not compiler: raise Exception('no compiler specified for target %s' % target)
+		if not src: raise Exception('no src specified for target %s' % target)
+		if cflags == None: cflags = []
+		if lflags == None: lflags = []
 
 		# Add inc directories to cflags list
 		if inc:
@@ -261,8 +282,8 @@ def process_cfg(filename, buildcfg):
 
 	if ctx['target'] or ctx['config']: process_section() # Process final section
 
-	# Update phony 'everything' target
-	mf_write_rule(mf, 'everything', targets)
+	# Update phony 'every' target
+	mf_write_rule(mf, 'every', targets)
 
 if __name__ == '__main__':
 	try:
