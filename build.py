@@ -128,9 +128,8 @@ def process_cfg(filename, buildcfg):
 			# Phony targets don't inherit from the current build configuration
 			if not only_contains(ctx, ('target', 'type', 'requires', 'required-by')):
 				raise Exception('only "requires" and "required-by" may be specified for phony target %s' % target)
-		else:
-			# Non-phony targets inherit values from the current build configuration
-			inherit(ctx, configs[buildcfg])
+		# Inherit values from the current build configuration
+		inherit(ctx, configs[buildcfg])
 		# Check explicit dependencies
 		requires = ctx['requires']
 		required_by = ctx['required-by']
@@ -142,7 +141,9 @@ def process_cfg(filename, buildcfg):
 		if requires != None:
 			for req in requires:
 				mf_write_rule(mf, target, req)
-		if target_type == 'phony': return
+		if target_type == 'phony':
+			mf_write_rule(mf, '.PHONY', target)
+			return
 
 		# Check other keys
 		inc = ctx['inc']
