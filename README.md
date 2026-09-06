@@ -12,6 +12,7 @@ Projects
  * [build.py](build.py) is a general-purpose build script used by Starch. It invokes the compiler to generate dependencies for Starch build targets and then serves as a front-end for make. [build.py.md](build.py.md) documents the build script and its configuration file, [build.cfg](build.cfg).
  * [cloc.py](cloc.py) is a script to count lines of code in Starch. It can count blank, comment, code, and documentation lines in C, Python, Starch assembly, and Markdown files.
  * [distasm](distasm) is a Starch disassembler. It takes a stub binary file and produces Starch assembly describing it.
+ * [ifmt.py](ifmt.py) is a script to format markdown and other text files, wrapping and flowing consecutive lines to maintain a set maximum width.
  * [starch](starch) contains code associated with the Starch instruction set.
  * [stasm](stasm) is a Starch assembler. It takes a Starch assembly file and produces a stub binary containing Starch code suitable for emulation. See [stasm/doc/stasm-desc.md](stasm/doc/stasm-desc.md) for more details.
  * [stem](stem) is a Starch emulator. It executes Starch code in a emulated environment on the host machine.
