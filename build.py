@@ -4,10 +4,51 @@
 
 import concurrent.futures, copy, datetime, glob, hashlib, multiprocessing, os, pathlib, re, shlex, subprocess, sys, threading
 
-# Returns a shell line representing the given list of arguments, or single string argument
-def sh_esc(args):
+# When generating makefile contents and output messages, try not to use more than this many columns per line
+wrap_cols = 120
+
+# Returns the number of columns in the given line
+def count_cols(line, tabstop=8):
+	i = 0
+	c = 0
+	while i < len(line):
+		if line[i] == '\n': break
+		if line[i] == '\t': c = (c + tabstop) // tabstop * tabstop
+		else: c = c + 1
+		i = i + 1
+	return c
+
+# Returns the string containing the given words separated by the given separator string
+# and wrapped to the given number of columns with a backslash escaping the newlines
+# and a single space at the beginning of each wrapped line. Optionally prepends a prefix.
+def wordwrap(words, prefix='', sep=' ', wrap=0):
+	if wrap:
+		result = prefix
+		first = True
+		words = copy.copy(words) # Create a copy we can modify
+		while len(words) > 0: # Wrap all words
+			word = words[0]
+			if first:
+				result += word
+				cols = count_cols(result)
+				first = False
+			elif cols + len(sep) + len(word) <= wrap - 2:
+				result += sep + word
+				cols += len(sep) + len(word)
+			else:
+				result += ' \\\n ' + word
+				cols = 1 + count_cols(word)
+			words.pop(0) # Consume first argument
+	else:
+		result = prefix + sep.join(words)
+	return result
+
+
+# Returns a shell line representing the given list of arguments, or single string argument.
+# Optionally prepends a prefix. Optionally wraps to the given number of columns.
+def sh_esc(args, prefix='', wrap=0):
 	if isinstance(args, str): args = [args]
-	return ' '.join(shlex.quote(x) for x in args)
+	return wordwrap([shlex.quote(x) for x in args], prefix=prefix, wrap=wrap)
 
 # Returns the list of arguments described by the given shell line
 def sh_unesc(line):
@@ -18,19 +59,21 @@ def sh_unesc(line):
 def msg_quote(s):
 	return f'"{s.replace('"', '\\"').replace('\n', '\\n')}"'
 
-# Returns the string representing a single argument for a makefile rule
+# Returns the string escaped for use in a makefile rule
 def mk_esc_rule(rule):
 	return rule.replace('$', '$$').replace(' ', '\\ ')
 
-# Returns the string representing a single argument escaped for the shell and then for a makefile recipe
-def mk_esc_recipe(rec):
-	return sh_esc(rec).replace('$', '$$')
+# Returns the string representing a list of arguments or single string argument
+# as a makefile recipe. Prepends a tab and appends a newline.
+def mk_esc_recipe(args):
+	escaped = [arg.replace('$', '$$') for arg in args]
+	return sh_esc(escaped, prefix='\t', wrap=wrap_cols) + '\n'
 
 # Writes a dependency rule to the given makefile, escaping the target and each dependency.
 # deps may be a string representing a single dependency or a list of dependencies.
 def mf_write_rule(mf, target, deps):
 	if isinstance(deps, str): deps = [deps]
-	mf.write(f'{mk_esc_rule(target)}:{' '.join([mk_esc_rule(d) for d in deps])}\n')
+	mf.write(wordwrap([mk_esc_rule(dep) for dep in deps], prefix=mk_esc_rule(target) + ':', wrap=wrap_cols) + '\n')
 
 # Returns the basename of the given path, optionally including the extension
 def basename(path, withext=True):
@@ -72,7 +115,7 @@ def gen_deps(source, args):
 	result = subprocess.run(args, capture_output=True)
 	if result.returncode:
 		raise Exception(f'unable to generate dependency list for {msg_quote(source)}:\n' +
-			f'{sh_esc(args)}\n' +
+			f'{sh_esc(args, wrap=wrap_cols)}\n' +
 			f'{result.stderr.decode('utf-8')}')
 	return result.stdout.decode('utf-8')
 
@@ -129,8 +172,7 @@ def process_cfg(filename, buildcfg):
 			for req in required_by:
 				mf_write_rule(mf, req, target)
 		if requires != None:
-			for req in requires:
-				mf_write_rule(mf, target, req)
+			mf_write_rule(mf, target, requires)
 		if target_type == 'phony':
 			mf_write_rule(mf, '.PHONY', target)
 			return # Phony targets only have explicit dependencies
@@ -181,8 +223,7 @@ def process_cfg(filename, buildcfg):
 			# Write the dependencies to the makefile
 			mf.write(deps)
 			# Write the build recipe to the makefile
-			mf.write(f'\t{mk_esc_recipe(compiler)} -c {mk_esc_recipe(sources[i])} ' +
-				f'-o {mk_esc_recipe(objs[i])} {mk_esc_recipe(cflags)}\n')
+			mf.write(mk_esc_recipe((compiler, '-c', sources[i], '-o', objs[i], *cflags)))
 			i += 1
 
 		# Listed libs are dependencies which also generate extra linker flags
@@ -204,11 +245,10 @@ def process_cfg(filename, buildcfg):
 
 		# Write the recipe to create the target
 		if target_type == 'bin':
-			mf.write(f'\t{mk_esc_recipe(compiler)} -o {mk_esc_recipe(target)} ' +
-				f'{mk_esc_recipe(objs)} {mk_esc_recipe(lflags)}\n')
+			mf.write(mk_esc_recipe((compiler, '-o', target, *objs, *lflags)))
 		elif target_type == 'lib':
-			mf.write(f'\trm -f {mk_esc_recipe(target)}\n' +
-				f'\tar -crs {mk_esc_recipe(target)} {mk_esc_recipe(objs)}\n')
+			mf.write(mk_esc_recipe(('rm', '-f', target)))
+			mf.write(mk_esc_recipe(('ar', '-crs', target, *objs)))
 		elif target_type == 'so':
 			raise Exception('unimplemented')
 
