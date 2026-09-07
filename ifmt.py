@@ -2,10 +2,10 @@
 
 """Program to format text files, intelligently wrapping lines at a given number of columns while preserving overall document structure."""
 
-import argparse, sys, tempfile
+import argparse, shutil, sys, tempfile
 
 # String of all characters which may appear in a line prefix
-__prefix_chars__ = '\t #*-/=`'
+__prefix_chars__ = '\t #*-/=`|'
 
 # Returns the prefix of the given line
 def get_prefix(line):
@@ -25,6 +25,7 @@ def prefix_can_wrap(prefix):
 	if prefix[i:i+1] == '`': return False # Used to open and close code blocks in markdown
 	if prefix[i:i+1] == '#': return False # Used to denote headers in markdown
 	if prefix[i:i+1] == '=': return False # Used to denote headers in markdown
+	if prefix[i:i+1] == '|': return False # Used to define tables in markdown
 	return True
 
 # Returns the expected prefix of the next line after a line with the given prefix
@@ -124,29 +125,23 @@ if __name__ == '__main__':
 
 		# Process each input file
 		for infile in args.inputs:
-
 			# Determine the output file
 			if args.overwrite:
-				outfile = tempfile.TemporaryFile()
+				outfile = tempfile.NamedTemporaryFile('r+')
 			else:
 				if args.outfile: outfile = args.outfile
 				else: outfile = sys.stdout
 
 			# Process each line of the input file
 			process_file(infile, outfile, flow=args.flow, justify=args.justify, width=args.width, tabstop=args.tabstop)
-
-			# Overwrite the input file, if specified
-			if args.overwrite:
-				# Reopen the input file in write mode
-				infile.close()
-				infile = open(input.name,'w')
-				# Go to the beginning of the temporary file we created, and write each line to the original input file
-				outfile.seek(0)
-				infile.writelines(outfile.readlines())
-				# Close the temp file and input file
-				outfile.close()
 			# Close the input file
 			infile.close()
+
+			if args.overwrite:
+				# Close the temporary file and move it to the input file
+				outfile.flush()
+				shutil.move(outfile.name, infile.name)
+				outfile.close()
 
 	except Exception as e:
 		print(f'{sys.argv[0]}: error: {e}', file=sys.stderr)
