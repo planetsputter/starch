@@ -55,7 +55,7 @@ def process_line(line, remnant, outfile, *, inpre, flow, justify, width, tabstop
 	prefix = get_prefix(line)
 	if remnant: # Handle any remnant from the previous line
 		rem_prefix = get_prefix(remnant)
-		if inpre or not flow or rem_prefix != prefix or len(line) <= 1: # Can't flow these lines together
+		if inpre or not flow or next_prefix(rem_prefix) != prefix or len(line) <= 1: # Can't flow these lines together
 			outfile.write(remnant)
 		else: # Can flow these lines together
 			line = remnant[0:-1] + ' ' + line[len(prefix):]
@@ -83,8 +83,9 @@ def process_file(infile, outfile, *, flow, justify, width, tabstop):
 	remnant = ''
 	inpre = False # Whether we are in a preformatted block
 	line = infile.readline()
-	while line:
+	while True:
 		remnant = process_line(line, remnant, outfile, inpre=inpre, flow=flow, justify=justify, width=width, tabstop=tabstop)
+		if not line: break # EOF
 		# Keep track of whether we are in a preformatted block to avoid modifying there
 		i = 0
 		while i < len(line):
