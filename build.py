@@ -5,7 +5,7 @@
 import concurrent.futures, copy, datetime, glob, hashlib, multiprocessing, os, pathlib, re, shlex, subprocess, sys, threading
 
 # When generating makefile contents and output messages, try not to use more than this many columns per line
-wrap_cols = 120
+wrap_cols = 100
 
 # Returns the number of columns in the given line
 def count_cols(line, tabstop=8):
@@ -108,21 +108,23 @@ def only_contains(d, keys):
 		if d[key] != None and not key in keys: return False
 	return True
 
-# Runs the command described by the given arguments, intended to generate dependencies
-# for the given source. Throws an exception if the command returns non-zero. Otherwise
-# returns a string of the process's captured stdout (the dependencies).
-def gen_deps(source, args):
+# Runs the command to generate dependencies for the given arguments.
+# Throws an exception if the command returns non-zero.
+# Otherwise returns a tuple containing a string of the process's captured stdout
+# (the dependencies) followed by each argument to this function.
+def gen_deps(compiler, source, obj, cflags):
+	args = (compiler, '-c', source, '-M', '-MM', '-MF', '-', '-MQ', obj, *cflags)
 	result = subprocess.run(args, capture_output=True)
 	if result.returncode:
 		raise Exception(f'unable to generate dependency list for {msg_quote(source)}:\n' +
 			f'{sh_esc(args, wrap=wrap_cols)}\n' +
 			f'{result.stderr.decode('utf-8')}')
-	return result.stdout.decode('utf-8')
+	return result.stdout.decode('utf-8'), compiler, source, obj, cflags
 
 # Experimentation indicates that this script spends most of its time waiting for the compiler
 # to generate dependencies. We spawn multiple threads to reduce execution time. These threads
 # are believed to be IO-bound, not CPU-bound, so we make more than we have CPUs.
-executor = concurrent.futures.ThreadPoolExecutor(max_workers=multiprocessing.cpu_count() + 4)
+executor = concurrent.futures.ThreadPoolExecutor(max_workers=multiprocessing.cpu_count() * 2)
 
 # Process a build configuration file
 def process_cfg(filename, buildcfg):
@@ -134,6 +136,9 @@ def process_cfg(filename, buildcfg):
 
 	# List of objects for all targets
 	allobjs = []
+
+	# List of futures representing completed copmiler runs to generate dependencies
+	futures = []
 
 	# Processes the section with the given settings
 	def process_section(sec):
@@ -205,7 +210,6 @@ def process_cfg(filename, buildcfg):
 			if globs: sources += globs
 			else: sources += [s] # Globs were not used
 		objs = []
-		futures = []
 		for source in sources:
 			# Compute a hash that encodes the significant parameters for generating the object for this source
 			h = hashlib.sha256(repr((compiler, source, cflags)).encode('utf-8')).hexdigest()[0:16]
@@ -215,16 +219,7 @@ def process_cfg(filename, buildcfg):
 			if obj in allobjs: continue # This object is required by multiple targets, rule already generated
 			allobjs.append(obj)
 			# Have the compiler generate the dependency rules
-			args = (compiler, '-c', source, '-M', '-MM', '-MF', '-', '-MQ', obj, *cflags)
-			futures.append(executor.submit(gen_deps, source, args))
-		i = 0
-		while i < len(sources): # Wait for dependency generation to complete for all sources
-			deps = futures[i].result()
-			# Write the dependencies to the makefile
-			mf.write(deps)
-			# Write the build recipe to the makefile
-			mf.write(mk_esc_recipe((compiler, '-c', sources[i], '-o', objs[i], *cflags)))
-			i += 1
+			futures.append(executor.submit(gen_deps, compiler, source, obj, cflags))
 
 		# Listed libs are dependencies which also generate extra linker flags
 		if libs:
@@ -352,6 +347,16 @@ def process_cfg(filename, buildcfg):
 	# Update phony 'every' target
 	mf.write('\n')
 	mf_write_rule(mf, 'every', targets)
+
+	mf.write('\n# Rules for all objects\n')
+
+	while len(futures) > 0: # Wait for dependency generation to complete for all sources
+		deps, compiler, source, obj, cflags = futures[0].result()
+		# Write the dependencies to the makefile
+		mf.write(deps)
+		# Write the build recipe to the makefile
+		mf.write(mk_esc_recipe((compiler, '-c', source, '-o', obj, *cflags)))
+		futures.pop(0)
 
 if __name__ == '__main__':
 	try:
