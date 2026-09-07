@@ -2,7 +2,7 @@
 
 """Generic build script which invokes a compiler to accurately generate dependencies, then functions as a front-end for make."""
 
-import copy, datetime, glob, hashlib, multiprocessing, os, pathlib, re, shlex, subprocess, sys
+import concurrent.futures, copy, datetime, glob, hashlib, multiprocessing, os, pathlib, re, shlex, subprocess, sys, threading
 
 # Returns a shell line representing the given list of arguments, or single string argument
 def sh_esc(args):
@@ -16,7 +16,7 @@ def sh_unesc(line):
 # Returns a string containing the given string in quotes in a mainly-unambiguous way.
 # Used for messages to the user.
 def msg_quote(s):
-	return f'"{s.replace('"', '\\"')}"'
+	return f'"{s.replace('"', '\\"').replace('\n', '\\n')}"'
 
 # Returns the string representing a single argument for a makefile rule
 def mk_esc_rule(rule):
@@ -65,12 +65,157 @@ def only_contains(d, keys):
 		if d[key] != None and not key in keys: return False
 	return True
 
+# Runs the command described by the given arguments, intended to generate dependencies
+# for the given source. Throws an exception if the command returns non-zero. Otherwise
+# returns a string of the process's captured stdout (the dependencies).
+def gen_deps(source, args):
+	result = subprocess.run(args, capture_output=True)
+	if result.returncode:
+		raise Exception(f'unable to generate dependency list for {msg_quote(source)}:\n' +
+			f'{sh_esc(args)}\n' +
+			f'{result.stderr.decode('utf-8')}')
+	return result.stdout.decode('utf-8')
+
+# Experimentation indicates that this script spends most of its time waiting for the compiler
+# to generate dependencies. We spawn multiple threads to reduce execution time. These threads
+# are believed to be IO-bound, not CPU-bound, so we make more than we have CPUs.
+executor = concurrent.futures.ThreadPoolExecutor(max_workers=multiprocessing.cpu_count() + 4)
+
 # Process a build configuration file
 def process_cfg(filename, buildcfg):
+	# All configurations by name
+	configs = {}
+
+	# All non-phony targets in order of definition
+	targets = []
+
+	# List of objects for all targets
+	allobjs = []
+
+	# Processes the section with the given settings
+	def process_section(sec):
+		# Check context
+		config = sec['config']
+		if config != None: # This is a configuration section
+			if config in configs: raise Exception(f'redefinition of config {msg_quote(config)}')
+			configs[config] = copy.copy(sec)
+			return
+		# Convenience variable
+		target = sec['target']
+		# Check that current build configuration has been defined
+		if buildcfg not in configs:
+			raise Exception(f'config {msg_quote(buildcfg)} was not specified before target {msg_quote(target)}')
+		# Check target type
+		target_type = sec['type']
+		if not target_type: raise Exception(f'no target type specified for target {msg_quote(target)}')
+		if not target_type in ('bin', 'lib', 'so', 'phony'):
+			raise Exception(f'invalid target type {target_type} for target {msg_quote(target)}')
+		if target_type == 'phony':
+			# Phony targets may only contain certain keys
+			if not only_contains(sec, ('target', 'type', 'requires', 'required-by')):
+				raise Exception(f'only "requires" and "required-by" may be specified for phony target {msg_quote(target)}')
+		else: # Keep track of all non-phony targets
+			targets.append(target)
+		# Inherit values from the current build configuration
+		inherit(sec, configs[buildcfg])
+
+		# Emit comment at beginning of rules for this section
+		mf.write(f'\n# Rules for target {sh_esc(target)}\n')
+
+		# Document any explicit dependencies
+		requires = sec['requires']
+		required_by = sec['required-by']
+		if required_by != None:
+			for req in required_by:
+				mf_write_rule(mf, req, target)
+		if requires != None:
+			for req in requires:
+				mf_write_rule(mf, target, req)
+		if target_type == 'phony':
+			mf_write_rule(mf, '.PHONY', target)
+			return # Phony targets only have explicit dependencies
+
+		# Check other keys
+		inc = sec['inc']
+		libs = sec['libs']
+		cflags = sec['cflags']
+		lflags = sec['lflags']
+		compiler = sec['compiler']
+		src = sec['src']
+		if not compiler: raise Exception(f'no compiler specified for target {msg_quote(target)}')
+		if not src: raise Exception(f'no src specified for target {msg_quote(target)}')
+		if cflags == None: cflags = []
+		if lflags == None: lflags = []
+
+		# Add inc directories to cflags list
+		if inc:
+			incdirs = []
+			for d in inc:
+				globs = glob.glob(d, recursive=True) # Allow globs
+				if globs: incdirs += globs
+				else: incdirs += [d] # Globs were not used
+			cflags += [f'-I{d}' for d in incdirs] # Include directory in header search path
+
+		# Generate dependencies for all source files
+		sources = []
+		for s in src:
+			globs = glob.glob(s, recursive=True) # Allow globs
+			if globs: sources += globs
+			else: sources += [s] # Globs were not used
+		objs = []
+		futures = []
+		for source in sources:
+			# Compute a hash that encodes the significant parameters for generating the object for this source
+			h = hashlib.sha256(repr((compiler, source, cflags)).encode('utf-8')).hexdigest()[0:16]
+			# Compute the name for the object file, which includes the hash
+			obj = f'.build/obj/{basename(source, withext=False)}-{h}.o'
+			objs.append(obj)
+			if obj in allobjs: continue # This object is required by multiple targets, rule already generated
+			allobjs.append(obj)
+			# Have the compiler generate the dependency rules
+			args = (compiler, '-c', source, '-M', '-MM', '-MF', '-', '-MQ', obj, *cflags)
+			futures.append(executor.submit(gen_deps, source, args))
+		i = 0
+		while i < len(sources): # Wait for dependency generation to complete for all sources
+			deps = futures[i].result()
+			# Write the dependencies to the makefile
+			mf.write(deps)
+			# Write the build recipe to the makefile
+			mf.write(f'\t{mk_esc_recipe(compiler)} -c {mk_esc_recipe(sources[i])} ' +
+				f'-o {mk_esc_recipe(objs[i])} {mk_esc_recipe(cflags)}\n')
+			i += 1
+
+		# Listed libs are dependencies which also generate extra linker flags
+		if libs:
+			libraries = []
+			for l in libs:
+				globs = glob.glob(l, recursive=True) # Allow globs
+				if globs: libraries += globs
+				else: libraries += [l] # Globs were not used
+			# Generate extra linker flags
+			lflags += [f'-L{pathlib.Path(l).parents[0]}' for l in libraries]
+			lflags += [f'-l{get_lib_name(pathlib.Path(l).name)}' for l in libraries]
+			# Write extra dependency rule
+			mf_write_rule(mf, target, libraries)
+
+		# Write the target dependencies rule to the makefile.
+		# The dependencies themselves depend on the build configuration.
+		mf_write_rule(mf, target, objs + ['.build/lastcfg'])
+
+		# Write the recipe to create the target
+		if target_type == 'bin':
+			mf.write(f'\t{mk_esc_recipe(compiler)} -o {mk_esc_recipe(target)} ' +
+				f'{mk_esc_recipe(objs)} {mk_esc_recipe(lflags)}\n')
+		elif target_type == 'lib':
+			mf.write(f'\trm -f {mk_esc_recipe(target)}\n' +
+				f'\tar -crs {mk_esc_recipe(target)} {mk_esc_recipe(objs)}\n')
+		elif target_type == 'so':
+			raise Exception('unimplemented')
+
 	# Open the build configuration file
 	file = open(filename)
 
-	# Make the build directory and object directory
+	# Make the build directory, object directory, and rule directory
 	pathlib.Path('.build/obj').mkdir(exist_ok=True, parents=True)
 
 	# Open the makefile
@@ -106,141 +251,13 @@ def process_cfg(filename, buildcfg):
 		'cflags': None,
 		'lflags': None
 	}
-	# All configurations by name
-	configs = {}
-
-	# The list of targets
-	targets = []
-
-	# List of objects for all targets
-	allobjs = []
-
-	def process_section():
-		# Check context
-		config = ctx['config']
-		if config != None: # This is a configuration section
-			if config in configs: raise Exception(f'redefinition of config {msg_quote(config)}')
-			configs[config] = copy.copy(ctx)
-			return
-		# Convenience variable
-		target = ctx['target']
-		# Check that current build configuration has been defined
-		if buildcfg not in configs:
-			raise Exception(f'config {msg_quote(buildcfg)} was not specified before target {msg_quote(target)}')
-		# Check target type
-		target_type = ctx['type']
-		if not target_type: raise Exception(f'no target type specified for target {msg_quote(target)}')
-		if not target_type in ('bin', 'lib', 'so', 'phony'):
-			raise Exception(f'invalid target type {target_type} for target {msg_quote(target)}')
-		if target_type == 'phony':
-			# Phony targets don't inherit from the current build configuration
-			if not only_contains(ctx, ('target', 'type', 'requires', 'required-by')):
-				raise Exception(f"only 'requires' and 'required-by' may be specified for phony target {msg_quote(target)}")
-		# Inherit values from the current build configuration
-		inherit(ctx, configs[buildcfg])
-		# Check explicit dependencies
-		requires = ctx['requires']
-		required_by = ctx['required-by']
-
-		# Emit comment at beginning of rules for this section
-		mf.write(f'\n# Rules for target {sh_esc(target)}\n')
-
-		# Document any explicit dependencies
-		if required_by != None:
-			for req in required_by:
-				mf_write_rule(mf, req, target)
-		if requires != None:
-			for req in requires:
-				mf_write_rule(mf, target, req)
-		if target_type == 'phony':
-			mf_write_rule(mf, '.PHONY', target)
-			return # Phony targets only have explicit dependencies
-
-		# Check other keys
-		inc = ctx['inc']
-		libs = ctx['libs']
-		cflags = ctx['cflags']
-		lflags = ctx['lflags']
-		compiler = ctx['compiler']
-		src = ctx['src']
-		if not compiler: raise Exception(f'no compiler specified for target {msg_quote(target)}')
-		if not src: raise Exception(f'no src specified for target {msg_quote(target)}')
-		if cflags == None: cflags = []
-		if lflags == None: lflags = []
-
-		# Add inc directories to cflags list
-		if inc:
-			incdirs = []
-			for d in inc:
-				globs = glob.glob(d, recursive=True) # Allow globs
-				if globs: incdirs += globs
-				else: incdirs += [d] # Globs were not used
-			cflags += [f'-I{d}' for d in incdirs] # Include directory in header search path
-
-		# Generate dependencies for all source files
-		sources = []
-		for s in src:
-			globs = glob.glob(s, recursive=True) # Allow globs
-			if globs: sources += globs
-			else: sources += [s] # Globs were not used
-		objs = []
-		for source in sources:
-			# Compute a hash that encodes the significant parameters for generating the object for this source
-			h = hashlib.sha256(repr((compiler, source, cflags)).encode('utf-8')).hexdigest()[0:16]
-			# Compute the name for the object file, which includes the hash
-			obj = f'.build/obj/{basename(source, withext=False)}-{h}.o'
-			objs.append(obj)
-			if obj in allobjs: continue # This object is required by multiple targets, rule already generated
-			allobjs.append(obj)
-			# Have the compiler generate the dependency rules
-			args = (compiler, '-c', source, '-M', '-MM', '-MF', '-', '-MQ', obj, *cflags)
-			result = subprocess.run(args, capture_output=True)
-			if result.returncode:
-				raise Exception(f'unable to generate dependency list for {msg_quote(source)}:\n' +
-					f'{sh_esc(args)}\n' +
-					f'{result.stderr.decode('utf-8')}')
-			# Write the dependencies to the makefile
-			mf.write(result.stdout.decode('utf-8'))
-			# Write the build recipe to the makefile
-			mf.write(f'\t{mk_esc_recipe(compiler)} -c {mk_esc_recipe(source)} ' +
-				f'-o {mk_esc_recipe(obj)} {mk_esc_recipe(cflags)}\n')
-
-		# Listed libs are dependencies which also generate extra linker flags
-		if libs:
-			libraries = []
-			for l in libs:
-				globs = glob.glob(l, recursive=True) # Allow globs
-				if globs: libraries += globs
-				else: libraries += [l] # Globs were not used
-			# Generate extra linker flags
-			lflags += [f'-L{pathlib.Path(l).parents[0]}' for l in libraries]
-			lflags += [f'-l{get_lib_name(pathlib.Path(l).name)}' for l in libraries]
-			# Write extra dependency rule
-			mf_write_rule(mf, target, libraries)
-
-		# Write the target dependencies rule to the makefile.
-		# The dependencies themselves depend on the build configuration.
-		mf_write_rule(mf, target, objs + ['.build/lastcfg'])
-
-		# Write the recipe to create the target
-		if target_type == 'bin':
-			mf.write(f'\t{mk_esc_recipe(compiler)} -o {mk_esc_recipe(target)} ' +
-				f'{mk_esc_recipe(objs)} {mk_esc_recipe(lflags)}\n')
-		elif target_type == 'lib':
-			mf.write(f'\trm -f {mk_esc_recipe(target)}\n' +
-				f'\tar -crs {mk_esc_recipe(target)} {mk_esc_recipe(objs)}\n')
-		elif target_type == 'so':
-			raise Exception('unimplemented')
-
-		targets.append(target)
-
 	# Parse each line of the file
 	comment_regex = r'^\s*#'
 	empty_regex = r'^\s*$'
 	lineno = 0
 	for line in file:
 		try: # Attempt to parse the line
-			lineno = lineno + 1
+			lineno += 1
 			# Strip trailing newline, if any
 			if len(line) > 0 and line[-1] == '\n': line = line[:-1]
 
@@ -268,7 +285,7 @@ def process_cfg(filename, buildcfg):
 				# 'target' or 'config' keys initiate a new section.
 				# We must process the old section, if any.
 				if ctx['target'] or ctx['config']:
-					process_section()
+					process_section(ctx)
 					for e in ctx: ctx[e] = None # Clear context
 			elif not key in ctx:
 				raise Exception(f'invalid key {msg_quote(key)}')
@@ -290,7 +307,7 @@ def process_cfg(filename, buildcfg):
 		except Exception as e: # Add detail to exception and re-throw
 			raise Exception(f'line {lineno}: {e}')
 
-	if ctx['target'] or ctx['config']: process_section() # Process final section
+	if ctx['target'] or ctx['config']: process_section(ctx) # Process final section
 
 	# Update phony 'every' target
 	mf.write('\n')
@@ -314,15 +331,11 @@ if __name__ == '__main__':
 
 		# Scan for a command line argument that assigns the BUILDCFG variable
 		# such as "BUILDCFG=debug". Make parses these and they will override
-		# an environment variable. Also scan for any targets.
-		targets = []
+		# an environment variable.
 		for arg in args:
 			equpos = arg.find('=')
-			if equpos >= 0: # An assignment
-				if arg[:equpos] == 'BUILDCFG':
-					buildcfg = arg[equpos + 1:]
-			else: # A target
-				targets += [arg]
+			if equpos >= 0 and arg[:equpos] == 'BUILDCFG': # An assignment to BUILDCFG
+				buildcfg = arg[equpos + 1:]
 
 		# A build configuration must be specified
 		if not buildcfg:
@@ -357,5 +370,5 @@ if __name__ == '__main__':
 		result.check_returncode();
 
 	except Exception as e:
-		print(f'{sys.argv[0]}: error: {e}', file=sys.stderr)
+		print(f'{basename(sys.argv[0])}: error: {e}', file=sys.stderr)
 		exit(1)
