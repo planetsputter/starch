@@ -415,5 +415,8 @@ if __name__ == '__main__':
 		result.check_returncode();
 
 	except Exception as e:
-		print(f'{basename(sys.argv[0])}: error: {e}', file=sys.stderr)
+		# Format "error" in red if printing to a terminal
+		ANSI_RED = "\033[31m" if sys.stderr.isatty() else ""
+		ANSI_RESET = "\033[0m" if sys.stderr.isatty() else ""
+		print(f'{basename(sys.argv[0])}: {ANSI_RED}error{ANSI_RESET}: {e}', file=sys.stderr)
 		exit(1)
