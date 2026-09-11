@@ -49,6 +49,82 @@ def count_cols(line, tabstop):
 		i = i + 1
 	return c
 
+# Returns the line justified to the given number of columns
+def justify_line(line, *, width, tabstop):
+	# Split the line after prefix into words on spaces, attempting to preserve quoted strings
+	prefix = get_prefix(line)
+	aftpfx = line[len(prefix):] # Line after prefix
+	words = []
+
+	# Find whether the first quotation mark is preceded by something other than a space'
+	# If so, we assume the first part of the line is part of a quoted string.
+	qi = aftpfx.find('\'')
+	if qi < 0: qi = aftpfx.find('"')
+	if qi < 0: qi = aftpfx.find('`')
+	if qi > 0 and aftpfx[qi - 1] != ' ': # All prior is part of a quoted string
+		qi += 1
+		word = aftpfx[0:qi]
+	else:
+		word = ''
+		qi = 0
+
+	quoted = ''
+	while qi < len(aftpfx):
+		c = aftpfx[qi]
+		if quoted:
+			word += c
+			if c == quoted: quoted = ''
+		elif c == '\'' or c == '"' or c == '`':
+			word += c
+			quoted = c
+		elif c == ' ':
+			if word:
+				words += [word]
+				word = ''
+		else:
+			word += c
+		qi += 1
+	if word: words += [word] # Append last word
+
+	if len(words) == 0: # All whitespace after prefix
+		line = prefix
+	elif len(words) == 1: # Only one word after prefix
+		line = prefix + words[0]
+	else: # Multiple words after prefix
+		# Prepend prefix to first word
+		words[0] = prefix + words[0]
+
+		# If spaces must be inserted, insert them after periods first, as these
+		# probably indicate the end of a sentence.
+		i = 0
+		line = ' '.join(words)
+		while i < len(words) - 1 and count_cols(line, tabstop) < width:
+			if words[i][-1] == '.':
+				words[i] += ' '
+				line = ' '.join(words)
+			i += 1
+
+		# Construct list specifying in which positions to insert spaces into the line
+		spl = []
+		l = [(0, len(words) - 1)]
+		while len(l) > 0:
+			low = l[0][0]
+			high = l[0][1]
+			mid = (low + high) // 2
+			spl += [mid]
+			if low < mid: l += [(low, mid)]
+			if mid + 1 < high: l += [(mid + 1, high)]
+			l.pop(0)
+
+		i = 0
+		while True: # Keep inserting spaces until width is met
+			line = ' '.join(words)
+			if count_cols(line, tabstop) >= width: break
+			words[spl[i]] += ' '
+			i += 1
+			if i >= len(spl): i = 0
+	return line
+
 # Processes a single line of input from a file and an optional remnant from the previous line
 # using the given parameters. Returns a remnant, if any.
 def process_line(line, remnant, outfile, *, inpre, flow, justify, width, tabstop):
@@ -72,6 +148,10 @@ def process_line(line, remnant, outfile, *, inpre, flow, justify, width, tabstop
 				if c <= count_cols(prefix, tabstop): break # Space in prefix
 				si = tsi
 			if si >= len(line): break # Whole line fits, use as remnant
+			if justify:
+				justified = justify_line(line[0:si], width=width, tabstop=tabstop)
+				line = justified + line[si:]
+				si = len(justified)
 			outfile.write(line[0:si] + '\n')
 			prefix = next_prefix(prefix)
 			line = prefix + line[si + 1:]
@@ -106,14 +186,12 @@ if __name__ == '__main__':
 		parser.add_argument('-o','--output', dest='outfile', metavar='outfile', type=argparse.FileType('w'), help='Output file. If unspecified, output is written to STDOUT.')
 		parser.add_argument('-O','--overwrite', dest='overwrite', metavar='overwrite', action='store_const', const=True, help='If specified, input files are overwritten in place. Cannot be specified in tandem with -o (--output).')
 		parser.add_argument('-f','--flow', dest='flow', metavar='flow', action='store_const', const=True, help='If specified, consecutive lines with the same prefix are presumed to be part of the same block of text. Newlines are not preserved.')
-		parser.add_argument('-j','--justify', dest='justify', metavar='justify', action='store_const', const=True, help='If specified, output is right- and left-justified. Implies \'-f\'. Neither tabs nor newlines are preserved.')
+		parser.add_argument('-j','--justify', dest='justify', metavar='justify', action='store_const', const=True, help='If specified, output is right- and left-justified. Implies \'-f\'.')
 
 		# Parse arguments
 		args = parser.parse_args()
 
 		# Check for argument conflicts
-		if args.justify:
-			raise Exception('Unimplemented')
 		if args.justify and args.flow:
 			sys.stderr.write('Warning: Justification (\'-j\' or \'--justify\') implies flow (\'-f\' or \'--flow\'). Both are specified.\n')
 		if args.outfile and args.overwrite:
