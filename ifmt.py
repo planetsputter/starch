@@ -15,17 +15,22 @@ def get_prefix(line):
 		else: break
 	return line[0:i]
 
-# Returns whether the prefix can wrap
-def prefix_can_wrap(prefix):
+# Returns whether the line can wrap. Line must be non-empty.
+def line_can_wrap(line):
 	# Find first character not space or tab
 	i = 0
-	while i < len(prefix):
-		if prefix[i] == ' ' or prefix[i] == '\t': i = i + 1
+	while i < len(line) - 1:
+		if line[i] in (' ', '\t'): i += 1
 		else: break
-	if prefix[i:i+1] == '`': return False # Used to open and close code blocks in markdown
-	if prefix[i:i+1] == '#': return False # Used to denote headers in markdown
-	if prefix[i:i+1] == '=': return False # Used to denote headers in markdown
-	if prefix[i:i+1] == '|': return False # Used to define tables in markdown
+	# Find last character not space, tab, or newline
+	j = len(line) - 1
+	while j > 0:
+		if line[j] in (' ', '\t', '\n'): j -= 1
+		else: break
+	if line[i:i+3] == '```': return False # Used to open and close code blocks in markdown
+	if line[i] == '#': return False # Used to denote headers in markdown
+	if line[i] == '=': return False # Used to denote headers in markdown
+	if line[i] == '|' and line[j] == '|': return False # Used to define tables in markdown
 	return True
 
 # Returns the expected prefix of the next line after a line with the given prefix
@@ -137,7 +142,7 @@ def process_line(line, remnant, outfile, *, inpre, flow, justify, width, tabstop
 			line = remnant[0:-1] + ' ' + line[len(prefix):]
 			prefix = rem_prefix
 	# Split the line on a space if allowed and necessary to maintain width
-	if not inpre and prefix_can_wrap(prefix) and len(line) > 1:
+	if not inpre and len(line) > 1 and line_can_wrap(line):
 		while True: # Keep writing until all wrapped lines are written
 			si = len(line)
 			c = count_cols(line, tabstop)
