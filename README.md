@@ -3,36 +3,55 @@ Starch
 
 Starch is a theoretical stack-based computer architecture.
 
-See [starch/doc/starch-desc.md](starch/doc/starch-desc.md) for a description of the instruction set.
-[starch/inc/starch.h](starch/inc/starch.h) is a C header file which defines all Starch instruction opcodes.
+See [starch/doc/starch-desc.md](starch/doc/starch-desc.md) for  a description of
+the instruction  set.  [starch/inc/starch.h](starch/inc/starch.h)  is a C header
+file which defines all Starch instruction opcodes.
 
 Projects
 --------
 
- * [build.py](build.py) is a general-purpose build script used by Starch. It invokes the compiler to generate dependencies for Starch build targets and then serves as a front-end for make. [build.py.md](build.py.md) documents the build script and its configuration file, [build.cfg](build.cfg).
- * [cloc.py](cloc.py) is a script to count lines of code in Starch. It can count blank, comment, code, and documentation lines in C, Python, Starch assembly, and Markdown files.
- * [distasm](distasm) is a Starch disassembler. It takes a stub binary file and produces Starch assembly describing it.
- * [ifmt.py](ifmt.py) is a script to format markdown and other text files, wrapping and flowing consecutive lines to maintain a set maximum width.
+ * [build.py](build.py) is a  general-purpose build  script used by  Starch.  It
+   invokes the compiler  to generate dependencies  for Starch build  targets and
+   then serves as a front-end for make. [build.py.md](build.py.md) documents the
+   build script and its configuration file, [build.cfg](build.cfg).
+ * [cloc.py](cloc.py) is a script to count lines of code in Starch. It can count
+   blank, comment, code, and documentation lines  in C, Python, Starch assembly,
+   and Markdown files.
+ * [distasm](distasm) is a Starch disassembler.  It takes a stub binary file and
+   produces Starch assembly describing it.
+ * [ifmt.py](ifmt.py) is  a  script to  format  markdown and  other  text files,
+   wrapping and flowing consecutive lines to maintain a set maximum width.
  * [starch](starch) contains code associated with the Starch instruction set.
- * [stasm](stasm) is a Starch assembler. It takes a Starch assembly file and produces a stub binary containing Starch code suitable for emulation. See [stasm/doc/stasm-desc.md](stasm/doc/stasm-desc.md) for more details.
- * [stem](stem) is a Starch emulator. It executes Starch code in a emulated environment on the host machine.
+ * [stasm](stasm) is a  Starch assembler.  It  takes a Starch  assembly file and
+   produces a stub  binary containing Starch  code suitable for  emulation.  See
+   [stasm/doc/stasm-desc.md](stasm/doc/stasm-desc.md) for more details.
+ * [stem](stem) is  a  Starch emulator.  It  executes Starch code  in a emulated
+   environment on the host machine.
  * [stub](stub) is a custom binary file format used by Starch projects.
  * [util](util) is a collection of utilities used by Starch projects.
- * [.vim](.vim) is a collection of syntax highlighting files for viewing Starch assembly in Vim. The syntax highlighting files can be installed for a user by copying them to the user's home directory, as in `cp -r .vim ~`.
+ * [.vim](.vim) is a collection of syntax  highlighting files for viewing Starch
+   assembly in Vim. The syntax highlighting files can be installed for a user by
+   copying them to the user's home directory, as in `cp -r .vim ~`.
 
 How to Build
 ------------
 
-Set the environment variable "BUILDCFG" to "release" or "debug" then run `./build.py` to perform a parallel build. BUILDCFG can also be passed as a command line argument as in `./build.py BUILDCFG=debug`.
+Set  the  environment  variable "BUILDCFG"  to  "release" or  "debug"  then  run
+`./build.py` to  perform a  parallel build.   BUILDCFG  can also be  passed as a
+command line argument as in `./build.py BUILDCFG=debug`.
 
-A build target may be specified on the command line. Typical build targets would be "all" (builds Starch binaries, the default), "clean" (removes intermediate files), or "test" (builds test binaries).
+A build target may be specified on the command line. Typical build targets would
+be "all" (builds  Starch binaries,  the default), "clean"  (removes intermediate
+files), or "test" (builds test binaries).
 
 How to Test
 -----------
 
-First make the binaries required for test with `./build.py test`. Then run `./test.sh`.
+First make  the  binaries required  for  test with `./build.py test`.   Then run
+`./test.sh`.
 
 Name
 ----
 
-Starch probably stands for "Stack Architecture" but might also stand for "Smart Things and Really Cool Hacks".
+Starch probably stands for "Stack Architecture" but  might also stand for "Smart
+Things and Really Cool Hacks".

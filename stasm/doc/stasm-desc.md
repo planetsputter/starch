@@ -4,7 +4,9 @@ Stasm (Starch Assembler)
 Introduction
 ------------
 
-Stasm is an assembler for the Starch instruction set. It parses a text file in Starch assembly format and produces a binary in stub format. The binary can be emulated by the Starch emulator, stem.
+Stasm is an assembler for the Starch instruction  set.  It parses a text file in
+Starch assembly format and produces a binary  in stub format.  The binary can be
+emulated by the Starch emulator, stem.
 
 Usage
 -----
@@ -14,11 +16,16 @@ For usage information, run `stasm --help`.
 Assembly Format
 ---------------
 
-Each line of the text input file is processed by the assembler as a comment, a statement, a label definition, or an assembler command.
+Each line of the  text input file is  processed by the assembler as a comment, a
+statement, a label definition, or an assembler command.
 
 ### Comments
 
-Single-line comments in Starch assembly begin with two slashes (//) and continue until the end of the line. A comment may finish a line started by any other kind of statement, for instance a label or assembler command. Multi-line comments begin with a slash and an asterisk (/*) and end with an asterisk and a slash (*/), just as in C.
+Single-line comments in Starch assembly begin with two slashes (//) and continue
+until the end of the line. A comment may finish a line started by any other kind
+of statement, for  instance a label  or assembler command.   Multi-line comments
+begin with  a slash  and an asterisk (/*)  and end with an  asterisk and a slash
+(*/), just as in C.
 
 Example:
 ```
@@ -30,7 +37,11 @@ multi-line comment. */
 
 ### Statements
 
-Statements consist of an opcode or pseudo-op followed by an optional argument. Whether or not the argument is present depends on the opcode. The argument may be an integer or string literal or a label usage, again depending on the opcode. The label usage must start with a colon (':'). Typical C-style syntax for integer, character, and string literals is supported.
+Statements consist of  an opcode or  pseudo-op followed by an optional argument.
+Whether or not the argument is present  depends on the opcode.  The argument may
+be an integer or string literal or a label usage, again depending on the opcode.
+The label usage must start with a colon (':'). Typical C-style syntax for
+integer, character, and string literals is supported.
 
 Example:
 ```
@@ -40,13 +51,17 @@ add64
 push64as64 "string literal"
 call :some_function
 ```
-For a full list of Starch opcodes, see [../../starch/doc/starch-desc.md](../../starch/doc/starch-desc.md).
+For       a       full       list       of       Starch       opcodes,       see
+[../../starch/doc/starch-desc.md](../../starch/doc/starch-desc.md).
 
 #### Pseudo-ops
 
-Psuedo-ops may take the place of an opcode in a Starch assembly statement and are designed to make writing assembly easier. Psuedo-ops may evaluate to a different opcode depending on the value of their argument.
+Psuedo-ops may take the  place of an  opcode in a Starch  assembly statement and
+are designed  to  make writing  assembly  easier.  Psuedo-ops may  evaluate to a
+different opcode depending on the value of their argument.
 
-For instance, the following code utilizes the `push64` pseudo-op and evaluates to the same instructions as the example above:
+For instance, the  following code utilizes  the `push64` pseudo-op and evaluates
+to the same instructions as the example above:
 ```
 push64 0
 push64 0x100
@@ -55,7 +70,8 @@ push64 "string literal"
 call :some_function
 ```
 
-In each case the pseudo-op resolves to the opcode which requires the smallest immediate value while preserving signedness.
+In each case the  pseudo-op resolves to  the opcode which  requires the smallest
+immediate value while preserving signedness.
 
 Starch assembly pseudo-ops:
 | Psuedo-op | Description |
@@ -72,7 +88,11 @@ Starch assembly pseudo-ops:
 
 ### Bracket notation
 
-The push pseudo-ops can take an operand in brackets. In this form the pseudo-op actually generates two instructions, one to push the offset within brackets and another to load data from that offset. If the offset within brackets begins with the keyword "SFP", it is relative to the stack frame pointer. Otherwise it is an absolute address.
+The push pseudo-ops can take an operand in brackets.  In this form the pseudo-op
+actually generates two instructions, one to  push the offset within brackets and
+another to load data from that offset. If the offset within brackets begins with
+the keyword "SFP", it is relative to the stack frame pointer. Otherwise it is an
+absolute address.
 
 Examples:
 ```
@@ -92,9 +112,12 @@ push64 0
 loadpopsfp32
 ```
 
-This allows the developer to more consisely write the common operation of bringing a local variable or function parameter to the top of the stack.
+This allows  the  developer to  more  consisely write  the  common operation  of
+bringing a local variable or function parameter to the top of the stack.
 
-The store8, store16, store32, and store64 pseudo-ops can also take bracket notation, allowing the developer to concisely notate storing the local variable at the top of the stack to the address in brackets.
+The store8,  store16,  store32, and  store64  pseudo-ops can  also  take bracket
+notation, allowing the developer to concisely  notate storing the local variable
+at the top of the stack to the address in brackets.
 
 Examples:
 ```
@@ -114,13 +137,22 @@ push64 0
 storerpopsfp32
 ```
 
-The pop8, pop16, pop32, and pop64 pseudo-ops evaluate to the same instructions as the store pseudo-ops, except that they are followed by a pop instruction that removes the stored data from the stack.
+The pop8, pop16,  pop32, and pop64  pseudo-ops evaluate to the same instructions
+as the store pseudo-ops, except that they are followed by a pop instruction that
+removes the stored data from the stack.
 
 ### Label Definitions
 
-A label definition begins with a colon (':') and appears at the beginning of a line. This distinguishes it from a label _usage_, which appears as an argument in a statement. A statement may occur on the same line after a label definition. A label definition causes the compiler to associate the current address with the given label. It then substitutes the current address value for all previous and future usages of that label.
+A label definition begins with a colon (':') and appears at the beginning of a
+line.  This distinguishes it from a label  _usage_, which appears as an argument
+in a statement. A statement may occur on the same line after a label definition.
+A label definition causes the compiler to associate the current address with the
+given label.  It then substitutes the current address value for all previous and
+future usages of that label.
 
-Labels are commonly used to assign names to function and data addresses. In the following example, `:some_data` and `:some_function` are label definitions while `:some_other_function` is a label usage:
+Labels are commonly used to assign names to function and data addresses.  In the
+following example, `:some_data` and `:some_function` are label definitions while
+`:some_other_function` is a label usage:
 ```
 :some_data data64 0
 
@@ -129,11 +161,13 @@ call :some_other_function
 ret
 ```
 
-All labels which are used in the program must be defined by the end of a Starch assembler input, or the program is ill-formed.
+All labels which are used in the program must  be defined by the end of a Starch
+assembler input, or the program is ill-formed.
 
 ### Assembler Commands
 
-The Starch assembler supports several assembler commands which aid the developer in various ways.
+The Starch assembler supports several assembler commands which aid the developer
+in various ways.
 
 | Assembler Command | Description |
 |:----------------- |:----------- |
@@ -148,7 +182,11 @@ The Starch assembler supports several assembler commands which aid the developer
 
 ## Symbols
 
-As noted above, the `define` assembler command can be used to define a symbolic constant. These constants are arbitrary text words which will be substituted into the input when used later preceded by a dollar sign ('$'). Symbolic constants can be used to define constant integer values as well as opcodes, labels, and string literals.
+As noted above, the `define` assembler command  can be used to define a symbolic
+constant.  These constants  are arbitrary text  words which will  be substituted
+into the input when used later preceded by a dollar sign ('$'). Symbolic
+constants can  be used  to define  constant  integer values as  well as opcodes,
+labels, and string literals.
 
 The following example defines and uses a symbolic constant:
 ```
@@ -158,7 +196,13 @@ push64 $MAX_REPS
 
 ### Auto-Symbols
 
-The Starch assembler recognizes some automatic symbols which have a default value when used if not defined by the user. Each Starch interrupt name can be used as an automatic symbol which evaluates to the interrupt number (for instance `$STINT_DIV_BY_ZERO`). Each Starch opcode name can be used as an automatic symbol which evaluates to the numeric value of the opcode when capitalized and preceded by "OP_" (for instance `$OP_HALT`). Important IO addresses also have automatic symbols (for instance `$IO_STDOUT_ADDR`).
+The Starch  assembler  recognizes some  automatic  symbols which have  a default
+value when used if  not defined by the  user.  Each Starch interrupt name can be
+used  as  an  automatic symbol  which  evaluates to  the  interrupt number  (for
+instance `$STINT_DIV_BY_ZERO`).   Each  Starch opcode  name  can be  used  as an
+automatic  symbol  which  evaluates to  the  numeric value  of  the opcode  when
+capitalized and  preceded  by  "OP_"  (for instance  `$OP_HALT`).   Important IO
+addresses also have automatic symbols (for instance `$IO_STDOUT_ADDR`).
 
 The following example uses some automatic symbols:
 ```
@@ -170,4 +214,6 @@ push64 $IO_STDOUT_ADDR      // Pushes the stdout IO address as a 64-bit integer
 Example Files
 -------------
 
-For examples of Starch assembler input files, review the files with extention ".sta" in the test directory of the repository. See also the files in the examples directory.
+For examples of  Starch assembler input  files, review the  files with extention
+".sta" in  the test  directory of  the  repository.  See  also the  files in the
+examples directory.

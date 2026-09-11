@@ -4,7 +4,13 @@ Starch
 Introduction
 ------------
 
-Starch is a theoretical stack-oriented computer architecture. Most instructions consist of a single 8-bit byte and operate on memory on a stack. Memory outside the stack can be accessed in a load & store fashion. Addressing is byte-oriented as is common in modern architectures (that is to say, a byte is the smallest addressable quantity). Addresses are 64 bits wide. Two's complement notation is used to represent integers. The bytes in multi-byte integers are arranged in little-endian order (the byte at the lowest address is the least significant).
+Starch is a theoretical stack-oriented computer architecture.  Most instructions
+consist of a single 8-bit byte and operate on memory on a stack.  Memory outside
+the stack can be accessed in a load & store fashion. Addressing is byte-oriented
+as is  common in  modern architectures (that is  to say, a byte  is the smallest
+addressable quantity). Addresses are 64 bits wide. Two's complement  notation is
+used to represent  integers.  The bytes  in multi-byte integers  are arranged in
+little-endian order (the byte at the lowest address is the least significant).
 
 Processor State
 ---------------
@@ -21,11 +27,25 @@ The processor state is small, consisting of the following registers:
 
 ### Stack Diagram
 
-The stack grows upward with the "top" of the stack being at the highest address and the "bottom" of the stack being at the lowest address. The stack top address is stored in the stack pointer register (SP). This points to the address just above the highest data on the stack. The stack bottom address is stored in the stack bottom pointer register (SBP). The uppermost limit of stack data is stored in the stack limit pointer register (SLP).
+The stack grows upward with the "top" of  the stack being at the highest address
+and the "bottom" of the stack being at the lowest address. The stack top address
+is stored in the  stack pointer register  (SP).  This points to the address just
+above the highest data on the stack.  The  stack bottom address is stored in the
+stack bottom pointer register (SBP). The uppermost limit of stack data is stored
+in the stack limit pointer register (SLP).
 
-Though the stack is a contiguous region of memory it is logically segmented into stack frames, each of which contains values used in the execution of a single function invocation. When one function calls another a new stack frame is created for the called function. When the called function returns the stack frame is popped. The stack frame pointer register (SFP) keeps track of the address of the current stack frame. The return address (RETA) and the previous stack frame pointer (PSFP) are stored just below the SFP address.
+Though the stack is a contiguous region of memory it is logically segmented into
+stack frames, each of  which contains values  used in the execution  of a single
+function invocation.   When  one function  calls  another a  new  stack frame is
+created for  the  called function.  When  the called function  returns the stack
+frame is  popped.  The  stack frame  pointer  register (SFP) keeps  track of the
+address of the current stack frame.  The  return address (RETA) and the previous
+stack frame pointer (PSFP) are stored just below the SFP address.
 
-To call a function that takes arguments, arguments are pushed onto the stack beginning with the last (ARGn) and ending with the first (ARG1). Space is also pushed to the stack for a return value. This arrangement allows variadic functions to be called easily.
+To call  a function  that takes arguments,  arguments are pushed  onto the stack
+beginning with the last (ARGn) and ending  with the first (ARG1).  Space is also
+pushed to  the  stack for  a  return value.   This  arrangement allows  variadic
+functions to be called easily.
 
 | Address | Data                        |
 |:------- |:--------------------------- |
@@ -39,12 +59,18 @@ To call a function that takes arguments, arguments are pushed onto the stack beg
 |         | ARGn                        |
 |         | Calling function local data |
 
-Note that while function arguments are pushed to the stack from last to first, the last argument pushed being thought of as the "leftmost", individual instructions which perform a non-commutative operation such as subtraction typically consider the last argument pushed to be the "rightmost". This is to be more similar to postfix notation. These instructions also typically have an order-reversed variant.
+Note that while function  arguments are pushed  to the stack from last to first,
+the  last  argument  pushed  being  thought  of as  the  "leftmost",  individual
+instructions which  perform  a  non-commutative  operation  such  as subtraction
+typically consider the last argument pushed to be the "rightmost". This is to be
+more similar  to  postfix notation.  These  instructions also typically  have an
+order-reversed variant.
 
 Memory Map
 ----------
 
-Addresses from 0 through 0x2fff are reserved for special purposes. Program execution begins at address 0x3000.
+Addresses from  0  through 0x2fff  are  reserved for special  purposes.  Program
+execution begins at address 0x3000.
 
 Special purpose memory:
 
@@ -55,7 +81,9 @@ Special purpose memory:
 
 ### IO Memory
 
-Addresses from 0 through 0xfff within IO memory are reserved. Attempts to access memory in this region will result in STINT_BAD_IO_ACCESS. This helps detect null pointer dereferences with small offsets, a common programming error.
+Addresses from 0 through 0xfff within IO memory are reserved. Attempts to access
+memory in this region will result in STINT_BAD_IO_ACCESS. This helps detect null
+pointer dereferences with small offsets, a common programming error.
 
 Other IO memory is mapped as follows:
 
@@ -71,12 +99,19 @@ Access to any unmapped IO memory address will generate STINT_BAD_IO_ACCESS.
 
 ### Interrupt Handlers
 
-There are 256 interrupt handlers of 16 bytes each beginning at address 0x2000. When an interrupt occurs, the core vectors to 0x2000 plus the interrupt number multiplied by 16. Currently no other action is taken to preserve processor registers, but this may change in the future. By default, each interrupt handler simply halts with the index of the interrupt as the halt code. For custom interrupt handlers, 16 bytes is enough space to encode a jump to a separate location where more involved handling of the interrupt may take place.
+There are 256 interrupt  handlers of 16  bytes each beginning at address 0x2000.
+When an interrupt occurs,  the core vectors  to 0x2000 plus the interrupt number
+multiplied by  16.   Currently no  other  action is taken  to preserve processor
+registers, but this may change in the future. By default, each interrupt handler
+simply halts  with the  index of  the  interrupt as  the halt  code.  For custom
+interrupt handlers,  16 bytes  is enough  space  to encode a jump  to a separate
+location where more involved handling of the interrupt may take place.
 
 Interrupts
 ----------
 
-The Starch core will enter an interrupt handler if certain exceptional conditions occur. These are enumerated below:
+The  Starch  core  will  enter  an  interrupt  handler  if  certain  exceptional
+conditions occur. These are enumerated below:
 
 | Interrupt Name | Description |
 |:-------------- |:----------- |
@@ -92,19 +127,35 @@ The Starch core will enter an interrupt handler if certain exceptional condition
 Instruction Set
 ---------------
 
-Here we document all the instructions defined by Starch. Each instruction is a single byte. Most instructions have variants that operate on 64-, 32-, 16-, and 8-bit operands.
+Here we document all the instructions defined  by Starch.  Each instruction is a
+single byte.  Most instructions have variants that operate on 64-, 32-, 16-, and
+8-bit operands.
 
 The following conventions are used in this section:
- * When a word ends in a number, the number represents the number of bits. When the number is preceded by a "u" it represents an unsigned integer value. When it is preceded by an "i" it represents a signed integer value. If the preceding letter is neither "u" nor "i", the signedness is not important to the operation of the instruction.
- * The word "as" is used to indicate promotion of the previous value to the size of the following value. The signedness of the following value is used. When promoting to a signed value, sign extension is performed.
- * When a value is surrounded by square brackets, it represents the value at the address specified within the brackets. For instance, [PC]8 would be the 8-bit value at the PC address, which is the current instruction.
- * When it is desired to represent separate elements on the stack they are written separated by commas. The leftmost item as written is closest to the bottom of the stack. The letters "a", "b", "c", and "d" are used to represent arbitrary data.
- * All mathematical operators that appear in the following tables function exactly as they do in the C language.
- * The @ symbol is used to indicate the address at which a value resides if that is significant to the operation being performed.
+ * When a word ends in a number, the number represents the number of bits.  When
+   the number is preceded by a "u" it represents an unsigned integer value. When
+   it is  preceded by  an "i"  it  represents a  signed integer  value.  If  the
+   preceding letter is neither  "u" nor "i",  the signedness is not important to
+   the operation of the instruction.
+ * The word "as" is used to indicate promotion of the previous value to the size
+   of the following value.  The signedness of the following value is used.  When
+   promoting to a signed value, sign extension is performed.
+ * When a value is surrounded by square brackets, it represents the value at the
+   address specified within the brackets. For instance, [PC]8 would be the 8-bit
+   value at the PC address, which is the current instruction.
+ * When it  is desired  to represent  separate  elements on  the  stack they are
+   written separated by commas.  The leftmost item  as written is closest to the
+   bottom of the stack. The letters "a", "b", "c", and "d" are used to represent
+   arbitrary data.
+ * All mathematical  operators  that  appear  in the  following  tables function
+   exactly as they do in the C language.
+ * The @ symbol is used to indicate the address at which a value resides if that
+   is significant to the operation being performed.
 
 ### Push Operations
 
-These operations are used to push immediate data (data in program memory) onto the stack.
+These operations are used  to push immediate  data (data in program memory) onto
+the stack.
 
 | Op Code     | PC After | Stack Before | Stack After     |
 |:----------- |:-------- |:------------ |:--------------- |
@@ -137,7 +188,9 @@ These operations are used to pop data from the stack.
 | pop64   | PC+1     | a64          | SFP-8      |
 | popn    | PC+1     | ai64         | SFP+ai64-8 |
 
-The popn instruction pops a variable number of bytes from the stack. Negative values allow pushing uninitialized data onto the stack, as for stack-based arrays.
+The popn instruction pops  a variable number  of bytes from the stack.  Negative
+values allow  pushing  uninitialized data  onto  the stack,  as  for stack-based
+arrays.
 
 ### Duplication Operations
 
@@ -152,7 +205,9 @@ These operations duplicate the value currently at the top of the stack.
 
 ### Set Operations
 
-These operations copy the value at the top of the stack down to the position below it, effectively setting the value at that position, and pop the original value from the top of the stack.
+These operations  copy the  value at the top  of the stack down  to the position
+below it, effectively setting  the value at  that position, and pop the original
+value from the top of the stack.
 
 | Op Code | PC After | Stack Before | Stack After |
 |:------- |:-------- |:------------ |:----------- |
@@ -163,7 +218,13 @@ These operations copy the value at the top of the stack down to the position bel
 
 ### Promotion and Demotion Operations
 
-These operations promote or demote the integer value at the top of the stack to a larger or smaller size respectively. Promotion can be done in a signed or unsigned manner. Demotion is done by truncation. Unsigned promotions are accomplished by pushing bytes with value zero onto the stack. The value to be promoted is not read. This makes the unsigned promotion operations an efficient way to push a zero value onto the stack. Some demotions can be accomplished with a single pop instruction and are aliases for the pop operations in parenthesis.
+These operations promote or demote the integer value  at the top of the stack to
+a larger  or smaller  size respectively.  Promotion  can be done in  a signed or
+unsigned manner.   Demotion  is  done  by truncation.   Unsigned  promotions are
+accomplished by pushing bytes  with value zero  onto the stack.  The value to be
+promoted is not read.  This makes the unsigned promotion operations an efficient
+way to push a zero value onto the stack. Some demotions can be accomplished with
+a single pop instruction and are aliases for the pop operations in parenthesis.
 
 | Op Code           | PC After | Stack Before | Stack After |
 |:----------------- |:-------- |:------------ |:----------- |
@@ -188,7 +249,11 @@ These operations promote or demote the integer value at the top of the stack to 
 
 ### Integer Arithmetic Operations
 
-These operations perform arithmetic operations on integer operands at the top of the stack. The signedness of the operands does not affect integer addition and subtraction when using two's complement notation. Other operations have signed and unsigned variants. Operations that are not commutative have an order-reversed variant indicated by an "r" in the op code name.
+These operations perform arithmetic operations on integer operands at the top of
+the stack.  The signedness of the operands  does not affect integer addition and
+subtraction when using two's complement notation.  Other  operations have signed
+and  unsigned   variants.    Operations  that   are  not  commutative   have  an
+order-reversed variant indicated by an "r" in the op code name.
 
 | Op Code   | PC After | Stack Before | Stack After |
 |:--------- |:-------- |:------------ |:----------- |
@@ -243,7 +308,8 @@ These operations perform arithmetic operations on integer operands at the top of
 
 ### Bitwise Shift Operations
 
-Left-shift operations are equivalent for signed and unsigned operands. Right-shift operations differ for signed and unsigned operands.
+Left-shift  operations  are   equivalent  for   signed  and  unsigned  operands.
+Right-shift operations differ for signed and unsigned operands.
 
 | Op Code   | PC After | Stack Before | Stack After |
 |:--------- |:-------- |:------------ |:----------- |
@@ -262,7 +328,8 @@ Left-shift operations are equivalent for signed and unsigned operands. Right-shi
 
 ### Bitwise Logical Operations
 
-All the bitwise logical operations supported by the C language have an associated set of instructions. Signedness does not affect these operations.
+All  the  bitwise  logical  operations  supported  by  the  C  language have  an
+associated set of instructions. Signedness does not affect these operations.
 
 | Op Code   | PC After | Stack Before | Stack After |
 |:--------- |:-------- |:------------ |:----------- |
@@ -285,7 +352,8 @@ All the bitwise logical operations supported by the C language have an associate
 
 ### Boolean Logical Operations
 
-Boolean logical operations result in a Boolean value, either a zero or a one, replacing the operand(s).
+Boolean logical operations result  in a Boolean  value, either a zero  or a one,
+replacing the operand(s).
 
 | Op Code   | PC After | Stack Before | Stack After   |
 |:--------- |:-------- |:------------ |:------------- |
@@ -304,7 +372,9 @@ Boolean logical operations result in a Boolean value, either a zero or a one, re
 
 ### Comparison Operations
 
-These instructions result in a Boolean value, either a zero or a one, replacing the two operands. They can be used to calculate the condition for branching instructions. In some cases signedness of the operands is significant.
+These instructions result in a Boolean value,  either a zero or a one, replacing
+the two  operands.  They  can be used  to calculate the  condition for branching
+instructions. In some cases signedness of the operands is significant.
 
 | Op Code   | PC After | Stack Before | Stack After  |
 |:--------- |:-------- |:------------ |:------------ |
@@ -351,7 +421,8 @@ These instructions result in a Boolean value, either a zero or a one, replacing 
 
 ### Function Call and Return Instructions
 
-These instructions call functions and return from them. Variants with an "s" use an address on the stack.
+These instructions call functions and return from them. Variants with an "s" use
+an address on the stack.
 
 | Op Code   | PC After   | Stack Before                   | Stack After     | SFP After  |
 |:--------- |:---------- |:------------------------------ |:--------------- |:---------- |
@@ -373,7 +444,8 @@ These instructions can transfer control flow to a non-sequential instruction.
 
 ### Branching Instructions
 
-These instructions will transfer control flow to a non-sequential instruction if their argument is zero.
+These instructions will transfer control flow to a non-sequential instruction if
+their argument is zero.
 
 | Op Code   | PC After                                  | Stack Before | Stack After |
 |:--------- |:----------------------------------------- |:------------ |:----------- |
@@ -396,7 +468,16 @@ These instructions will transfer control flow to a non-sequential instruction if
 
 ### Memory Operations
 
-These instructions load data from memory to the stack or store data from the stack to memory. Instructions with "sfp" use offsets from the stack frame pointer address, SFP. This allows to bring arguments to the current function and local variables within the current function to the top of the stack, because they reside at known offsets from SFP. For negative offsets, the stack frame metadata size (16) is subtracted (subtraction not shown in the table below). This allows reference to the calling function arguments and return values without dependence on the stack frame metadata size. The offset operand is always 64 bits wide. Opcode names with an additional "r" indicate an order-reversed variant.
+These instructions  load data  from memory to  the stack or store  data from the
+stack to  memory.   Instructions with  "sfp"  use offsets  from  the stack frame
+pointer address, SFP. This allows to bring arguments to the current function and
+local variables  within the  current function to  the top of  the stack, because
+they reside at known  offsets from SFP.   For negative offsets,  the stack frame
+metadata size  (16)  is subtracted (subtraction  not shown in  the table below).
+This allows  reference  to the  calling  function arguments  and  return  values
+without dependence  on  the stack  frame  metadata size.  The  offset operand is
+always  64  bits  wide.   Opcode  names  with  an  additional  "r"  indicate  an
+order-reversed variant.
 
 | Op Code        | PC After | Stack Before | Stack After           | Side Effect          |
 |:-------------- |:-------- |:------------ |:--------------------- |:-------------------- |
