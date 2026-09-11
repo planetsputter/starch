@@ -59,6 +59,7 @@ def process_line(line, remnant, outfile, *, inpre, flow, justify, width, tabstop
 			outfile.write(remnant)
 		else: # Can flow these lines together
 			line = remnant[0:-1] + ' ' + line[len(prefix):]
+			prefix = rem_prefix
 	# Split the line on a space if allowed and necessary to maintain width
 	if not inpre and prefix_can_wrap(prefix) and len(line) > 1:
 		while True: # Keep writing until all wrapped lines are written
@@ -66,10 +67,11 @@ def process_line(line, remnant, outfile, *, inpre, flow, justify, width, tabstop
 			c = count_cols(line, tabstop)
 			while c > width:
 				tsi = line[0:si].rfind(' ')
-				if tsi < 0: break
+				if tsi < 0: break # No more spaces
+				c = count_cols(line[0:tsi], tabstop)
+				if c <= count_cols(prefix, tabstop): break # Space in prefix
 				si = tsi
-				c = count_cols(line[0:si], tabstop)
-			if si >= len(line): break
+			if si >= len(line): break # Whole line fits, use as remnant
 			outfile.write(line[0:si] + '\n')
 			prefix = next_prefix(prefix)
 			line = prefix + line[si + 1:]
