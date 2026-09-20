@@ -449,10 +449,6 @@ their argument is zero.
 
 | Op Code   | PC After                                  | Stack Before | Stack After |
 |:--------- |:----------------------------------------- |:------------ |:----------- |
-|  brz8     | if  !a8 then [PC + 1]64 else PC + 9       |  a8          |             |
-| brz16     | if !a16 then [PC + 1]64 else PC + 9       | a16          |             |
-| brz32     | if !a32 then [PC + 1]64 else PC + 9       | a32          |             |
-| brz64     | if !a64 then [PC + 1]64 else PC + 9       | a64          |             |
 |  rbrz8i8  | if  !a8 then PC + [PC + 1]i8  else PC + 2 |  a8          |             |
 |  rbrz8i16 | if  !a8 then PC + [PC + 1]i16 else PC + 3 |  a8          |             |
 |  rbrz8i32 | if  !a8 then PC + [PC + 1]i32 else PC + 5 |  a8          |             |
@@ -534,6 +530,7 @@ order-reversed variant.
 
 | Op Code | PC After | Note                                                       |
 |:------- |:-------- |:---------------------------------------------------------- |
+| pushsfp | PC + 1   | Pushes the 64-bit SFP value onto the stack.                |
 | setsbp  | PC + 9   | Sets SBP to the 64-bit immediate value                     |
 | setsfp  | PC + 9   | Sets SFP to the 64-bit immediate value                     |
 | setsp   | PC + 9   | Sets SP to the 64-bit immediate value                      |
