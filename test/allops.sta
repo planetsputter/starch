@@ -175,6 +175,7 @@ clei64
 call 0
 calls
 ret
+reti
 jmp 0
 jmps
 rjmpi8 0
@@ -243,8 +244,9 @@ storerpopsfp64
 pushsfp
 setsbp 0
 setsfp 0
-setsp 0
 setslp 0
+setsp 0
+incctx
 halt 0
 ext
 nop

@@ -229,6 +229,7 @@ static const char *op_names[] = {
 	[op_call] = "call",
 	[op_calls] = "calls",
 	[op_ret] = "ret",
+	[op_reti] = "reti",
 
 	//
 	// Jump operations
@@ -314,6 +315,7 @@ static const char *op_names[] = {
 	[op_setsbp] = "setsbp",
 	[op_setsfp] = "setsfp",
 	[op_setsp] = "setsp",
+	[op_incctx] = "incctx",
 	[op_setslp] = "setslp",
 	[op_halt] = "halt",
 	[op_ext] = "ext",
@@ -751,6 +753,7 @@ int imm_type_for_opcode(int opcode)
 		break;
 	case op_calls:
 	case op_ret:
+	case op_reti:
 		ret = SDT_VOID;
 		break;
 
@@ -847,9 +850,12 @@ int imm_type_for_opcode(int opcode)
 		break;
 	case op_setsbp:
 	case op_setsfp:
-	case op_setsp:
 	case op_setslp:
+	case op_setsp:
 		ret = SDT_U64;
+		break;
+	case op_incctx:
+		ret = SDT_VOID;
 		break;
 	case op_halt:
 		ret = SDT_U8;

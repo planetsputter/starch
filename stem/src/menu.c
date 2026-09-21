@@ -113,7 +113,7 @@ static int do_dump(size_t argc, const char *argv[], int *flags)
 	return mem_dump_hex(&main_mem, addr, size, stdout);
 }
 
-// List all breakpoints
+// List source code
 static int do_list(size_t argc, const char *argv[], int *flags)
 {
 	// @todo: implement
@@ -214,10 +214,10 @@ static int do_reg(size_t argc, const char *argv[], int *flags)
 	for (int i = 0; i < STEM_NUM_CORES; i++) {
 		printf("core %d:\n", i);
 		printf("pc:  0x%016"PRIx64"\n", cores[i].pc);
-		printf("sbp: 0x%016"PRIx64"\n", cores[i].sbp);
-		printf("sfp: 0x%016"PRIx64"\n", cores[i].sfp);
-		printf("sp:  0x%016"PRIx64"\n", cores[i].sp);
-		printf("slp: 0x%016"PRIx64"\n", cores[i].slp);
+		printf("sbp: 0x%016"PRIx64"\n", cores[i].cur->sbp);
+		printf("sfp: 0x%016"PRIx64"\n", cores[i].cur->sfp);
+		printf("slp: 0x%016"PRIx64"\n", cores[i].cur->slp);
+		printf("sp:  0x%016"PRIx64"\n", cores[i].cur->sp);
 	}
 	return 0;
 }

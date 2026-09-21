@@ -232,6 +232,7 @@ enum {
 	op_call,  // Call function at 64 bit imm addr
 	op_calls, // Call function at top 64 bit popped addr
 	op_ret,   // Return from current function
+	op_reti,  // Return from an interrupt routine
 
 	//
 	// Jump operations
@@ -316,8 +317,9 @@ enum {
 	op_pushsfp, // Push 64 bit SFP value
 	op_setsbp,  // Set SBP 64 bit imm
 	op_setsfp,  // Set SFP to 64 bit imm
-	op_setsp,   // Set SP to 64 bit imm
 	op_setslp,  // Set SLP to 64 bit imm
+	op_setsp,   // Set SP to 64 bit imm
+	op_incctx,  // Increments the context index
 	op_halt,    // Halts the processor with 8 bit unsigned imm exit code
 	op_ext,     // Introduces an extended operation
 	op_nop,     // No op
@@ -386,6 +388,7 @@ enum {
 	STINT_BAD_FRAME_ACCESS, // Stack access out of current stack frame
 	STINT_BAD_STACK_ACCESS, // Stack access out of stack memory region
 	STINT_BAD_ADDR, // Address out of range
+	STINT_BAD_CTX, // Bad context index
 	STINT_NUM_INTS,
 };
 

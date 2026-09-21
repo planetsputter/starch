@@ -23,8 +23,8 @@ define MAX_REPS     64
 //
 section $STATIC_ADDR
 
-:rep64_data
-data64 0
+:rep64_data data64 0
+:handled_data data8 0 // Index of last handled interrupt
 
 //
 // Instruction section
@@ -54,71 +54,83 @@ setslp $STACK_LIMIT
 	halt 0
 
 //
-// Set the given interrupt handler to jump to the given address
+// Generic interrupt handler which simply records which interrupt was handled
 //
-:set_int_addr // void set_int_addr(intu8, addr64)
-	push64 [SFP-9] // addr64
-	push8 [SFP-1]  // addr64, intu8
-	prom8u64       // addr64, intu64
-	push64 16
-	mul64          // addr64, intu64 * 16
-	push64 $BEGIN_INT_ADDR
-	add64          // addr64, intu64 * 16 + $BEGIN_INT_ADDR
-	push8 $OP_JMP
-	storepop8
-	push64 1
-	add64          // addr64, intu64 * 16 + $BEGIN_INT_ADDR + 1
-	storerpop64    // addr64
-	ret
+:handle_int
+	push8 [SFP-2]
+	store8 [:handled_data] // Record which interrupt was handled
+	reti
 
 //
-// Restore the default handler for the given interrupt, which halts with the interrupt code
+// Set the given interrupt handler to :handle_int
 //
-:restore_int_handler // void restore_int_handler(intu8)
+:set_int_handler  // void set_int_handler(intu8)
 	push8 [SFP-1] // intu8
 	prom8u64      // intu64
-	push64 16     // intu64, 16_64
+	push64 16
 	mul64         // intu64 * 16
 	push64 $BEGIN_INT_ADDR
 	add64         // intu64 * 16 + $BEGIN_INT_ADDR
-	push8 $OP_HALT
-	storepop8     // *(intu64 * 16 + $BEGIN_INT_ADDR) = $OP_HALT
+	push8 $OP_JMP // intu64 * 16 + $BEGIN_INT_ADDR, $OP_JMP
+	storepop8     // [intu64 * 16 + $BEGIN_INT_ADDR] = $OP_JMP
+	push64 1      // intu64 * 16 + $BEGIN_INT_ADDR, 1
+	add64         // intu64 * 16 + $BEGIN_INT_ADDR + 1
+	push64 :handle_int // intu64 * 16 + $BEGIN_INT_ADDR + 1, :handle_int
+	store64       // [intu64 * 16 + $BEGIN_INT_ADDR + 1] = :handle_int
 	ret
+
+//
+// Restores the handler for the given interrupt to one that simply halts with the interrupt code
+//
+:restore_int_handler // void restore_int_handler(intu8)
+	push8 [SFP-1]    // intu8
+	prom8u64         // intu64
+	push64 16
+	mul64            // intu64 * 16
+	push64 $BEGIN_INT_ADDR
+	add64            // intu64 * 16 + $BEGIN_INT_ADDR
+	push8 $OP_HALT   // intu64 * 16 + $BEGIN_INT_ADDR, $OP_HALT
+	storepop8        // [intu64 * 16 + $BEGIN_INT_ADDR] = $OP_HALT
+	push64 1         // intu64 * 16 + $BEGIN_INT_ADDR, 1
+	add64            // intu64 * 16 + $BEGIN_INT_ADDR + 1
+	push8 [SFP-1]    // intu64 * 16 + $BEGIN_INT_ADDR + 1, intu8
+	store8           // [intu64 * 16 + $BEGIN_INT_ADDR + 1] = intu8
+	ret
+	
 
 //
 // Test interrupts
 //
 :test_int
-
 	//
 	// Test that invalid instructions generate STINT_INVALID_INST
 	//
-	push64 :after_invalid     // addr64
-	push8 $STINT_INVALID_INST // addr64, int8
-	call :set_int_addr
-	pop8
-	pop64
-	invalid                   // Intentionally trigger invalid instruction interrupt
-	halt 1                    // Should not get here
-:after_invalid                // Should get here instead
-	push64 :after_invalid_00
+	// Call set_int_handler($STINT_INVALID_INST)
 	push8 $STINT_INVALID_INST
-	call :set_int_addr
+	call :set_int_handler
 	pop8
-	pop64
+	invalid // Trigger invalid instruction interrupt
+	// Check that :handled_data is equal to $STINT_INVALID_INST
+	push8 [:handled_data]
+	push8 $STINT_INVALID_INST
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 	// We want to show that 0x00 is an invalid instruction, because it is common in data
-	data8 0
-	halt 1
-:after_invalid_00
-	push64 :after_invalid_ff
+	push8 0
+	pop8 [:handled_data]
+	data8 0 // Trigger invalid instruction interrupt
+	push8 [:handled_data]
 	push8 $STINT_INVALID_INST
-	call :set_int_addr
-	pop8
-	pop64
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 	// We want to show that 0xff is an invalid instruction, because it is common in data
-	data8 0xff
-	halt 1
-:after_invalid_ff
+	push8 0
+	pop8 [:handled_data]
+	data8 0xff // Trigger invalid instruction interrupt
+	push8 [:handled_data]
+	push8 $STINT_INVALID_INST
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 	push8 $STINT_INVALID_INST
 	call :restore_int_handler // int8
 	pop8
@@ -127,57 +139,58 @@ setslp $STACK_LIMIT
 	// Test that an assertion failure generates STINT_ASSERT_FAILURE
 	//
 	// When writing 8 bits
-	push64 :after_assert1       // addr64
-	push8 $STINT_ASSERT_FAILURE // addr64, int8
-	call :set_int_addr
+	push8 $STINT_ASSERT_FAILURE
+	call :set_int_handler
+	pop8
+	push64 $IO_ASSERT_ADDR // $IO_ASSERT_ADDR
+	push8 0                // $IO_ASSERT_ADDR, 0_8
+	storepop8              // Generates assertion failure before pop
 	pop8
 	pop64
-	push64 $IO_ASSERT_ADDR         // $IO_ASSERT_ADDR
-	push8 0                     // $IO_ASSERT_ADDR, 0_8
-	storepop8                   // Generates assertion failure before pop
-	halt 1                      // Should not get here
-:after_assert1              // Should get here instead
-	pop8
-	pop64
+	// Check that :handled_data is equal to $STINT_ASSERT_FAILURE
+	push8 [:handled_data]
+	push8 $STINT_ASSERT_FAILURE
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 	// When writing 16 bits
-	push64 :after_assert2       // addr64
-	push8 $STINT_ASSERT_FAILURE // addr64, int8
-	call :set_int_addr
-	pop8
-	pop64
-	push64 $IO_ASSERT_ADDR         // $IO_ASSERT_ADDR
-	push16 0                    // $IO_ASSERT_ADDR, 0_16
-	storepop16                  // Generates assertion failure before pop
-	halt 1                      // Should not get here
-:after_assert2              // Should get here instead
+	push8 0
+	pop8 [:handled_data]
+	push64 $IO_ASSERT_ADDR // $IO_ASSERT_ADDR
+	push16 0               // $IO_ASSERT_ADDR, 0_16
+	storepop16             // Generates assertion failure before pop
 	pop16
 	pop64
+	// Check that :handled_data is equal to $STINT_ASSERT_FAILURE
+	push8 [:handled_data]
+	push8 $STINT_ASSERT_FAILURE
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 	// When writing 32 bits
-	push64 :after_assert3       // addr64
-	push8 $STINT_ASSERT_FAILURE // addr64, int8
-	call :set_int_addr
-	pop8
-	pop64
-	push64 $IO_ASSERT_ADDR         // $IO_ASSERT_ADDR
-	push32 0                    // $IO_ASSERT_ADDR, 0_32
-	storepop32                  // Generates assertion failure before pop
-	halt 1                      // Should not get here
-:after_assert3              // Should get here instead
+	push8 0
+	pop8 [:handled_data]
+	push64 $IO_ASSERT_ADDR // $IO_ASSERT_ADDR
+	push32 0               // $IO_ASSERT_ADDR, 0_32
+	storepop32             // Generates assertion failure before pop
 	pop32
 	pop64
+	// Check that :handled_data is equal to $STINT_ASSERT_FAILURE
+	push8 [:handled_data]
+	push8 $STINT_ASSERT_FAILURE
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 	// When writing 64 bits
-	push64 :after_assert4       // addr64
-	push8 $STINT_ASSERT_FAILURE // addr64, int8
-	call :set_int_addr
-	pop8
-	pop64
-	push64 $IO_ASSERT_ADDR         // $IO_ASSERT_ADDR
-	push64 0                    // $IO_ASSERT_ADDR, 0_64
-	storepop64                  // Generates assertion failure before pop
-	halt 1                      // Should not get here
-:after_assert4              // Should get here instead
+	push8 0
+	pop8 [:handled_data]
+	push64 $IO_ASSERT_ADDR // $IO_ASSERT_ADDR
+	push64 0               // $IO_ASSERT_ADDR, 0_64
+	storepop64             // Generates assertion failure before pop
 	pop64
 	pop64
+	// Check that :handled_data is equal to $STINT_ASSERT_FAILURE
+	push8 [:handled_data]
+	push8 $STINT_ASSERT_FAILURE
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 	// Restore original interrupt handler
 	push8 $STINT_ASSERT_FAILURE
 	call :restore_int_handler
@@ -189,431 +202,403 @@ setslp $STACK_LIMIT
 	// Test that division by zero produces STINT_DIV_BY_ZERO
 	//
 	// For divu8
-	push64 :after_divu8
 	push8 $STINT_DIV_BY_ZERO
-	call :set_int_addr
+	call :set_int_handler
 	pop8
-	pop64
 	push8 [$IO_URAND_ADDR] // a8
-	push8 0  // a8, 0_8
-	divu8
-	halt 1
-:after_divu8
+	push8 0                // a8, 0_8
+	divu8                  // Generates STINT_DIV_BY_ZERO before pop takes place
 	pop8
 	pop8
+	push8 [:handled_data]
+	push8 $STINT_DIV_BY_ZERO
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 	// For divu16
-	push64 :after_divu16
-	push8 $STINT_DIV_BY_ZERO
-	call :set_int_addr
-	pop8
-	pop64
+	push8 0
+	pop8 [:handled_data]
 	push16 [$IO_URAND_ADDR] // a16
-	push16 0  // a16, 0_16
-	divu16
-	halt 1
-:after_divu16
+	push16 0                // a16, 0_16
+	divu16                  // Generates STINT_DIV_BY_ZERO before pop takes place
 	pop16
 	pop16
+	push8 [:handled_data]
+	push8 $STINT_DIV_BY_ZERO
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 	// For divu32
-	push64 :after_divu32
-	push8 $STINT_DIV_BY_ZERO
-	call :set_int_addr
-	pop8
-	pop64
+	push8 0
+	pop8 [:handled_data]
 	push32 [$IO_URAND_ADDR] // a32
-	push32 0  // a32, 0_32
-	divu32
-	halt 1
-:after_divu32
+	push32 0                // a32, 0_32
+	divu32                  // Generates STINT_DIV_BY_ZERO before pop takes place
 	pop32
 	pop32
-	// For divu64
-	push64 :after_divu64
+	push8 [:handled_data]
 	push8 $STINT_DIV_BY_ZERO
-	call :set_int_addr
-	pop8
-	pop64
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
+	// For divu64
+	push8 0
+	pop8 [:handled_data]
 	push64 [$IO_URAND_ADDR] // a64
-	push64 0  // a64, 0_64
-	divu64
-	halt 1
-:after_divu64
+	push64 0                // a64, 0_64
+	divu64                  // Generates STINT_DIV_BY_ZERO before pop takes place
 	pop64
 	pop64
+	push8 [:handled_data]
+	push8 $STINT_DIV_BY_ZERO
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 
 	// For divru8
-	push64 :after_divru8
-	push8 $STINT_DIV_BY_ZERO
-	call :set_int_addr
-	pop8
-	pop64
-	push8 0  // 0_8
+	push8 0
+	pop8 [:handled_data]
+	push8 0                // 0_8
 	push8 [$IO_URAND_ADDR] // 0_8, a8
-	divru8
-	halt 1
-:after_divru8
+	divru8                 // Generates STINT_DIV_BY_ZERO before pop takes place
 	pop8
 	pop8
+	push8 [:handled_data]
+	push8 $STINT_DIV_BY_ZERO
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 	// For divru16
-	push64 :after_divru16
-	push8 $STINT_DIV_BY_ZERO
-	call :set_int_addr
-	pop8
-	pop64
-	push16 0  // 0_16
+	push8 0
+	pop8 [:handled_data]
+	push16 0                // 0_16
 	push16 [$IO_URAND_ADDR] // 0_16, a16
-	divru16
-	halt 1
-:after_divru16
+	divru16                 // Generates STINT_DIV_BY_ZERO before pop takes place
 	pop16
 	pop16
+	push8 [:handled_data]
+	push8 $STINT_DIV_BY_ZERO
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 	// For divru32
-	push64 :after_divru32
-	push8 $STINT_DIV_BY_ZERO
-	call :set_int_addr
-	pop8
-	pop64
-	push32 0  // 0_32
+	push8 0
+	pop8 [:handled_data]
+	push32 0                // 0_32
 	push32 [$IO_URAND_ADDR] // 0_32, a32
-	divru32
-	halt 1
-:after_divru32
+	divru32                 // Generates STINT_DIV_BY_ZERO before pop takes place
 	pop32
 	pop32
-	// For divru64
-	push64 :after_divru64
+	push8 [:handled_data]
 	push8 $STINT_DIV_BY_ZERO
-	call :set_int_addr
-	pop8
-	pop64
-	push64 0  // 0_64
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
+	// For divru64
+	push8 0
+	pop8 [:handled_data]
+	push64 0                // 0_64
 	push64 [$IO_URAND_ADDR] // 0_64, a64
-	divru64
-	halt 1
-:after_divru64
+	divru64                 // Generates STINT_DIV_BY_ZERO before pop takes place
 	pop64
 	pop64
+	push8 [:handled_data]
+	push8 $STINT_DIV_BY_ZERO
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 
 	// For divi8
-	push64 :after_divi8
 	push8 $STINT_DIV_BY_ZERO
-	call :set_int_addr
+	call :set_int_handler
 	pop8
-	pop64
 	push8 [$IO_URAND_ADDR] // a8
-	push8 0  // a8, 0_8
-	divi8
-	halt 1
-:after_divi8
+	push8 0                // a8, 0_8
+	divi8                  // Generates STINT_DIV_BY_ZERO before pop takes place
 	pop8
 	pop8
+	push8 [:handled_data]
+	push8 $STINT_DIV_BY_ZERO
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 	// For divi16
-	push64 :after_divi16
-	push8 $STINT_DIV_BY_ZERO
-	call :set_int_addr
-	pop8
-	pop64
+	push8 0
+	pop8 [:handled_data]
 	push16 [$IO_URAND_ADDR] // a16
-	push16 0  // a16, 0_16
-	divi16
-	halt 1
-:after_divi16
+	push16 0                // a16, 0_16
+	divi16                  // Generates STINT_DIV_BY_ZERO before pop takes place
 	pop16
 	pop16
+	push8 [:handled_data]
+	push8 $STINT_DIV_BY_ZERO
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 	// For divi32
-	push64 :after_divi32
-	push8 $STINT_DIV_BY_ZERO
-	call :set_int_addr
-	pop8
-	pop64
+	push8 0
+	pop8 [:handled_data]
 	push32 [$IO_URAND_ADDR] // a32
-	push32 0  // a32, 0_32
-	divi32
-	halt 1
-:after_divi32
+	push32 0                // a32, 0_32
+	divi32                  // Generates STINT_DIV_BY_ZERO before pop takes place
 	pop32
 	pop32
-	// For divi64
-	push64 :after_divi64
+	push8 [:handled_data]
 	push8 $STINT_DIV_BY_ZERO
-	call :set_int_addr
-	pop8
-	pop64
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
+	// For divi64
+	push8 0
+	pop8 [:handled_data]
 	push64 [$IO_URAND_ADDR] // a64
-	push64 0  // a64, 0_64
-	divi64
-	halt 1
-:after_divi64
+	push64 0                // a64, 0_64
+	divi64                  // Generates STINT_DIV_BY_ZERO before pop takes place
 	pop64
 	pop64
+	push8 [:handled_data]
+	push8 $STINT_DIV_BY_ZERO
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 
 	// For divri8
-	push64 :after_divri8
-	push8 $STINT_DIV_BY_ZERO
-	call :set_int_addr
-	pop8
-	pop64
-	push8 0  // 0_8
+	push8 0
+	pop8 [:handled_data]
+	push8 0                // 0_8
 	push8 [$IO_URAND_ADDR] // 0_8, a8
-	divri8
-	halt 1
-:after_divri8
+	divri8                 // Generates STINT_DIV_BY_ZERO before pop takes place
 	pop8
 	pop8
+	push8 [:handled_data]
+	push8 $STINT_DIV_BY_ZERO
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 	// For divri16
-	push64 :after_divri16
-	push8 $STINT_DIV_BY_ZERO
-	call :set_int_addr
-	pop8
-	pop64
-	push16 0  // 0_16
+	push8 0
+	pop8 [:handled_data]
+	push16 0                // 0_16
 	push16 [$IO_URAND_ADDR] // 0_16, a16
-	divri16
-	halt 1
-:after_divri16
+	divri16                 // Generates STINT_DIV_BY_ZERO before pop takes place
 	pop16
 	pop16
+	push8 [:handled_data]
+	push8 $STINT_DIV_BY_ZERO
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 	// For divri32
-	push64 :after_divri32
-	push8 $STINT_DIV_BY_ZERO
-	call :set_int_addr
-	pop8
-	pop64
-	push32 0  // 0_32
+	push8 0
+	pop8 [:handled_data]
+	push32 0                // 0_32
 	push32 [$IO_URAND_ADDR] // 0_32, a32
-	divri32
-	halt 1
-:after_divri32
+	divri32                 // Generates STINT_DIV_BY_ZERO before pop takes place
 	pop32
 	pop32
-	// For divri64
-	push64 :after_divri64
+	push8 [:handled_data]
 	push8 $STINT_DIV_BY_ZERO
-	call :set_int_addr
-	pop8
-	pop64
-	push64 0  // 0_64
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
+	// For divri64
+	push8 0
+	pop8 [:handled_data]
+	push64 0                // 0_64
 	push64 [$IO_URAND_ADDR] // 0_64, a64
-	divri64
-	halt 1
-:after_divri64
+	divri64                 // Generates STINT_DIV_BY_ZERO before pop takes place
 	pop64
 	pop64
+	push8 [:handled_data]
+	push8 $STINT_DIV_BY_ZERO
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 
 	//
 	// Test that modulo by zero produces STINT_DIV_BY_ZERO
 	//
 	// For modu8
-	push64 :after_modu8
 	push8 $STINT_DIV_BY_ZERO
-	call :set_int_addr
+	call :set_int_handler
 	pop8
-	pop64
 	push8 [$IO_URAND_ADDR] // a8
-	push8 0  // a8, 0_8
-	modu8
-	halt 1
-:after_modu8
+	push8 0                // a8, 0_8
+	modu8                  // Generates STINT_DIV_BY_ZERO before pop takes place
 	pop8
 	pop8
+	push8 [:handled_data]
+	push8 $STINT_DIV_BY_ZERO
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 	// For modu16
-	push64 :after_modu16
-	push8 $STINT_DIV_BY_ZERO
-	call :set_int_addr
-	pop8
-	pop64
+	push8 0
+	pop8 [:handled_data]
 	push16 [$IO_URAND_ADDR] // a16
-	push16 0  // a16, 0_16
-	modu16
-	halt 1
-:after_modu16
+	push16 0                // a16, 0_16
+	modu16                  // Generates STINT_DIV_BY_ZERO before pop takes place
 	pop16
 	pop16
+	push8 [:handled_data]
+	push8 $STINT_DIV_BY_ZERO
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 	// For modu32
-	push64 :after_modu32
-	push8 $STINT_DIV_BY_ZERO
-	call :set_int_addr
-	pop8
-	pop64
+	push8 0
+	pop8 [:handled_data]
 	push32 [$IO_URAND_ADDR] // a32
-	push32 0  // a32, 0_32
-	modu32
-	halt 1
-:after_modu32
+	push32 0                // a32, 0_32
+	modu32                  // Generates STINT_DIV_BY_ZERO before pop takes place
 	pop32
 	pop32
-	// For modu64
-	push64 :after_modu64
+	push8 [:handled_data]
 	push8 $STINT_DIV_BY_ZERO
-	call :set_int_addr
-	pop8
-	pop64
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
+	// For modu64
+	push8 0
+	pop8 [:handled_data]
 	push64 [$IO_URAND_ADDR] // a64
-	push64 0  // a64, 0_64
-	modu64
-	halt 1
-:after_modu64
+	push64 0                // a64, 0_64
+	modu64                  // Generates STINT_DIV_BY_ZERO before pop takes place
 	pop64
 	pop64
+	push8 [:handled_data]
+	push8 $STINT_DIV_BY_ZERO
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 
 	// For modru8
-	push64 :after_modru8
-	push8 $STINT_DIV_BY_ZERO
-	call :set_int_addr
-	pop8
-	pop64
-	push8 0  // 0_8
+	push8 0
+	pop8 [:handled_data]
+	push8 0                // 0_8
 	push8 [$IO_URAND_ADDR] // 0_8, a8
-	modru8
-	halt 1
-:after_modru8
+	modru8                 // Generates STINT_DIV_BY_ZERO before pop takes place
 	pop8
 	pop8
+	push8 [:handled_data]
+	push8 $STINT_DIV_BY_ZERO
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 	// For modru16
-	push64 :after_modru16
-	push8 $STINT_DIV_BY_ZERO
-	call :set_int_addr
-	pop8
-	pop64
-	push16 0  // 0_16
+	push8 0
+	pop8 [:handled_data]
+	push16 0                // 0_16
 	push16 [$IO_URAND_ADDR] // 0_16, a16
-	modru16
-	halt 1
-:after_modru16
+	modru16                 // Generates STINT_DIV_BY_ZERO before pop takes place
 	pop16
 	pop16
+	push8 [:handled_data]
+	push8 $STINT_DIV_BY_ZERO
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 	// For modru32
-	push64 :after_modru32
-	push8 $STINT_DIV_BY_ZERO
-	call :set_int_addr
-	pop8
-	pop64
-	push32 0  // 0_32
+	push8 0
+	pop8 [:handled_data]
+	push32 0                // 0_32
 	push32 [$IO_URAND_ADDR] // 0_32, a32
-	modru32
-	halt 1
-:after_modru32
+	modru32                 // Generates STINT_DIV_BY_ZERO before pop takes place
 	pop32
 	pop32
-	// For modru64
-	push64 :after_modru64
+	push8 [:handled_data]
 	push8 $STINT_DIV_BY_ZERO
-	call :set_int_addr
-	pop8
-	pop64
-	push64 0  // 0_64
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
+	// For modru64
+	push8 0
+	pop8 [:handled_data]
+	push64 0                // 0_64
 	push64 [$IO_URAND_ADDR] // 0_64, a64
-	modru64
-	halt 1
-:after_modru64
+	modru64                 // Generates STINT_DIV_BY_ZERO before pop takes place
 	pop64
 	pop64
+	push8 [:handled_data]
+	push8 $STINT_DIV_BY_ZERO
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 
 	// For modi8
-	push64 :after_modi8
 	push8 $STINT_DIV_BY_ZERO
-	call :set_int_addr
+	call :set_int_handler
 	pop8
-	pop64
 	push8 [$IO_URAND_ADDR] // a8
-	push8 0  // a8, 0_8
-	modi8
-	halt 1
-:after_modi8
+	push8 0                // a8, 0_8
+	modi8                  // Generates STINT_DIV_BY_ZERO before pop takes place
 	pop8
 	pop8
+	push8 [:handled_data]
+	push8 $STINT_DIV_BY_ZERO
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 	// For modi16
-	push64 :after_modi16
-	push8 $STINT_DIV_BY_ZERO
-	call :set_int_addr
-	pop8
-	pop64
+	push8 0
+	pop8 [:handled_data]
 	push16 [$IO_URAND_ADDR] // a16
-	push16 0  // a16, 0_16
-	modi16
-	halt 1
-:after_modi16
+	push16 0                // a16, 0_16
+	modi16                  // Generates STINT_DIV_BY_ZERO before pop takes place
 	pop16
 	pop16
+	push8 [:handled_data]
+	push8 $STINT_DIV_BY_ZERO
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 	// For modi32
-	push64 :after_modi32
-	push8 $STINT_DIV_BY_ZERO
-	call :set_int_addr
-	pop8
-	pop64
+	push8 0
+	pop8 [:handled_data]
 	push32 [$IO_URAND_ADDR] // a32
-	push32 0  // a32, 0_32
-	modi32
-	halt 1
-:after_modi32
+	push32 0                // a32, 0_32
+	modi32                  // Generates STINT_DIV_BY_ZERO before pop takes place
 	pop32
 	pop32
-	// For modi64
-	push64 :after_modi64
+	push8 [:handled_data]
 	push8 $STINT_DIV_BY_ZERO
-	call :set_int_addr
-	pop8
-	pop64
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
+	// For modi64
+	push8 0
+	pop8 [:handled_data]
 	push64 [$IO_URAND_ADDR] // a64
-	push64 0  // a64, 0_64
-	modi64
-	halt 1
-:after_modi64
+	push64 0                // a64, 0_64
+	modi64                  // Generates STINT_DIV_BY_ZERO before pop takes place
 	pop64
 	pop64
+	push8 [:handled_data]
+	push8 $STINT_DIV_BY_ZERO
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 
 	// For modri8
-	push64 :after_modri8
-	push8 $STINT_DIV_BY_ZERO
-	call :set_int_addr
-	pop8
-	pop64
-	push8 0  // 0_8
+	push8 0
+	pop8 [:handled_data]
+	push8 0                // 0_8
 	push8 [$IO_URAND_ADDR] // 0_8, a8
-	modri8
-	halt 1
-:after_modri8
+	modri8                 // Generates STINT_DIV_BY_ZERO before pop takes place
 	pop8
 	pop8
+	push8 [:handled_data]
+	push8 $STINT_DIV_BY_ZERO
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 	// For modri16
-	push64 :after_modri16
-	push8 $STINT_DIV_BY_ZERO
-	call :set_int_addr
-	pop8
-	pop64
-	push16 0  // 0_16
+	push8 0
+	pop8 [:handled_data]
+	push16 0                // 0_16
 	push16 [$IO_URAND_ADDR] // 0_16, a16
-	modri16
-	halt 1
-:after_modri16
+	modri16                 // Generates STINT_DIV_BY_ZERO before pop takes place
 	pop16
 	pop16
+	push8 [:handled_data]
+	push8 $STINT_DIV_BY_ZERO
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 	// For modri32
-	push64 :after_modri32
-	push8 $STINT_DIV_BY_ZERO
-	call :set_int_addr
-	pop8
-	pop64
-	push32 0  // 0_32
+	push8 0
+	pop8 [:handled_data]
+	push32 0                // 0_32
 	push32 [$IO_URAND_ADDR] // 0_32, a32
-	modri32
-	halt 1
-:after_modri32
+	modri32                 // Generates STINT_DIV_BY_ZERO before pop takes place
 	pop32
 	pop32
-	// For modri64
-	push64 :after_modri64
+	push8 [:handled_data]
 	push8 $STINT_DIV_BY_ZERO
-	call :set_int_addr
-	pop8
-	pop64
-	push64 0  // 0_64
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
+	// For modri64
+	push8 0
+	pop8 [:handled_data]
+	push64 0                // 0_64
 	push64 [$IO_URAND_ADDR] // 0_64, a64
-	modri64
-	halt 1
-:after_modri64
+	modri64                 // Generates STINT_DIV_BY_ZERO before pop takes place
 	pop64
 	pop64
+	push8 [:handled_data]
+	push8 $STINT_DIV_BY_ZERO
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 
 	// Restore original STINT_DIV_BY_ZERO handler
 	push8 $STINT_DIV_BY_ZERO
@@ -625,166 +610,153 @@ setslp $STACK_LIMIT
 	//
 	push64 0
 	// For load8
-	push64 :after_load8
 	push8 $STINT_BAD_IO_ACCESS
-	call :set_int_addr
+	call :set_int_handler
 	pop8
-	pop64
-	load8
-	halt 1
-:after_load8
+	load8  // Generates STINT_BAD_IO_ACCESS before push
+	push8 [:handled_data]
+	push8 $STINT_BAD_IO_ACCESS
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 	// For load16
-	push64 :after_load16
+	push8 0
+	pop8 [:handled_data]
+	load16 // Generates STINT_BAD_IO_ACCESS before push
+	push8 [:handled_data]
 	push8 $STINT_BAD_IO_ACCESS
-	call :set_int_addr
-	pop8
-	pop64
-	load16
-	halt 1
-:after_load16
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 	// For load32
-	push64 :after_load32
+	push8 0
+	pop8 [:handled_data]
+	load32 // Generates STINT_BAD_IO_ACCESS before push
+	push8 [:handled_data]
 	push8 $STINT_BAD_IO_ACCESS
-	call :set_int_addr
-	pop8
-	pop64
-	load32
-	halt 1
-:after_load32
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 	// For load64
-	push64 :after_load64
+	push8 0
+	pop8 [:handled_data]
+	load64 // Generates STINT_BAD_IO_ACCESS before push
+	push8 [:handled_data]
 	push8 $STINT_BAD_IO_ACCESS
-	call :set_int_addr
-	pop8
-	pop64
-	load64
-	halt 1
-:after_load64
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
+
 	// For loadpop8
-	push64 :after_loadpop8
+	push8 0
+	pop8 [:handled_data]
+	loadpop8  // Generates STINT_BAD_IO_ACCESS before pop
+	push8 [:handled_data]
 	push8 $STINT_BAD_IO_ACCESS
-	call :set_int_addr
-	pop8
-	pop64
-	loadpop8
-	halt 1
-:after_loadpop8
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 	// For loadpop16
-	push64 :after_loadpop16
+	push8 0
+	pop8 [:handled_data]
+	loadpop16 // Generates STINT_BAD_IO_ACCESS before pop
+	push8 [:handled_data]
 	push8 $STINT_BAD_IO_ACCESS
-	call :set_int_addr
-	pop8
-	pop64
-	loadpop16
-	halt 1
-:after_loadpop16
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 	// For loadpop32
-	push64 :after_loadpop32
+	push8 0
+	pop8 [:handled_data]
+	loadpop32 // Generates STINT_BAD_IO_ACCESS before pop
+	push8 [:handled_data]
 	push8 $STINT_BAD_IO_ACCESS
-	call :set_int_addr
-	pop8
-	pop64
-	loadpop32
-	halt 1
-:after_loadpop32
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 	// For loadpop64
-	push64 :after_loadpop64
+	push8 0
+	pop8 [:handled_data]
+	loadpop64 // Generates STINT_BAD_IO_ACCESS before pop
+	push8 [:handled_data]
 	push8 $STINT_BAD_IO_ACCESS
-	call :set_int_addr
-	pop8
-	pop64
-	loadpop64
-	halt 1
-:after_loadpop64
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 
 	// For store8
-	push64 :after_store8
-	push8 $STINT_BAD_IO_ACCESS
-	call :set_int_addr
-	pop8
-	pop64
 	push8 0
-	store8
-	halt 1
-:after_store8
+	pop8 [:handled_data]
+	push8 0
+	store8  // Generates STINT_BAD_IO_ACCESS before store
 	pop8
+	push8 [:handled_data]
+	push8 $STINT_BAD_IO_ACCESS
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 	// For store16
-	push64 :after_store16
-	push8 $STINT_BAD_IO_ACCESS
-	call :set_int_addr
-	pop8
-	pop64
-	push16 0
-	store16
-	halt 1
-:after_store16
-	pop16
-	// For store32
-	push64 :after_store32
-	push8 $STINT_BAD_IO_ACCESS
-	call :set_int_addr
-	pop8
-	pop64
-	push32 0
-	store32
-	halt 1
-:after_store32
-	pop32
-	// For store64
-	push64 :after_store64
-	push8 $STINT_BAD_IO_ACCESS
-	call :set_int_addr
-	pop8
-	pop64
-	push64 0
-	store64
-	halt 1
-:after_store64
-	pop64
-	// For storepop8
-	push64 :after_storepop8
-	push8 $STINT_BAD_IO_ACCESS
-	call :set_int_addr
-	pop8
-	pop64
 	push8 0
-	storepop8
-	halt 1
-:after_storepop8
-	pop8
-	// For storepop16
-	push64 :after_storepop16
-	push8 $STINT_BAD_IO_ACCESS
-	call :set_int_addr
-	pop8
-	pop64
+	pop8 [:handled_data]
 	push16 0
-	storepop16
-	halt 1
-:after_storepop16
+	store16 // Generates STINT_BAD_IO_ACCESS before store
 	pop16
-	// For storepop32
-	push64 :after_storepop32
+	push8 [:handled_data]
 	push8 $STINT_BAD_IO_ACCESS
-	call :set_int_addr
-	pop8
-	pop64
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
+	// For store32
+	push8 0
+	pop8 [:handled_data]
 	push32 0
-	storepop32
-	halt 1
-:after_storepop32
+	store32 // Generates STINT_BAD_IO_ACCESS before store
 	pop32
-	// For storepop64
-	push64 :after_storepop64
+	push8 [:handled_data]
 	push8 $STINT_BAD_IO_ACCESS
-	call :set_int_addr
-	pop8
-	pop64
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
+	// For store64
+	push8 0
+	pop8 [:handled_data]
 	push64 0
-	storepop64
-	halt 1
-:after_storepop64
+	store64 // Generates STINT_BAD_IO_ACCESS before store
 	pop64
+	push8 [:handled_data]
+	push8 $STINT_BAD_IO_ACCESS
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
+
+	// For storepop8
+	push8 0
+	pop8 [:handled_data]
+	push8 0
+	storepop8  // Generates STINT_BAD_IO_ACCESS before store
+	pop8
+	push8 [:handled_data]
+	push8 $STINT_BAD_IO_ACCESS
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
+	// For storepop16
+	push8 0
+	pop8 [:handled_data]
+	push16 0
+	storepop16 // Generates STINT_BAD_IO_ACCESS before store
+	pop16
+	push8 [:handled_data]
+	push8 $STINT_BAD_IO_ACCESS
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
+	// For storepop32
+	push8 0
+	pop8 [:handled_data]
+	push32 0
+	storepop32 // Generates STINT_BAD_IO_ACCESS before store
+	pop32
+	push8 [:handled_data]
+	push8 $STINT_BAD_IO_ACCESS
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
+	// For storepop64
+	push8 0
+	pop8 [:handled_data]
+	push64 0
+	storepop64 // Generates STINT_BAD_IO_ACCESS before store
+	pop64
+	push8 [:handled_data]
+	push8 $STINT_BAD_IO_ACCESS
+	ceq8
+	pop8 [$IO_ASSERT_ADDR]
 
 	pop64 // Pop the NULL address
 

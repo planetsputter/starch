@@ -7,9 +7,19 @@
 #include <stdint.h>
 #include "mem.h"
 
-struct core {
-	// The core Starch registers
+// Stack control block
+struct scb {
 	uint64_t pc, sbp, sfp, sp, slp;
+};
+
+// Starch processor core
+struct core {
+	// Supervisor and user stack control blocks
+	struct scb scbs[2];
+	struct scb *cur; // Pointer to current stack control block, performing function of CTX register
+
+	// Program counter
+	uint64_t pc;
 
 	// Buffers for stdin and stdout
 	uint8_t *stdin_buff, *stdout_buff;

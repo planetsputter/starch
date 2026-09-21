@@ -17,13 +17,16 @@ Processor State
 
 The processor state is small, consisting of the following registers:
 
-| Register | Description          |
-|:-------- |:-------------------- |
-| PC       | Program Counter      |
-| SBP      | Stack Bottom Pointer |
-| SFP      | Stack Frame Pointer  |
-| SP       | Stack Pointer        |
-| SLP      | Stack Limit Pointer  |
+| Register | Description                        |
+|:-------- |:---------------------------------- |
+| PC       | Program Counter                    |
+| CTX      | Context index                      |
+| SBP      | Stack Bottom Pointer (per context) |
+| SFP      | Stack Frame Pointer (per context)  |
+| SLP      | Stack Limit Pointer (per context)  |
+| SP       | Stack Pointer (per context)        |
+
+The processor can operate in either a supervisor or user context. The CTX register stores the index of the current context. The supervisor context has index zero, while the user context has index one. More contexts may be defined in the future. The SBP, SFP, SLP, and SP registers are duplicated between the supervisor and user contexts.
 
 ### Stack Diagram
 
@@ -58,6 +61,18 @@ functions to be called easily.
 |         | ...                         |
 |         | ARGn                        |
 |         | Calling function local data |
+
+When an interrupt occurs, the supervisor context is immediately selected. Then the 8-bit interrupt identifier (INT8), previous context index (PCTX8), supervisor stack frame pointer, and program counter are pushed to the stack and SFP is updated. This is very similar to calling the interrupt as a function with two 8-bit arguments: PCTX8 and INT8. The processor state including context can be cleanly restored by the reti instruction. It is important to note therefore that data on the supervisor stack above SP may be overwritten by an interrupt handler. Data above SP on the user stack will not be overwritten.
+
+| Address | Data                           |
+|:------- |:------------------------------ |
+| SP      |                                |
+| SFP     | Interrupt routine local data   |
+| SFP-8   | RETA                           |
+| SFP-16  | PSFP                           |
+| SFP-17  | PCTX8                          |
+| SFP-18  | INT8                           |
+|         | Interrupted routine local data |
 
 Note that while function  arguments are pushed  to the stack from last to first,
 the  last  argument  pushed  being  thought  of as  the  "leftmost",  individual
@@ -100,9 +115,8 @@ Access to any unmapped IO memory address will generate STINT_BAD_IO_ACCESS.
 ### Interrupt Handlers
 
 There are 256 interrupt  handlers of 16  bytes each beginning at address 0x2000.
-When an interrupt occurs,  the core vectors  to 0x2000 plus the interrupt number
-multiplied by  16.   Currently no  other  action is taken  to preserve processor
-registers, but this may change in the future. By default, each interrupt handler
+When an interrupt occurs,  the core immediately switches to the supervisor context, pushes the SFP value, pushes PC value, pushes the previous context index as a byte, sets SFP, then vectors  to 0x2000 plus the interrupt number
+multiplied by  16.   By default, each interrupt handler
 simply halts  with the  index of  the  interrupt as  the halt  code.  For custom
 interrupt handlers,  16 bytes  is enough  space  to encode a jump  to a separate
 location where more involved handling of the interrupt may take place.
@@ -123,6 +137,7 @@ conditions occur. These are enumerated below:
 | STINT_BAD_FRAME_ACCESS | An instruction which would not normally be used to access memory outside the current stack frame attempted to access memory outside the current stack frame. |
 | STINT_BAD_STACK_ACCESS | An instruction which would not normally be used to access memory outside the stack attempted to access memory outside the stack. |
 | STINT_BAD_ADDR | An attempt was made to access memory at an address that does not map to any physical memory. |
+| STINT_BAD_CTX  | An attempt was made to set the context to an invalid value using the incctx or reti instructions. |
 
 Instruction Set
 ---------------
@@ -424,11 +439,12 @@ instructions. In some cases signedness of the operands is significant.
 These instructions call functions and return from them. Variants with an "s" use
 an address on the stack.
 
-| Op Code   | PC After   | Stack Before                   | Stack After     | SFP After  |
-|:--------- |:---------- |:------------------------------ |:--------------- |:---------- |
-| call      | [PC+1]64   |                                | SFP64, PC64 + 9 | SP + 16    |
-| calls     | a64        | a64                            | SFP64, PC64 + 1 | SP + 8     |
-| ret       | [SFP-8]64  | PSFP64@[SFP-16], RETA64, [...] |                 | [SFP-16]64 |
+| Op Code   | PC After   | Stack Before                                | Stack After     | SFP After  | CTX After |
+|:--------- |:---------- |:------------------------------------------- |:--------------- |:---------- |:--------- |
+| call      | [PC+1]64   |                                             | SFP64, PC64 + 9 | SP + 16    |           |
+| calls     | a64        | a64                                         | SFP64, PC64 + 1 | SP + 8     |           |
+| ret       | [SFP-8]64  | PSFP64@[SFP-16], RETA64, [...]              |                 | [SFP-16]64 |           |
+| reti      | [SFP-9]64  | INT8, PCTX8, PSFP64@[SFP-16], RETA64, [...] |                 | [SFP-16]64 | PCTX8     |
 
 ### Jump Instructions
 
@@ -529,12 +545,13 @@ order-reversed variant.
 ### Miscellaneous Operations
 
 | Op Code | PC After | Note                                                       |
-|:------- |:-------- |:---------------------------------------------------------- |
+|:------- |:-------- | ---------------------------------------------------------- |
 | pushsfp | PC + 1   | Pushes the 64-bit SFP value onto the stack.                |
 | setsbp  | PC + 9   | Sets SBP to the 64-bit immediate value                     |
 | setsfp  | PC + 9   | Sets SFP to the 64-bit immediate value                     |
-| setsp   | PC + 9   | Sets SP to the 64-bit immediate value                      |
 | setslp  | PC + 9   | Sets SLP to the 64-bit immediate value                     |
+| setsp   | PC + 9   | Sets SP to the 64-bit immediate value                      |
+| incctx  | PC + 9   | Increments the CTX value by one.                           |
 | nop     | PC + 1   | Performs no operation                                      |
 | ext     | PC + 1   | Introduces an extended opcode                              |
 | halt    | PC       | Halts the processor                                        |
