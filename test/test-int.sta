@@ -13,9 +13,11 @@
 //
 // Definitions
 //
-define STACK_BOTTOM 0x4000
-define STACK_LIMIT  0x5000
-define STATIC_ADDR  0x5000
+define SUP_STACK_BOTTOM 0x4000
+define SUP_STACK_LIMIT  0x5000
+define USR_STACK_BOTTOM 0x5000
+define USR_STACK_LIMIT  0x6000
+define STATIC_ADDR  0x6000
 define MAX_REPS     64
 
 //
@@ -31,10 +33,18 @@ section $STATIC_ADDR
 //
 section $INIT_PC_VAL
 
-setsbp $STACK_BOTTOM
-setsfp $STACK_BOTTOM
-setsp  $STACK_BOTTOM
-setslp $STACK_LIMIT
+// Set up supervisor stack
+setsbp $SUP_STACK_BOTTOM
+setsfp $SUP_STACK_BOTTOM
+setsp  $SUP_STACK_BOTTOM
+setslp $SUP_STACK_LIMIT
+
+// Set up user stack
+incctx
+setsbp $USR_STACK_BOTTOM
+setsfp $USR_STACK_BOTTOM
+setsp  $USR_STACK_BOTTOM
+setslp $USR_STACK_LIMIT
 
 //
 // Main program loop
