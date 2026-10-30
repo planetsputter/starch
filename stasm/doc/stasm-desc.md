@@ -24,8 +24,8 @@ statement, a label definition, or an assembler command.
 Single-line comments in Starch assembly begin with two slashes (//) and continue
 until the end of the line. A comment may finish a line started by any other kind
 of statement, for  instance a label  or assembler command.   Multi-line comments
-begin with  a slash  and an asterisk (/*)  and end with an  asterisk and a slash
-(*/), just as in C.
+begin with  a slash  and an asterisk (`/*`)  and end with an  asterisk and a
+slash (`*/`), just as in C.
 
 Example:
 ```
