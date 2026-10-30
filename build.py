@@ -4,8 +4,9 @@
 
 import concurrent.futures, copy, datetime, glob, hashlib, multiprocessing, os, pathlib, re, shlex, subprocess, sys, threading
 
-# When generating makefile contents and output messages, try not to use more than this many columns per line
-wrap_cols = 100
+# When generating makefile contents and output messages, try not to use more than this many columns per line.
+# If zero, no wrapping is performed.
+wrap_cols = 0
 
 # Returns the number of columns in the given line
 def count_cols(line, tabstop=8):
