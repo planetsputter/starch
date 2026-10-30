@@ -112,7 +112,10 @@ def parse_md_line(state, line, counts):
 parsers = {
 	'py' : parse_python_line,
 	'c' : parse_c_line,
+	'cc' : parse_c_line,
+	'cpp' : parse_c_line,
 	'h' : parse_c_line,
+	'hh' : parse_c_line,
 	'md' :  parse_md_line,
 	'sta' : parse_c_line, # Starch assembly files can be counted with C parser
 }
