@@ -88,7 +88,7 @@ struct core cores[STEM_NUM_CORES];
 struct mem main_mem;
 
 // Breakpoint map
-struct bpmap *bpmap = NULL;
+struct bpmap *bpmap;
 
 bool non_help_arg = false, arg_error = false;
 void handle_arg(struct carg_desc *desc, const char *arg)
@@ -106,9 +106,8 @@ void handle_arg(struct carg_desc *desc, const char *arg)
 			arg_error = true;
 		}
 		else {
-			if (bpmap == NULL) bpmap = bpmap_create();
 			// Note: For now all counts are 1
-			bpmap = bpmap_insert(bpmap, addr, 1);
+			bpmap_insert(bpmap, addr, 1);
 		}
 	}
 }
@@ -116,6 +115,7 @@ void handle_arg(struct carg_desc *desc, const char *arg)
 int main(int argc, const char *argv[])
 {
 	int ret = 0;
+	bpmap = bpmap_create();
 
 	// Parse command-line arguments
 	enum carg_error parse_error = carg_parse_args(

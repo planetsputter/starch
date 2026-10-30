@@ -6,6 +6,7 @@
 #include <string.h>
 #include <sys/time.h>
 
+#include "bintree.c"
 #include "bstr.h"
 #include "bmap.c"
 #include "smap.c"
@@ -16,49 +17,65 @@ enum {
 static char testkeys[TEST_SIZE + 1];
 static char testvals[TEST_SIZE + 1];
 
-static void test_depth(const struct smap *node)
-{
-	int maxd = -1, leftd = -1, rightd = -1;
-	if (node->left) {
-		test_depth(node->left);
-		leftd = node->left->depth;
-		if (leftd > maxd) maxd = leftd;
-	}
-	if (node->right) {
-		test_depth(node->right);
-		rightd = node->right->depth;
-		if (rightd > maxd) maxd = rightd;
-	}
-	int diffd = leftd - rightd;
-	assert(node->depth == maxd + 1 && diffd <= 1 && diffd >= -1);
-}
-
-static void test_bdepth(const struct bmap *node)
+static void test_depth_node(const struct bintree_node *node)
 {
 	if (node == NULL) return;
 	int maxd = -1, leftd = -1, rightd = -1;
 	if (node->left) {
-		test_bdepth(node->left);
+		test_depth_node(node->left);
 		leftd = node->left->depth;
 		if (leftd > maxd) maxd = leftd;
 	}
 	if (node->right) {
-		test_bdepth(node->right);
+		test_depth_node(node->right);
 		rightd = node->right->depth;
 		if (rightd > maxd) maxd = rightd;
 	}
 	int diffd = leftd - rightd;
 	assert(node->depth == maxd + 1 && diffd <= 1 && diffd >= -1);
 }
+static void test_depth(const struct smap *map)
+{
+	const struct bintree *tree = (const struct bintree*)map;
+	test_depth_node(tree->root);
+}
 
-static int get_bcount(const struct bmap *node)
+static void test_bdepth_node(const struct bintree_node *node)
+{
+	if (node == NULL) return;
+	int maxd = -1, leftd = -1, rightd = -1;
+	if (node->left) {
+		test_bdepth_node(node->left);
+		leftd = node->left->depth;
+		if (leftd > maxd) maxd = leftd;
+	}
+	if (node->right) {
+		test_bdepth_node(node->right);
+		rightd = node->right->depth;
+		if (rightd > maxd) maxd = rightd;
+	}
+	int diffd = leftd - rightd;
+	assert(node->depth == maxd + 1 && diffd <= 1 && diffd >= -1);
+}
+static void test_bdepth(const struct bmap *map)
+{
+	const struct bintree *tree = (const struct bintree*)map;
+	test_bdepth_node(tree->root);
+}
+
+static int get_bcount_node(const struct bintree_node *node)
 {
 	if (node == NULL) return 0;
-	return 1 + get_bcount(node->left) + get_bcount(node->right);
+	return 1 + get_bcount_node(node->left) + get_bcount_node(node->right);
+}
+static int get_bcount(const struct bmap *map)
+{
+	const struct bintree *tree = (const struct bintree*)map;
+	return get_bcount_node(tree->root);
 }
 
 static const char *last_key = NULL;
-static int iter_func(char *key, char *val, void *user_ptr)
+static int iter_func(const char *key, const char *val, void *user_ptr)
 {
 	(void)val;
 	(void)user_ptr;
@@ -70,7 +87,7 @@ static int iter_func(char *key, char *val, void *user_ptr)
 }
 
 static const char *last_bkey = NULL;
-static int biter_func(bchar *key, bchar *val, void *user_ptr)
+static int biter_func(const bchar *key, const bchar *val, void *user_ptr)
 {
 	(void)val;
 	(void)user_ptr;
@@ -108,18 +125,12 @@ int main()
 	struct smap *smap = smap_create();
 
 	//
-	// Test initial conditions
-	//
-	assert(smap == NULL);
-
-	//
 	// Test for C-strings
 	//
 	for (int i = 0; i < TEST_SIZE * 2; i++) {
 		// Insert random key and value
 		int j = random() % TEST_SIZE;
-		smap = smap_insert(smap, strdup(testkeys + j), strdup(testvals + j));
-		assert(smap != NULL);
+		smap_insert(smap, strdup(testkeys + j), strdup(testvals + j));
 		// Check depth of all nodes
 		test_depth(smap);
 		// Check that value was associated with key
@@ -139,18 +150,12 @@ int main()
 	struct bmap *bmap = bmap_create();
 
 	//
-	// Test initial conditions
-	//
-	assert(bmap == NULL);
-
-	//
 	// Test for B-strings
 	//
 	for (int i = 0; i < TEST_SIZE * 2; i++) {
 		// Insert random key and value
 		int j = random() % TEST_SIZE;
-		bmap = bmap_insert(bmap, bstrdupc(testkeys + j), bstrdupc(testvals + j));
-		assert(bmap != NULL);
+		bmap_insert(bmap, bstrdupc(testkeys + j), bstrdupc(testvals + j));
 		// Check depth of all nodes
 		test_bdepth(bmap);
 		// Check that value was associated with key
@@ -171,11 +176,11 @@ int main()
 		int j = random() % TEST_SIZE;
 		bchar *key = bstrdupc(testkeys + j);
 		bchar *val = NULL;
-		int has = bmap_get(bmap, key, &val);
+		bool has = bmap_get(bmap, key, &val);
 		assert(has == (val != NULL));
 		int count_before = get_bcount(bmap);
 		// Attempt to remove key
-		bmap = bmap_remove(bmap, key);
+		bmap_remove(bmap, key);
 		bfree(key);
 		// Check depth of all nodes
 		test_bdepth(bmap);

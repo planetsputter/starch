@@ -62,7 +62,7 @@ static int do_break(size_t argc, const char *argv[], int *flags)
 	if (get_addr(argc, argv, &addr)) return 0;
 
 	// Add new breakpoint
-	bpmap = bpmap_insert(bpmap, addr, 1);
+	bpmap_insert(bpmap, addr, 1);
 	printf("breakpoint set at address %#"PRIx64"\n", addr);
 	return 0;
 }
@@ -92,7 +92,7 @@ static int do_delete(size_t argc, const char *argv[], int *flags)
 	}
 
 	// Remove the breakpoint
-	bpmap = bpmap_remove(bpmap, addr);
+	bpmap_remove(bpmap, addr);
 	return 0;
 }
 

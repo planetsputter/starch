@@ -113,7 +113,7 @@ static int symbol_sub(struct assembler *as, struct token *token, bchar **val)
 				}
 			}
 			if (symbol) { // Found a matching autosymbol
-				as->defs = bmap_insert(as->defs, name, symbol);
+				bmap_insert(as->defs, name, symbol);
 			}
 			else {
 				stmsgtf(SMT_ERROR, token->lineno, token->charno, "undefined symbol \"%s\"", name);
@@ -1233,7 +1233,7 @@ int assembler_handle_token(struct assembler *as, struct token *token)
 
 		case APS_DEFINE3:
 			// Symbol name is in word1 while symbol value is in word2.
-			as->defs = bmap_insert(as->defs, as->word1->str, as->word2->str);
+			bmap_insert(as->defs, as->word1->str, as->word2->str);
 			// The symbol map takes ownership of the strings
 			as->word1->str = NULL;
 			as->word2->str = NULL;

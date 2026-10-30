@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 
 // Structure which represents a map of integer BP addresses to counts
@@ -17,16 +18,17 @@ struct bpmap *bpmap_create();
 // Deletes the given BP map
 void bpmap_delete(struct bpmap*);
 
-// Looks up the given address in the given BP map and sets *val to the
+// Looks up the given address in the given BP map and sets *count to the
 // corresponding count. Returns whether a matching address was found.
-int bpmap_get(const struct bpmap*, uint64_t addr, int *count);
+bool bpmap_get(const struct bpmap*, uint64_t addr, int *count);
 
-// Inserts the given addr/count pair into the given BP map, returning
-// the modified BP map.
-struct bpmap *bpmap_insert(struct bpmap*, uint64_t addr, int count);
+// Inserts the given addr/count pair into the given BP map
+void bpmap_insert(struct bpmap*, uint64_t addr, int count);
 
-// Remove the breakpoint at the given address, returning the modified map
-struct bpmap *bpmap_remove(struct bpmap*, uint64_t addr);
+// Remove the breakpoint at the given address
+void bpmap_remove(struct bpmap*, uint64_t addr);
 
-// Iterate through breakpoints, calling the given function for each
+// Iterates through breakpoints, calling the given function for each.
+// If the given function returns non-zero, stops iteration.
+// Returns the last return value of the given function, or zero for an empty map.
 int bpmap_iter(struct bpmap*, void *user_ptr, int (*iter_func)(uint64_t, int, void*));
