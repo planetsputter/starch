@@ -260,15 +260,13 @@ void assembler_destroy(struct assembler *as)
 	expr_parser_destroy(&as->ep);
 	for (struct label_rec *rec = as->label_recs; rec;) {
 		struct label_rec *temp = rec->prev;
-		label_rec_destroy(rec);
-		free(rec);
+		label_rec_delete(rec);
 		rec = temp;
 	}
 	as->label_recs = NULL;
 	for (struct label_usage *usage = as->label_usages; usage;) {
 		struct label_usage *temp = usage->prev;
-		label_usage_destroy(usage);
-		free(usage);
+		label_usage_delete(usage);
 		usage = temp;
 	}
 	as->label_usages = NULL;
@@ -349,8 +347,7 @@ static int assembler_handle_label_def(struct assembler *as, struct token *token,
 	}
 	if (!rec) {
 		// Label has not been used before. Add new label record to list.
-		struct label_rec *next = (struct label_rec*)malloc(sizeof(struct label_rec));
-		label_rec_init(next, false, true, bstrdupb(token->str), addr, fpos, as->sec_count - 1);
+		struct label_rec *next = label_rec_new(false, true, bstrdupb(token->str), addr, fpos, as->sec_count - 1);
 		next->prev = as->label_recs;
 		as->label_recs = next;
 	}
@@ -514,8 +511,7 @@ static void *create_label_recs(void *user_ptr, struct token *token)
 		struct label_rec *rec = label_rec_lookup(as->label_recs, string_lit, contents);
 		if (!rec) {
 			// Label has not been used before. Add new label record to list with usage.
-			rec = (struct label_rec*)malloc(sizeof(struct label_rec));
-			label_rec_init(rec, string_lit, false, string_lit ? contents : bstrdupb(contents), 0, 0, 0);
+			rec = label_rec_new(string_lit, false, string_lit ? contents : bstrdupb(contents), 0, 0, 0);
 			rec->prev = as->label_recs;
 			as->label_recs = rec;
 		}
@@ -876,8 +872,7 @@ static int assembler_handle_opcode(struct assembler *as, bool pseudo_op, int cod
 			uint64_t curr_addr = as->curr_sec.addr + current_fo - as->curr_sec.fpos;
 
 			// Note usage of label
-			lu = (struct label_usage*)malloc(sizeof(struct label_usage));
-			label_usage_init(lu, current_fo, curr_addr, as->sec_count - 1, opcode_size == 0 ? imm_bytes : 0, pseudo_op, opcode, expr);
+			lu = label_usage_new(current_fo, curr_addr, as->sec_count - 1, opcode_size == 0 ? imm_bytes : 0, pseudo_op, opcode, expr);
 			lu->prev = as->label_usages;
 			as->label_usages = lu;
 

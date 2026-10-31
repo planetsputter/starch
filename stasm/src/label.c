@@ -19,8 +19,9 @@ static void *find_expr(void *user_ptr, struct token *token)
 }
 
 // Initializes the given label usage
-void label_usage_init(struct label_usage *lu, long foffset, uint64_t addr, int si, int data_len, bool pseudo_op, int opcode, struct expr *expr)
+struct label_usage *label_usage_new(long foffset, uint64_t addr, int si, int data_len, bool pseudo_op, int opcode, struct expr *expr)
 {
+	struct label_usage *lu = (struct label_usage*)malloc(sizeof(struct label_usage));
 	lu->foffset = foffset;
 	lu->addr = addr;
 	lu->si = si;
@@ -30,15 +31,17 @@ void label_usage_init(struct label_usage *lu, long foffset, uint64_t addr, int s
 	lu->needs_apply = true;
 	lu->expr = expr;
 	lu->prev = NULL;
+	return lu;
 }
 
 // Destroys the given label usage
-void label_usage_destroy(struct label_usage *lu)
+void label_usage_delete(struct label_usage *lu)
 {
 	if (lu->expr) {
 		expr_delete(lu->expr);
 		lu->expr = NULL;
 	}
+	free(lu);
 }
 
 // Applies the given label usage in the given file once the label address is known
@@ -334,8 +337,9 @@ int label_usage_apply(struct label_usage *lu, FILE *outfile, uint64_t label_addr
 }
 
 // Initializes the given label record, taking ownership of the given label B-string
-void label_rec_init(struct label_rec *rec, bool string_lit, bool defined, bchar *label, uint64_t addr, long fpos, int si)
+struct label_rec *label_rec_new(bool string_lit, bool defined, bchar *label, uint64_t addr, long fpos, int si)
 {
+	struct label_rec *rec = (struct label_rec*)malloc(sizeof(struct label_rec));
 	rec->string_lit = string_lit;
 	rec->label = label;
 	rec->defined = defined;
@@ -343,13 +347,17 @@ void label_rec_init(struct label_rec *rec, bool string_lit, bool defined, bchar 
 	rec->fpos = fpos;
 	rec->si = si;
 	rec->prev = NULL;
+	return rec;
 }
 
 // Destroys the given label record
-void label_rec_destroy(struct label_rec *rec)
+void label_rec_delete(struct label_rec *rec)
 {
-	bfree(rec->label);
-	rec->label = NULL;
+	if (rec->label) {
+		bfree(rec->label);
+		rec->label = NULL;
+	}
+	free(rec);
 }
 
 // Look up the label record for the given B-string label name or string literal
